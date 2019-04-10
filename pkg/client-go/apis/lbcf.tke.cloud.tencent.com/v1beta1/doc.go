@@ -16,4 +16,5 @@ limitations under the License.
 
 // +k8s:deepcopy-gen=package
 // +groupName=lbcf.tke.cloud.tencent.com
+
 package v1beta1

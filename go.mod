@@ -1,4 +1,4 @@
-module git.tencent.com/lb-controlling-framework
+module git.tencent.com/tke/lb-controlling-framework
 
 go 1.12
 
@@ -38,6 +38,6 @@ require (
 	k8s.io/apiserver v0.0.0-20190325150012-164c02b49fbe // indirect
 	k8s.io/client-go v9.0.0+incompatible
 	k8s.io/kube-openapi v0.0.0-20190228160746-b3a7cee44a30 // indirect
-	k8s.io/kubernetes v1.12.7
+	k8s.io/kubernetes v1.12.7 // indirect
 	k8s.io/utils v0.0.0-20190221042446-c2654d5206da // indirect
 )

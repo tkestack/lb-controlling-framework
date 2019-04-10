@@ -21,13 +21,13 @@ package internalinterfaces
 import (
 	time "time"
 
+	versioned "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	cache "k8s.io/client-go/tools/cache"
-	internalclientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 )
 
-type NewInformerFunc func(internalclientset.Interface, time.Duration) cache.SharedIndexInformer
+type NewInformerFunc func(versioned.Interface, time.Duration) cache.SharedIndexInformer
 
 // SharedInformerFactory a small interface to allow for adding an informer without an import cycle
 type SharedInformerFactory interface {

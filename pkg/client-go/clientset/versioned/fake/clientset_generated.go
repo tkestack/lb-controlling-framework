@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "git.tencent.com/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	lbcfv1beta1 "git.tencent.com/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1"
-	fakelbcfv1beta1 "git.tencent.com/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1/fake"
+	clientset "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	lbcfv1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1"
+	fakelbcfv1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

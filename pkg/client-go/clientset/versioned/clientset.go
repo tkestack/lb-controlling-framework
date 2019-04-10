@@ -19,7 +19,7 @@ limitations under the License.
 package versioned
 
 import (
-	lbcfv1beta1 "git.tencent.com/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfv1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
