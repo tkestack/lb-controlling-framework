@@ -17,5 +17,5 @@ docker-build:
 
 .PHONY: build
 build:
-	go build -o $(OUTPUT_PATH) git.tencent.com/tke/lb-controlling-framework/lbcf-controller/cmd
+	go build -o $(OUTPUT_PATH) git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller
 
