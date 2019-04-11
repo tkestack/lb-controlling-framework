@@ -55,8 +55,12 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=lbcf.tke.cloud.tencent.com, Version=v1beta1
 	case v1beta1.SchemeGroupVersion.WithResource("backendgroups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Lbcf().V1beta1().BackendGroups().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("backendrecords"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Lbcf().V1beta1().BackendRecords().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("loadbalancers"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Lbcf().V1beta1().LoadBalancers().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("loadbalancerdrivers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Lbcf().V1beta1().LoadBalancerDrivers().Informer()}, nil
 
 	}
 

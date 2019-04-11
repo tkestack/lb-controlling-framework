@@ -40,6 +40,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&LoadBalancerList{},
 		&BackendGroup{},
 		&BackendGroupList{},
+		&LoadBalancerDriver{},
+		&LoadBalancerDriverList{},
+		&BackendRecord{},
+		&BackendRecordList{},
 	)
 
 	scheme.AddKnownTypes(SchemeGroupVersion)

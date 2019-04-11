@@ -96,3 +96,88 @@ type BackendGroupList struct {
 
 	Items []BackendGroup `json:"items"`
 }
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// LoadBalancerDriver is a top-level type. A client is created for it.
+type LoadBalancerDriver struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   LoadBalancerDriverSpec   `json:"spec"`
+	Status LoadBalancerDriverStatus `json:"status,omitempty"`
+}
+
+type LoadBalancerDriverSpec struct {
+	DriverType string                     `json:"driverType"`
+	Addr       string                     `json:"addr"`
+	Webhooks   *LoadBalancerDriverWebhook `json:"webhooks"`
+}
+
+type LoadBalancerDriverWebhook struct {
+	ValidateLoadBalancer *WebhookConfig `json:"validateLoadBalancer,omitempty"`
+	CreateLoadBalancer   *WebhookConfig `json:"createLoadBalancer,omitempty"`
+	UpdateLoadBalancer   *WebhookConfig `json:"updateLoadBalancer,omitempty"`
+	DeleteLoadBalancer   *WebhookConfig `json:"deleteLoadBalancer,omitempty"`
+	ValidateBackend      *WebhookConfig `json:"validateBackend,omitempty"`
+	GenerateBackendAddr  *WebhookConfig `json:"generateBackendAddr,omitempty"`
+	EnsureBackend        *WebhookConfig `json:"ensureBackend,omitempty"`
+	DeregisterBackend    *WebhookConfig `json:"deregisterBackend,omitempty"`
+	UpdateBackend        *WebhookConfig `json:"updateBackend,omitempty"`
+}
+
+type WebhookConfig struct {
+	Timeout *string `json:"timeout"`
+}
+
+type LoadBalancerDriverStatus struct {
+	Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// LoadBalancerDriverList is a top-level list type. The client methods for lists are automatically created.
+// You are not supposed to create a separated client for this one.
+type LoadBalancerDriverList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []LoadBalancerDriver `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// LoadBalancerDriver is a top-level type. A client is created for it.
+type BackendRecord struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   BackendRecordSpec   `json:"spec"`
+	Status BackendRecordStatus `json:"status,omitempty"`
+}
+
+type BackendRecordSpec struct {
+	LBName            string            `json:"lbName"`
+	LBInfo            map[string]string `json:"lbInfo"`
+	LBAttributes      map[string]string `json:"lbAttributes"`
+	BackendParameters map[string]string `json:"backendParameters"`
+	DriverInjection   map[string]string `json:"driverInjection"`
+}
+
+type BackendRecordStatus struct {
+	BackendAddr string                                            `json:"backendAddr"`
+	Conditions  []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// BackendRecordList is a top-level list type. The client methods for lists are automatically created.
+// You are not supposed to create a separated client for this one.
+type BackendRecordList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []BackendRecord `json:"items"`
+}

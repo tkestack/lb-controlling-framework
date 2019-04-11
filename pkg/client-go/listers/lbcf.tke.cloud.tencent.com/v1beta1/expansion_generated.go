@@ -26,6 +26,14 @@ type BackendGroupListerExpansion interface{}
 // BackendGroupNamespaceLister.
 type BackendGroupNamespaceListerExpansion interface{}
 
+// BackendRecordListerExpansion allows custom methods to be added to
+// BackendRecordLister.
+type BackendRecordListerExpansion interface{}
+
+// BackendRecordNamespaceListerExpansion allows custom methods to be added to
+// BackendRecordNamespaceLister.
+type BackendRecordNamespaceListerExpansion interface{}
+
 // LoadBalancerListerExpansion allows custom methods to be added to
 // LoadBalancerLister.
 type LoadBalancerListerExpansion interface{}
@@ -33,3 +41,11 @@ type LoadBalancerListerExpansion interface{}
 // LoadBalancerNamespaceListerExpansion allows custom methods to be added to
 // LoadBalancerNamespaceLister.
 type LoadBalancerNamespaceListerExpansion interface{}
+
+// LoadBalancerDriverListerExpansion allows custom methods to be added to
+// LoadBalancerDriverLister.
+type LoadBalancerDriverListerExpansion interface{}
+
+// LoadBalancerDriverNamespaceListerExpansion allows custom methods to be added to
+// LoadBalancerDriverNamespaceLister.
+type LoadBalancerDriverNamespaceListerExpansion interface{}

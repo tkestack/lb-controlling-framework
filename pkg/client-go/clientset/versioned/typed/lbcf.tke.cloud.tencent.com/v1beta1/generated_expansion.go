@@ -20,4 +20,8 @@ package v1beta1
 
 type BackendGroupExpansion interface{}
 
+type BackendRecordExpansion interface{}
+
 type LoadBalancerExpansion interface{}
+
+type LoadBalancerDriverExpansion interface{}

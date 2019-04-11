@@ -26,8 +26,12 @@ import (
 type Interface interface {
 	// BackendGroups returns a BackendGroupInformer.
 	BackendGroups() BackendGroupInformer
+	// BackendRecords returns a BackendRecordInformer.
+	BackendRecords() BackendRecordInformer
 	// LoadBalancers returns a LoadBalancerInformer.
 	LoadBalancers() LoadBalancerInformer
+	// LoadBalancerDrivers returns a LoadBalancerDriverInformer.
+	LoadBalancerDrivers() LoadBalancerDriverInformer
 }
 
 type version struct {
@@ -46,7 +50,17 @@ func (v *version) BackendGroups() BackendGroupInformer {
 	return &backendGroupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// BackendRecords returns a BackendRecordInformer.
+func (v *version) BackendRecords() BackendRecordInformer {
+	return &backendRecordInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // LoadBalancers returns a LoadBalancerInformer.
 func (v *version) LoadBalancers() LoadBalancerInformer {
 	return &loadBalancerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// LoadBalancerDrivers returns a LoadBalancerDriverInformer.
+func (v *version) LoadBalancerDrivers() LoadBalancerDriverInformer {
+	return &loadBalancerDriverInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

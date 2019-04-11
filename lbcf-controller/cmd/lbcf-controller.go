@@ -25,4 +25,6 @@ func main() {
 	factory := externalversions.NewSharedInformerFactory(client, 10*time.Second)
 	go factory.Lbcf().V1beta1().LoadBalancers().Informer().Run(wait.NeverStop)
 	go factory.Lbcf().V1beta1().BackendGroups().Informer().Run(wait.NeverStop)
+	go factory.Lbcf().V1beta1().LoadBalancerDrivers().Informer().Run(wait.NeverStop)
+	go factory.Lbcf().V1beta1().BackendRecords().Informer().Run(wait.NeverStop)
 }

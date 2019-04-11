@@ -32,8 +32,16 @@ func (c *FakeLbcfV1beta1) BackendGroups(namespace string) v1beta1.BackendGroupIn
 	return &FakeBackendGroups{c, namespace}
 }
 
+func (c *FakeLbcfV1beta1) BackendRecords(namespace string) v1beta1.BackendRecordInterface {
+	return &FakeBackendRecords{c, namespace}
+}
+
 func (c *FakeLbcfV1beta1) LoadBalancers(namespace string) v1beta1.LoadBalancerInterface {
 	return &FakeLoadBalancers{c, namespace}
+}
+
+func (c *FakeLbcfV1beta1) LoadBalancerDrivers(namespace string) v1beta1.LoadBalancerDriverInterface {
+	return &FakeLoadBalancerDrivers{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

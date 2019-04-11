@@ -28,7 +28,9 @@ import (
 type LbcfV1beta1Interface interface {
 	RESTClient() rest.Interface
 	BackendGroupsGetter
+	BackendRecordsGetter
 	LoadBalancersGetter
+	LoadBalancerDriversGetter
 }
 
 // LbcfV1beta1Client is used to interact with features provided by the lbcf.tke.cloud.tencent.com group.
@@ -40,8 +42,16 @@ func (c *LbcfV1beta1Client) BackendGroups(namespace string) BackendGroupInterfac
 	return newBackendGroups(c, namespace)
 }
 
+func (c *LbcfV1beta1Client) BackendRecords(namespace string) BackendRecordInterface {
+	return newBackendRecords(c, namespace)
+}
+
 func (c *LbcfV1beta1Client) LoadBalancers(namespace string) LoadBalancerInterface {
 	return newLoadBalancers(c, namespace)
+}
+
+func (c *LbcfV1beta1Client) LoadBalancerDrivers(namespace string) LoadBalancerDriverInterface {
+	return newLoadBalancerDrivers(c, namespace)
 }
 
 // NewForConfig creates a new LbcfV1beta1Client for the given config.
