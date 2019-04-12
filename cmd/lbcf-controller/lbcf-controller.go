@@ -2,29 +2,19 @@ package main
 
 import (
 	"fmt"
-	"time"
+	"os"
 
-	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions"
-
-	"github.com/golang/glog"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
+	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/logs"
 )
 
 func main() {
-	fmt.Println("hello world")
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		glog.Fatal(err)
-	}
-	client := versioned.NewForConfigOrDie(cfg)
-	client.LbcfV1beta1().LoadBalancers("demo").Get("hello", v1.GetOptions{})
+	command := app.NewServer()
+	logs.InitLogs()
+	defer logs.FlushLogs()
 
-	factory := externalversions.NewSharedInformerFactory(client, 10*time.Second)
-	go factory.Lbcf().V1beta1().LoadBalancers().Informer().Run(wait.NeverStop)
-	go factory.Lbcf().V1beta1().BackendGroups().Informer().Run(wait.NeverStop)
-	go factory.Lbcf().V1beta1().LoadBalancerDrivers().Informer().Run(wait.NeverStop)
-	go factory.Lbcf().V1beta1().BackendRecords().Informer().Run(wait.NeverStop)
+	if err := command.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 }
