@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/emicklei/go-restful v2.9.3+incompatible // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
@@ -38,4 +39,5 @@ require (
 	k8s.io/client-go v9.0.0+incompatible
 	k8s.io/klog v0.2.0
 	k8s.io/kube-openapi v0.0.0-20190228160746-b3a7cee44a30 // indirect
+	k8s.io/kubernetes v1.12.7 // indirect
 )

@@ -111,7 +111,7 @@ type LoadBalancerDriver struct {
 
 type LoadBalancerDriverSpec struct {
 	DriverType string                     `json:"driverType"`
-	Addr       string                     `json:"addr"`
+	Url        string                     `json:"url"`
 	Webhooks   *LoadBalancerDriverWebhook `json:"webhooks"`
 }
 
