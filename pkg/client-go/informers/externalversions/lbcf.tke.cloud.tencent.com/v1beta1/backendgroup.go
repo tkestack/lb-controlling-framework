@@ -21,7 +21,7 @@ package v1beta1
 import (
 	time "time"
 
-	lbcftkecloudtencentcomv1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcftkecloudtencentcomv1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	versioned "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	internalinterfaces "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
 	v1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"

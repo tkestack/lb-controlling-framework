@@ -1,6 +1,11 @@
 package v1beta1
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"time"
+
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -18,9 +23,10 @@ type LoadBalancer struct {
 }
 
 type LoadBalancerSpec struct {
-	LBType     string            `json:"lbType"`
-	LBSpec     map[string]string `json:"lbSpec"`
-	attributes map[string]string `json:"attributes"`
+	LBDriver string            `json:"lbDriver"`
+	LBSpec   map[string]string `json:"lbSpec"`
+	// +optional
+	Attributes map[string]string `json:"attributes"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -35,9 +41,32 @@ type LoadBalancerList struct {
 }
 
 type LoadBalancerStatus struct {
-	LBInfo     map[string]string                                 `json:"lbInfo"`
-	Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+	LBInfo     map[string]string       `json:"lbInfo"`
+	Conditions []LoadBalancerCondition `json:"conditions"`
 }
+
+type LoadBalancerCondition struct {
+	// Type is the type of the condition.
+	Type LoadBalancerConditionType
+	// Status is the status of the condition.
+	// Can be True, False, Unknown.
+	Status ConditionStatus
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time
+	// Unique, one-word, CamelCase reason for the condition's last transition.
+	// +optional
+	Reason string
+	// Human-readable message indicating details about last transition.
+	// +optional
+	Message string
+}
+
+type LoadBalancerConditionType string
+
+const (
+	LBCreated LoadBalancerConditionType = "Created"
+)
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -52,32 +81,42 @@ type BackendGroup struct {
 }
 
 type BackendGroupSpec struct {
-	LBName  string          `json:"lbName"`
+	LBName string `json:"lbName"`
+	// +optional
 	Service *ServiceBackend `json:"service,omitempty"`
-	Pods    *PodBackend     `json:"pods,omitempty"`
-	Static  *[]string       `json:"static,omitempty"`
+	// +optional
+	Pods *PodBackend `json:"pods,omitempty"`
+	// +optional
+	Static []string `json:"static,omitempty"`
+	// +optional
+	Parameters map[string]string `json:"parameters"`
 }
 
 type ServiceBackend struct {
-	Name         string            `json:"name"`
-	PortName     *string           `json:"portName,omitempty"`
+	Name string       `json:"name"`
+	Port PortSelector `json:"port,omitempty"`
+	// +optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
 type PodBackend struct {
-	Port    ContainerPort     `json:"port"`
+	Port PortSelector `json:"port"`
+	// +optional
 	ByLabel *SelectPodByLabel `json:"byLabel,omitempty"`
-	ByName  *[]string         `json:"byName,omitempty"`
+	// +optional
+	ByName []string `json:"byName,omitempty"`
 }
 
-type ContainerPort struct {
-	PortNumber int32   `json:"portNumber"`
-	Protocol   *string `json:"protocol,omitempty"`
+type PortSelector struct {
+	PortNumber int32 `json:"portNumber"`
+	// +optional
+	Protocol *string `json:"protocol,omitempty"`
 }
 
 type SelectPodByLabel struct {
 	Selector map[string]string `json:"selector"`
-	Except   *[]string         `json:"except,omitempty"`
+	// +optional
+	Except []string `json:"except,omitempty"`
 }
 
 type BackendGroupStatus struct {
@@ -110,29 +149,42 @@ type LoadBalancerDriver struct {
 }
 
 type LoadBalancerDriverSpec struct {
-	DriverType string                     `json:"driverType"`
-	Url        string                     `json:"url"`
-	Webhooks   *LoadBalancerDriverWebhook `json:"webhooks"`
-}
-
-type LoadBalancerDriverWebhook struct {
-	ValidateLoadBalancer *WebhookConfig `json:"validateLoadBalancer,omitempty"`
-	CreateLoadBalancer   *WebhookConfig `json:"createLoadBalancer,omitempty"`
-	UpdateLoadBalancer   *WebhookConfig `json:"updateLoadBalancer,omitempty"`
-	DeleteLoadBalancer   *WebhookConfig `json:"deleteLoadBalancer,omitempty"`
-	ValidateBackend      *WebhookConfig `json:"validateBackend,omitempty"`
-	GenerateBackendAddr  *WebhookConfig `json:"generateBackendAddr,omitempty"`
-	EnsureBackend        *WebhookConfig `json:"ensureBackend,omitempty"`
-	DeregisterBackend    *WebhookConfig `json:"deregisterBackend,omitempty"`
-	UpdateBackend        *WebhookConfig `json:"updateBackend,omitempty"`
+	DriverType string `json:"driverType"`
+	Url        URL    `json:"url"`
+	// +optional
+	Webhooks []WebhookConfig `json:"webhooks"`
 }
 
 type WebhookConfig struct {
-	Timeout *string `json:"timeout"`
+	Name    string    `json:"name"`
+	Timeout *Duration `json:"timeout"`
+}
+
+type LoadBalancerDriverConditionType string
+
+const (
+	DriverAccepted LoadBalancerDriverConditionType = "Accepted"
+)
+
+type LoadBalancerDriverCondition struct {
+	// Type is the type of the condition.
+	Type LoadBalancerDriverConditionType
+	// Status is the status of the condition.
+	// Can be True, False, Unknown.
+	Status ConditionStatus
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time
+	// Unique, one-word, CamelCase reason for the condition's last transition.
+	// +optional
+	Reason string
+	// Human-readable message indicating details about last transition.
+	// +optional
+	Message string
 }
 
 type LoadBalancerDriverStatus struct {
-	Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+	Conditions []LoadBalancerDriverCondition `json:"conditions"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -180,4 +232,58 @@ type BackendRecordList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []BackendRecord `json:"items"`
+}
+
+type ConditionStatus string
+
+const (
+	ConditionTrue    ConditionStatus = "True"
+	ConditionFalse   ConditionStatus = "False"
+	ConditionUnknown ConditionStatus = "Unknown"
+)
+
+type URL struct {
+	url.URL
+}
+
+func (u *URL) UnmarshalJSON(b []byte) error {
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+
+	parsed, err := url.Parse(str)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %v, err: %v", str, err)
+	}
+	u.URL = *parsed
+	return nil
+}
+
+func (u URL) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.URL.String())
+}
+
+type Duration struct {
+	time.Duration
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+
+	dur, err := time.ParseDuration(str)
+	if err != nil {
+		return fmt.Errorf("invalid duration: %v, err: %v", str, err)
+	}
+	d.Duration = dur
+	return nil
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Duration.String())
 }

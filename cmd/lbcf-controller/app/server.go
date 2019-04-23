@@ -28,16 +28,24 @@ func NewServer() *cobra.Command {
 				klog.Fatal(err)
 			}
 
-			lbcfFactory := externalversions.NewSharedInformerFactory(lbcfclientset.NewForConfigOrDie(cfg), opts.ResyncPeriod)
+			k8sClient := kubernetes.NewForConfigOrDie(cfg)
+			lbcfClient := lbcfclientset.NewForConfigOrDie(cfg)
+			k8sFactory := informers.NewSharedInformerFactory(k8sClient, opts.ResyncPeriod)
+			lbcfFactory := externalversions.NewSharedInformerFactory(lbcfClient, opts.ResyncPeriod)
 			c := lbcfcontroller.NewController(
 				opts,
-				informers.NewSharedInformerFactory(kubernetes.NewForConfigOrDie(cfg), opts.ResyncPeriod).Core().V1().Pods(),
+				k8sClient,
+				lbcfClient,
+				k8sFactory.Core().V1().Pods(),
+				k8sFactory.Core().V1().Services(),
 				lbcfFactory.Lbcf().V1beta1().LoadBalancers(),
 				lbcfFactory.Lbcf().V1beta1().LoadBalancerDrivers(),
 				lbcfFactory.Lbcf().V1beta1().BackendGroups(),
 				lbcfFactory.Lbcf().V1beta1().BackendRecords())
 			c.Start()
+			k8sFactory.Start(wait.NeverStop)
 			lbcfFactory.Start(wait.NeverStop)
+			lbcfcontroller.NewAdmitServer(c).Start()
 		},
 	}
 	opts.addFlags(cmd.Flags())
@@ -55,4 +63,3 @@ func newOptions() *Options {
 func (o *Options) addFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&o.ResyncPeriod, "resync-period", 10*time.Second, "resync period for informers")
 }
-
