@@ -75,8 +75,8 @@ func validateDriverWebhooks(raw []v1beta1.WebhookConfig, path *field.Path) field
 			allErrs = append(allErrs, field.NotSupported(path, wh, knownWebhooks.List()))
 		}
 		if wh.Timeout != nil {
-			if wh.Timeout.Nanoseconds() < (10*time.Second).Nanoseconds() || wh.Timeout.Nanoseconds() > (10*time.Minute).Nanoseconds() {
-				allErrs = append(allErrs, field.Invalid(path, *wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be >= 10s and <= 10m", wh.Name)))
+			if  wh.Timeout.Nanoseconds() > (1*time.Minute).Nanoseconds() {
+				allErrs = append(allErrs, field.Invalid(path, *wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
 				return allErrs
 			}
 		}

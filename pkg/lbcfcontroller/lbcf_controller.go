@@ -6,8 +6,6 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcflister "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -30,12 +28,15 @@ func NewController(
 	c := &Controller{
 		k8sClient:         k8sClient,
 		lbcfClient:        lbcfClient,
-		lbController:      NewLoadBalancerController(lbInformer.Lister()),
-		driverController:  NewDriverController(lbDriverInformer.Lister()),
-		driverQueue:       workqueue.NewNamedRateLimitingQueue(DefaultControllerRateLimiter(), "driver-queue"),
-		loadBalancerQueue: workqueue.NewNamedRateLimitingQueue(DefaultControllerRateLimiter(), "lb-queue"),
-		backendGroupQueue: workqueue.NewNamedRateLimitingQueue(DefaultControllerRateLimiter(), "backendgroup-queue"),
+		driverQueue:       NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "driver-queue"),
+		loadBalancerQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "lb-queue"),
+		backendGroupQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backendgroup-queue"),
+		backendQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backend-queue"),
 	}
+
+	c.driverController = NewDriverController(lbcfClient, lbDriverInformer.Lister())
+	c.lbController = NewLoadBalancerController(lbcfClient, lbInformer.Lister(), c.driverController)
+	c.backendController = NewBackendController(lbcfClient, bgInformer.Lister(), brInformer.Lister(), c.driverController, c.lbController)
 
 	// enqueue backendgroup
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
@@ -79,8 +80,6 @@ func NewController(
 		DeleteFunc: c.deleteBackendRecord,
 	}, opts.ResyncPeriod)
 
-	c.loadBalancerLister = lbInformer.Lister()
-
 	c.podListerSynced = podInformer.Informer().HasSynced
 	c.svcListerSynced = svcInformer.Informer().HasSynced
 	c.LoadBalancerListerSynced = lbInformer.Informer().HasSynced
@@ -95,10 +94,9 @@ type Controller struct {
 	k8sClient  *kubernetes.Clientset
 	lbcfClient *lbcfclient.Clientset
 
-	lbController     *LoadBalancerController
 	driverController *DriverController
-
-	loadBalancerLister lbcflister.LoadBalancerLister
+	lbController     *LoadBalancerController
+	backendController *BackendController
 
 	podListerSynced           cache.InformerSynced
 	svcListerSynced           cache.InformerSynced
@@ -107,9 +105,10 @@ type Controller struct {
 	BackendGroupListerSynced  cache.InformerSynced
 	BackendRecordListerSynced cache.InformerSynced
 
-	driverQueue       workqueue.RateLimitingInterface
-	loadBalancerQueue workqueue.RateLimitingInterface
-	backendGroupQueue workqueue.RateLimitingInterface
+	driverQueue       IntervalRateLimitingInterface
+	loadBalancerQueue IntervalRateLimitingInterface
+	backendGroupQueue IntervalRateLimitingInterface
+	backendQueue IntervalRateLimitingInterface
 }
 
 func (c *Controller) Start() {
@@ -152,25 +151,36 @@ func (c *Controller) driverWorker() {
 }
 
 func (c *Controller) backendGroupWorker() {
-	for c.processNextItem(c.backendGroupQueue, c.syncBackendGroup) {
+	for c.processNextItem(c.backendGroupQueue, c.backendController.syncBackendGroup) {
 	}
 }
 
-func (c *Controller) processNextItem(queue workqueue.RateLimitingInterface, syncFunc func(string) error) bool {
+func (c *Controller) backendWorker() {
+	for c.processNextItem(c.backendQueue, c.backendController.syncBackend) {
+	}
+}
+
+type SyncFunc func(string)(error, *time.Duration)
+
+const(
+	DefaultRetryInterval = 10 * time.Second
+)
+
+func (c *Controller) processNextItem(queue IntervalRateLimitingInterface, syncFunc SyncFunc) bool {
 	key, quit := queue.Get()
 	if quit {
 		return false
 	}
 	defer queue.Done(key)
-	if err := syncFunc(key.(string)); err != nil {
-		queue.AddRateLimited(key)
+	if err, delay := syncFunc(key.(string)); err != nil {
+		if delay == nil{
+			queue.AddIntervalRateLimited(key, DefaultWebhookTimeout)
+		}else{
+			queue.AddIntervalRateLimited(key, *delay)
+		}
 	} else {
 		queue.Forget(key)
 	}
 	return true
 }
 
-func (c *Controller) syncBackendGroup(key string) error {
-
-	return nil
-}

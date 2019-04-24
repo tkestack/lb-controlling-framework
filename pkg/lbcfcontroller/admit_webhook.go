@@ -39,6 +39,7 @@ const (
 	lbFinalizerPatch string = `[
 		 {"op":"add","path":"/metadata/finalizers","value":["lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"]}
 	]`
+	driverDrainingLabel string = "lbcf.tke.cloud.tencent.com/driver-draining"
 )
 
 func (c *Controller) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionResponse {
@@ -74,6 +75,9 @@ func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *
 	} else if driver == nil {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
 	}
+	if isDriverDraining(driver.Labels) {
+		return toAdmissionResponse(fmt.Errorf("driver %q is draining, all LoadBalancer creating operation for that dirver is denied", driver.Name))
+	}
 
 	req := &ValidateLoadBalancerRequest{
 		LBSpec:     lb.Spec.LBSpec,
@@ -84,7 +88,7 @@ func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("call webhook error, webhook: validateLoadBalancer, err: %v", err))
 	} else if !rsp.Succ {
-		return toAdmissionResponse(fmt.Errorf("invalid LoadBalancer: %s", rsp.ErrMsg))
+		return toAdmissionResponse(fmt.Errorf("invalid LoadBalancer: %s", rsp.Msg))
 	}
 
 	return toAdmissionResponse(nil)
@@ -142,7 +146,7 @@ func (c *Controller) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("call webhook error, webhook: validateLoadBalancer, err: %v", err))
 	} else if !rsp.Succ {
-		return toAdmissionResponse(fmt.Errorf("invalid LoadBalancer: %s", rsp.ErrMsg))
+		return toAdmissionResponse(fmt.Errorf("invalid LoadBalancer: %s", rsp.Msg))
 	}
 
 	return toAdmissionResponse(nil)
@@ -183,8 +187,28 @@ func (c *Controller) ValidateDriverUpdate(ar *admission.AdmissionReview) *admiss
 	return toAdmissionResponse(nil)
 }
 
-func (c *Controller) ValidateDriverDelete(*admission.AdmissionReview) *admission.AdmissionResponse {
-	// TODO: check all backends deregistered
+func (c *Controller) ValidateDriverDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	driver := &lbcf.LoadBalancerDriver{}
+	if err := json.Unmarshal(ar.Request.Object.Raw, driver); err != nil {
+		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
+	}
+	if isDriverDraining(driver.Labels) {
+		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete", driverDrainingLabel))
+	}
+
+	lbList, err := c.lbController.listLoadBalancerByDriver(driver.Name, driver.Namespace)
+	if err != nil {
+		return toAdmissionResponse(fmt.Errorf("unable to list LoadBalancers for driver, err: %v", err))
+	} else if len(lbList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("all LoadBalancers must be deleted, %d remaining", len(lbList)))
+	}
+
+	beList, err := c.backendController.listBackendByDriver(driver.Name, driver.Namespace)
+	if err != nil {
+		return toAdmissionResponse(fmt.Errorf("unable to list BackendRecords for driver, err: %v", err))
+	} else if len(beList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("all BackendRecord must be deregistered, %d remaining", len(beList)))
+	}
 	return toAdmissionResponse(nil)
 }
 
@@ -198,9 +222,12 @@ func (c *Controller) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
-	lb, err := c.loadBalancerLister.LoadBalancers(bg.Namespace).Get(bg.Spec.LBName)
+	lb, err := c.lbController.getLoadBalancer(bg.Spec.LBName, bg.Namespace)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
+	}
+	if lb.DeletionTimestamp != nil{
+		return toAdmissionResponse(fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name))
 	}
 	driverNamespace := bg.Namespace
 	if strings.HasPrefix(bg.Name, SystemDriverPrefix) {
@@ -259,7 +286,7 @@ func (c *Controller) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(nil)
 	}
 
-	lb, err := c.loadBalancerLister.LoadBalancers(curObj.Namespace).Get(curObj.Spec.LBName)
+	lb, err := c.lbController.getLoadBalancer(curObj.Spec.LBName, curObj.Namespace)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
 	}

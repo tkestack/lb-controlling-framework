@@ -66,6 +66,8 @@ type LoadBalancerConditionType string
 
 const (
 	LBCreated LoadBalancerConditionType = "Created"
+	LBEnsured LoadBalancerConditionType = "Ensured"
+	LBDeleting LoadBalancerConditionType = "Deleting"
 )
 
 // +genclient
@@ -212,6 +214,7 @@ type BackendRecord struct {
 
 type BackendRecordSpec struct {
 	LBName            string            `json:"lbName"`
+	LBDriver          string            `json:"lbDriver"`
 	LBInfo            map[string]string `json:"lbInfo"`
 	LBAttributes      map[string]string `json:"lbAttributes"`
 	BackendParameters map[string]string `json:"backendParameters"`
@@ -221,6 +224,29 @@ type BackendRecordSpec struct {
 type BackendRecordStatus struct {
 	BackendAddr string                                            `json:"backendAddr"`
 	Conditions  []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+}
+
+type BackendRecordConditionType string
+
+const (
+	BackendRegistered BackendRecordConditionType = "Registered"
+)
+
+type BackendRecordCondition struct {
+	// Type is the type of the condition.
+	Type BackendRecordConditionType
+	// Status is the status of the condition.
+	// Can be True, False, Unknown.
+	Status ConditionStatus
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time
+	// Unique, one-word, CamelCase reason for the condition's last transition.
+	// +optional
+	Reason string
+	// Human-readable message indicating details about last transition.
+	// +optional
+	Message string
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

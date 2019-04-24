@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+
 	"github.com/parnurzeal/gorequest"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -47,8 +48,8 @@ type RequestForRetryHooks struct {
 }
 
 type ResponseForNoRetryHooks struct {
-	Succ   bool   `json:"succ"`
-	ErrMsg string `json:"errMsg"`
+	Succ bool   `json:"succ"`
+	Msg  string `json:"msg"`
 }
 
 const(
@@ -59,7 +60,7 @@ const(
 
 type ResponseForFailRetryHooks struct {
 	Status                 string `json:"status"`
-	ErrMsg                 string `json:"errMsg"`
+	Msg                    string `json:"msg"`
 	RetryIntervalInSeconds int32  `json:"retryIntervalInSeconds"`
 }
 
@@ -85,14 +86,13 @@ type CreateLoadBalancerResponse struct {
 	LBInfo map[string]string `json:"lbInfo"`
 }
 
-type UpdateLoadBalancerRequest struct {
+type EnsureLoadBalancerRequest struct {
 	RequestForRetryHooks
 	LBInfo        map[string]string `json:"lbInfo"`
 	Attributes    map[string]string `json:"attributes"`
-	OldAttributes map[string]string `json:"oldAttributes"`
 }
 
-type UpdateLoadBalancerResponse struct {
+type EnsureLoadBalancerResponse struct {
 	ResponseForFailRetryHooks
 }
 
@@ -214,8 +214,8 @@ func callCreateLoadBalancer(driver *v1beta1.LoadBalancerDriver, req *CreateLoadB
 	return rsp, nil
 }
 
-func callUpdateLoadBalancer(driver *v1beta1.LoadBalancerDriver, req *UpdateLoadBalancerRequest) (*UpdateLoadBalancerResponse, error) {
-	rsp := &UpdateLoadBalancerResponse{}
+func callEnsureLoadBalancer(driver *v1beta1.LoadBalancerDriver, req *EnsureLoadBalancerRequest) (*EnsureLoadBalancerResponse, error) {
+	rsp := &EnsureLoadBalancerResponse{}
 	if err := callWebhook(driver, UpdateLBHook, req, rsp); err != nil {
 		return nil, err
 	}
