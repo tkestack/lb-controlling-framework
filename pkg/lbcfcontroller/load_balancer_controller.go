@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 THL A29 Limited, a Tencent company.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package lbcfcontroller
 
 import (
@@ -64,24 +80,18 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 	lb, err := c.lister.LoadBalancers(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		return nil, nil
-	}else if err != nil {
+	} else if err != nil {
 		return err, nil
 	}
-	driver, err := c.driverProvider.getDriver(lb.Spec.LBDriver, getDriverNamespace(lb.Spec.LBDriver, lb.Namespace))
-	if err != nil {
-		return err, nil
+
+	driver, exist := c.driverProvider.getDriver(getDriverNamespace(lb.Spec.LBDriver, lb.Namespace), lb.Spec.LBDriver)
+	if !exist {
+		return fmt.Errorf("driver %q not found for LoadBalancer %s", lb.Spec.LBDriver, lb.Name), nil
 	}
 
 	// delete load balancer
 	if lb.DeletionTimestamp != nil {
-		needDelete := false
-		for _, f := range lb.Finalizers {
-			if f == "lbcf.tke.cloud.tencent.com/delete-load-loadbalancer" {
-				needDelete = true
-				break
-			}
-		}
-		if !needDelete {
+		if !hasFinalizer(lb.Finalizers, DeleteLBFinalizer) {
 			return nil, nil
 		}
 		req := &DeleteLoadBalancerRequest{
@@ -91,30 +101,55 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 			},
 			Attributes: lb.Spec.Attributes,
 		}
-		rsp, err := callDeleteLoadBalancer(driver, req)
+		rsp, err := driver.CallDeleteLoadBalancer(req)
 		if err != nil {
 			return err, nil
 		}
 		switch rsp.Status {
 		case StatusSucc:
-			// remove finalizer
-			var fin []string
-			for _, f := range lb.Finalizers {
-				if f != "lbcf.tke.cloud.tencent.com/delete-load-loadbalancer" {
-					fin = append(fin, f)
-				}
-				lbCpy := lb.DeepCopy()
-				lbCpy.Finalizers = fin
-				if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).Update(lbCpy); err != nil {
-					return err, nil
-				}
+			lbCpy := lb.DeepCopy()
+			lbCpy.Finalizers = removeFinalizer(lbCpy.Finalizers, DeleteLBFinalizer)
+			if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).Update(lbCpy); err != nil {
+				return err, nil
 			}
 		case StatusFail:
+			lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
+				Type:               lbcfapi.LBDeleted,
+				Status:             lbcfapi.ConditionFalse,
+				LastTransitionTime: v1.Now(),
+				Reason:             lbcfapi.ReasonOperationFailed.String(),
+				Message:            rsp.Msg,
+			})
+			if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
+				return err, nil
+			}
 			delay := calculateRetryInterval(DefaultWebhookTimeout, rsp.RetryIntervalInSeconds)
 			return fmt.Errorf(rsp.Msg), &delay
 		case StatusRunning:
+			lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
+				Type:               lbcfapi.LBDeleted,
+				Status:             lbcfapi.ConditionFalse,
+				LastTransitionTime: v1.Now(),
+				Reason:             lbcfapi.ReasonOperationInProgress.String(),
+				Message:            rsp.Msg,
+			})
+			if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
+				return err, nil
+			}
 			delay := calculateRetryInterval(DefaultWebhookTimeout, rsp.RetryIntervalInSeconds)
 			return fmt.Errorf(rsp.Msg), &delay
+		default:
+			lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
+				Type:               lbcfapi.LBDeleted,
+				Status:             lbcfapi.ConditionFalse,
+				LastTransitionTime: v1.Now(),
+				Reason:             lbcfapi.ReasonInvalidResponse.String(),
+				Message:            fmt.Sprintf("unknown status %q", rsp.Status),
+			})
+			if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
+				return err, nil
+			}
+			return fmt.Errorf("unknown status %q", rsp.Status), nil
 		}
 	}
 
@@ -127,14 +162,14 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 			},
 			Attributes: lb.Spec.Attributes,
 		}
-		rsp, err := callEnsureLoadBalancer(driver, req)
+		rsp, err := driver.CallEnsureLoadBalancer(req)
 		if err != nil {
 			return err, nil
 		}
 		switch rsp.Status {
 		case StatusSucc:
 			lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
-				Type:               lbcfapi.LBEnsured,
+				Type:               lbcfapi.LBSatisfied,
 				Status:             lbcfapi.ConditionTrue,
 				LastTransitionTime: v1.Now(),
 			})
@@ -144,10 +179,10 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 		case StatusFail:
 			if rsp.Msg != "" {
 				lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
-					Type:               lbcfapi.LBEnsured,
+					Type:               lbcfapi.LBSatisfied,
 					Status:             lbcfapi.ConditionFalse,
 					LastTransitionTime: v1.Now(),
-					Reason:             "EnsureFailed",
+					Reason:             lbcfapi.ReasonOperationFailed.String(),
 					Message:            rsp.Msg,
 				})
 				if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
@@ -158,10 +193,10 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 			return fmt.Errorf(rsp.Msg), &delay
 		case StatusRunning:
 			lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
-				Type:               lbcfapi.LBEnsured,
+				Type:               lbcfapi.LBSatisfied,
 				Status:             lbcfapi.ConditionFalse,
 				LastTransitionTime: v1.Now(),
-				Reason:             "OperationFailed",
+				Reason:             lbcfapi.ReasonOperationInProgress.String(),
 				Message:            rsp.Msg,
 			})
 			if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
@@ -169,13 +204,19 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 			}
 			delay := calculateRetryInterval(DefaultWebhookTimeout, rsp.RetryIntervalInSeconds)
 			return fmt.Errorf(rsp.Msg), &delay
+		default:
+			lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
+				Type:               lbcfapi.LBSatisfied,
+				Status:             lbcfapi.ConditionFalse,
+				LastTransitionTime: v1.Now(),
+				Reason:             lbcfapi.ReasonInvalidResponse.String(),
+				Message:            fmt.Sprintf("unknown status %q", rsp.Status),
+			})
+			if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
+				return err, nil
+			}
+			return fmt.Errorf("unknown status %q", rsp.Status), nil
 		}
-		if rsp.Status == StatusFail {
-			delay := calculateRetryInterval(DefaultWebhookTimeout, rsp.RetryIntervalInSeconds)
-			return fmt.Errorf(rsp.Msg), &delay
-		}
-
-		// TODO: update LoadBalancer.status.condition
 		return nil, nil
 	}
 
@@ -188,7 +229,7 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 		LBSpec:     lb.Spec.LBSpec,
 		Attributes: lb.Spec.Attributes,
 	}
-	rsp, err := callCreateLoadBalancer(driver, req)
+	rsp, err := driver.CallCreateLoadBalancer(req)
 	if err != nil {
 		return err, nil
 	}
@@ -208,7 +249,7 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 				Type:               lbcfapi.LBCreated,
 				Status:             lbcfapi.ConditionFalse,
 				LastTransitionTime: v1.Now(),
-				Reason:             "OperationFailed",
+				Reason:             lbcfapi.ReasonOperationFailed.String(),
 				Message:            rsp.Msg,
 			})
 			if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
@@ -222,7 +263,7 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 			Type:               lbcfapi.LBCreated,
 			Status:             lbcfapi.ConditionFalse,
 			LastTransitionTime: v1.Now(),
-			Reason:             "InProgress",
+			Reason:             lbcfapi.ReasonOperationInProgress.String(),
 			Message:            rsp.Msg,
 		})
 		if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
@@ -230,6 +271,18 @@ func (c *LoadBalancerController) syncLB(key string) (error, *time.Duration) {
 		}
 		delay := calculateRetryInterval(DefaultWebhookTimeout, rsp.RetryIntervalInSeconds)
 		return fmt.Errorf(rsp.Msg), &delay
+	default:
+		lb.Status = addLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
+			Type:               lbcfapi.LBCreated,
+			Status:             lbcfapi.ConditionFalse,
+			LastTransitionTime: v1.Now(),
+			Reason:             lbcfapi.ReasonInvalidResponse.String(),
+			Message:            fmt.Sprintf("unknown status %q", rsp.Status),
+		})
+		if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(namespace).UpdateStatus(lb); err != nil {
+			return err, nil
+		}
+		return fmt.Errorf("unknown status %q", rsp.Status), nil
 	}
 	// TODO: handle status update as part of resource
 	return nil, nil

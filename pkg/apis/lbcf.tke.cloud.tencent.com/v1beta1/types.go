@@ -1,12 +1,29 @@
+/*
+ * Copyright 2019 THL A29 Limited, a Tencent company.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package v1beta1
 
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
+	"strconv"
 	"time"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -65,9 +82,9 @@ type LoadBalancerCondition struct {
 type LoadBalancerConditionType string
 
 const (
-	LBCreated LoadBalancerConditionType = "Created"
-	LBEnsured LoadBalancerConditionType = "Ensured"
-	LBDeleting LoadBalancerConditionType = "Deleting"
+	LBCreated   LoadBalancerConditionType = "Created"
+	LBSatisfied LoadBalancerConditionType = "Satisfied"
+	LBDeleted  LoadBalancerConditionType = "Deleted"
 )
 
 // +genclient
@@ -124,7 +141,6 @@ type SelectPodByLabel struct {
 type BackendGroupStatus struct {
 	Backends           int32                                             `json:"backends"`
 	RegisteredBackends int32                                             `json:"registeredBackends"`
-	Conditions         []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -213,17 +229,141 @@ type BackendRecord struct {
 }
 
 type BackendRecordSpec struct {
-	LBName            string            `json:"lbName"`
-	LBDriver          string            `json:"lbDriver"`
-	LBInfo            map[string]string `json:"lbInfo"`
-	LBAttributes      map[string]string `json:"lbAttributes"`
-	BackendParameters map[string]string `json:"backendParameters"`
-	DriverInjection   map[string]string `json:"driverInjection"`
+	LBName             string                `json:"lbName"`
+	LBDriver           string                `json:"lbDriver"`
+	LBInfo             map[string]string     `json:"lbInfo"`
+	LBAttributes       map[string]string     `json:"lbAttributes"`
+	Parameters         map[string]string     `json:"parameters"`
+	PodBackendInfo     *PodBackendRecord     `json:"podBackend"`
+	ServiceBackendInfo *ServiceBackendRecord `json:"serviceBackend"`
+}
+
+type PodBackendRecord struct {
+	Name string        `json:"name"`
+	Port ContainerPort `json:"port"`
+}
+
+type ServiceBackendRecord struct {
+	Name string            `json:"name"`
+	Port ServicePort       `json:"port"`
+	Node NodeBackendRecord `json:"node"`
+}
+
+type NodeBackendRecord struct {
+	Name string `json:"name"`
+}
+
+type ContainerPort struct {
+	// +optional
+	Name string `json:"name,omitempty"`
+	// +optional
+	HostPort      int32 `json:"hostPort,omitempty"`
+	ContainerPort int32 `json:"containerPort"`
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+	// +optional
+	HostIP string `json:"hostIP,omitempty"`
+}
+
+type ServicePort struct {
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+
+	// The port that will be exposed by this service.
+	Port int32 `json:"port" protobuf:"varint,3,opt,name=port"`
+
+	// +optional
+	TargetPort IntOrString `json:"targetPort,omitempty" protobuf:"bytes,4,opt,name=targetPort"`
+
+	// The port on each node on which this service is exposed when type=NodePort or LoadBalancer.
+	// Usually assigned by the system. If specified, it will be allocated to the service
+	// if unused or else creation of the service will fail.
+	// Default is to auto-allocate a port if the ServiceType of this Service requires one.
+	// More info: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+	// +optional
+	NodePort int32 `json:"nodePort,omitempty" protobuf:"varint,5,opt,name=nodePort"`
+}
+
+type Type int
+
+const (
+	Int    Type = iota // The IntOrString holds an int.
+	String             // The IntOrString holds a string.
+)
+
+type IntOrString struct {
+	Type   Type   `protobuf:"varint,1,opt,name=type,casttype=Type"`
+	IntVal int32  `protobuf:"varint,2,opt,name=intVal"`
+	StrVal string `protobuf:"bytes,3,opt,name=strVal"`
+}
+
+func FromInt(val int) IntOrString {
+	if val > math.MaxInt32 || val < math.MinInt32 {
+		//glog.Errorf("value: %d overflows int32\n%s\n", val, debug.Stack())
+	}
+	return IntOrString{Type: Int, IntVal: int32(val)}
+}
+
+// FromString creates an IntOrString object with a string value.
+func FromString(val string) IntOrString {
+	return IntOrString{Type: String, StrVal: val}
+}
+
+// Parse the given string and try to convert it to an integer before
+// setting it as a string value.
+func Parse(val string) IntOrString {
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		return FromString(val)
+	}
+	return FromInt(i)
+}
+
+// String returns the string value, or the Itoa of the int value.
+func (intstr *IntOrString) String() string {
+	if intstr.Type == String {
+		return intstr.StrVal
+	}
+	return strconv.Itoa(intstr.IntValue())
+}
+
+// IntValue returns the IntVal if type Int, or if
+// it is a String, will attempt a conversion to int.
+func (intstr *IntOrString) IntValue() int {
+	if intstr.Type == String {
+		i, _ := strconv.Atoi(intstr.StrVal)
+		return i
+	}
+	return int(intstr.IntVal)
+}
+
+func (intstr *IntOrString) UnmarshalJSON(value []byte) error {
+	if value[0] == '"' {
+		intstr.Type = String
+		return json.Unmarshal(value, &intstr.StrVal)
+	}
+	intstr.Type = Int
+	return json.Unmarshal(value, &intstr.IntVal)
+}
+
+func (intstr IntOrString) MarshalJSON() ([]byte, error) {
+	switch intstr.Type {
+	case Int:
+		return json.Marshal(intstr.IntVal)
+	case String:
+		return json.Marshal(intstr.StrVal)
+	default:
+		return []byte{}, fmt.Errorf("impossible IntOrString.Type")
+	}
 }
 
 type BackendRecordStatus struct {
-	BackendAddr string                                            `json:"backendAddr"`
-	Conditions  []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+	BackendAddr  string                   `json:"backendAddr"`
+	InjectedInfo map[string]string        `json:"injectedInfo"`
+	Conditions   []BackendRecordCondition `json:"conditions"`
 }
 
 type BackendRecordConditionType string
@@ -312,4 +452,16 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 
 func (d Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.Duration.String())
+}
+
+type ConditionReason string
+
+const(
+	ReasonOperationInProgress ConditionReason = "InProgres"
+	ReasonOperationFailed ConditionReason = "OperationFailed"
+	ReasonInvalidResponse ConditionReason = "InvalidResponse"
+)
+
+func (c ConditionReason) String() string{
+	return string(c)
 }

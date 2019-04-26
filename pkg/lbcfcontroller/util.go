@@ -1,7 +1,25 @@
+/*
+ * Copyright 2019 THL A29 Limited, a Tencent company.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package lbcfcontroller
 
 import (
+	"encoding/json"
 	"fmt"
+	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	"strings"
 	"time"
@@ -85,11 +103,11 @@ func addLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 	newStatus := lbStatus.DeepCopy()
 	found := false
 	for i := range newStatus.Conditions {
-		if newStatus.Conditions[i].Type != expectCondition.Type {
-			continue
+		if newStatus.Conditions[i].Type == expectCondition.Type {
+			found = true
+			newStatus.Conditions[i] = expectCondition
+			break
 		}
-		found = true
-		newStatus.Conditions[i] = expectCondition
 	}
 	if !found {
 		newStatus.Conditions = append(newStatus.Conditions, expectCondition)
@@ -97,6 +115,21 @@ func addLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 	return *newStatus
 }
 
+func addBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition lbcfapi.BackendRecordCondition) lbcfapi.BackendRecordStatus{
+	cpy := beStatus.DeepCopy()
+	found := false
+	for i := range cpy.Conditions{
+		if cpy.Conditions[i].Type != expectCondition.Type{
+			found = true
+			cpy.Conditions[i] = expectCondition
+			break
+		}
+	}
+	if !found{
+		cpy.Conditions = append(cpy.Conditions, expectCondition)
+	}
+	return *cpy
+}
 
 type BackendType string
 
@@ -142,4 +175,65 @@ func calculateRetryInterval(defaultInterval time.Duration, userValueInSeconds in
 		return defaultInterval
 	}
 	return dur
+}
+
+func NewPodProvider(lister corev1.PodLister) PodProvider{
+	return &PodProviderImpl{
+		lister: lister,
+	}
+}
+
+type PodProvider interface {
+	GetPod(name string, namespace string) (*v1.Pod, error)
+}
+
+type PodProviderImpl struct {
+	lister corev1.PodLister
+}
+
+func (p *PodProviderImpl) GetPod(name string, namespace string) (*v1.Pod, error){
+	return p.lister.Pods(namespace).Get(name)
+}
+
+func containerPortToK8sContainerPort(port lbcfapi.ContainerPort) v1.ContainerPort{
+	return v1.ContainerPort{
+		Name: port.Name,
+		HostPort: port.HostPort,
+		ContainerPort: port.ContainerPort,
+		Protocol: v1.Protocol(port.Protocol),
+		HostIP: port.HostIP,
+	}
+}
+
+func recordIndex(obj interface{}) (string, error) {
+	r := obj.(*lbcfapi.BackendRecord)
+	index, err := json.Marshal(r.Spec.LBInfo)
+	return string(index), err
+}
+
+func hasFinalizer(all []string, expect string) bool{
+	for i := range all{
+		if all[i] == expect{
+			return true
+		}
+	}
+	return false
+}
+
+
+func removeFinalizer(all []string, toDelete string) []string{
+	var ret []string
+	for i := range all{
+		if all[i] != toDelete {
+			ret = append(ret, all[i])
+		}
+	}
+	return ret
+}
+
+func namespacedNameKeyFunc(namespace, name string) string{
+	if len(namespace) > 0{
+		return namespace + "/" + name
+	}
+	return name
 }

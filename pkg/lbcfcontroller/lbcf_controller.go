@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 THL A29 Limited, a Tencent company.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package lbcfcontroller
 
 import (
@@ -6,6 +22,7 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -31,12 +48,12 @@ func NewController(
 		driverQueue:       NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "driver-queue"),
 		loadBalancerQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "lb-queue"),
 		backendGroupQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backendgroup-queue"),
-		backendQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backend-queue"),
+		backendQueue:      NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backend-queue"),
 	}
 
 	c.driverController = NewDriverController(lbcfClient, lbDriverInformer.Lister())
 	c.lbController = NewLoadBalancerController(lbcfClient, lbInformer.Lister(), c.driverController)
-	c.backendController = NewBackendController(lbcfClient, bgInformer.Lister(), brInformer.Lister(), c.driverController, c.lbController)
+	c.backendController = NewBackendController(lbcfClient, bgInformer.Lister(), brInformer.Lister(), c.driverController, c.lbController, NewPodProvider(podInformer.Lister()))
 
 	// enqueue backendgroup
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
@@ -94,8 +111,8 @@ type Controller struct {
 	k8sClient  *kubernetes.Clientset
 	lbcfClient *lbcfclient.Clientset
 
-	driverController *DriverController
-	lbController     *LoadBalancerController
+	driverController  *DriverController
+	lbController      *LoadBalancerController
 	backendController *BackendController
 
 	podListerSynced           cache.InformerSynced
@@ -108,7 +125,7 @@ type Controller struct {
 	driverQueue       IntervalRateLimitingInterface
 	loadBalancerQueue IntervalRateLimitingInterface
 	backendGroupQueue IntervalRateLimitingInterface
-	backendQueue IntervalRateLimitingInterface
+	backendQueue      IntervalRateLimitingInterface
 }
 
 func (c *Controller) Start() {
@@ -156,13 +173,13 @@ func (c *Controller) backendGroupWorker() {
 }
 
 func (c *Controller) backendWorker() {
-	for c.processNextItem(c.backendQueue, c.backendController.syncBackend) {
+	for c.processNextItem(c.backendQueue, c.backendController.syncBackendRecord) {
 	}
 }
 
-type SyncFunc func(string)(error, *time.Duration)
+type SyncFunc func(string) (error, *time.Duration)
 
-const(
+const (
 	DefaultRetryInterval = 10 * time.Second
 )
 
@@ -173,9 +190,9 @@ func (c *Controller) processNextItem(queue IntervalRateLimitingInterface, syncFu
 	}
 	defer queue.Done(key)
 	if err, delay := syncFunc(key.(string)); err != nil {
-		if delay == nil{
+		if delay == nil {
 			queue.AddIntervalRateLimited(key, DefaultWebhookTimeout)
-		}else{
+		} else {
 			queue.AddIntervalRateLimited(key, *delay)
 		}
 	} else {
@@ -183,4 +200,3 @@ func (c *Controller) processNextItem(queue IntervalRateLimitingInterface, syncFu
 	}
 	return true
 }
-
