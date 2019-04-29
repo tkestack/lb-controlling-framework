@@ -188,6 +188,10 @@ func (c *Controller) ValidateDriverUpdate(ar *admission.AdmissionReview) *admiss
 	if !DriverUpdatedFieldsAllowed(curObj, oldObj) {
 		return toAdmissionResponse(fmt.Errorf("update to LoadBalancerUpdate is not permitted"))
 	}
+	errList := ValidateLoadBalancerDriver(curObj)
+	if len(errList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
+	}
 	return toAdmissionResponse(nil)
 }
 

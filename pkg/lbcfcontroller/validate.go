@@ -18,10 +18,11 @@ package lbcfcontroller
 
 import (
 	"fmt"
-	"net/url"
 	"reflect"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 
@@ -47,7 +48,7 @@ func ValidateLoadBalancerDriver(raw *v1beta1.LoadBalancerDriver) field.ErrorList
 	allErrs = append(allErrs, validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
 	//allErrs = append(allErrs, validateDriverUrl(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
 	if raw.Spec.Webhooks != nil {
-		allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec").Child("webhooks"))...)
+		allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec"))...)
 	}
 	return allErrs
 }
@@ -75,40 +76,26 @@ func validateDriverType(raw string, path *field.Path) field.ErrorList {
 	return allErrs
 }
 
-func validateDriverUrl(raw string, path *field.Path) field.ErrorList {
-	allErrs := field.ErrorList{}
-	if _, err := url.Parse(raw); err != nil {
-		allErrs = append(allErrs, field.Invalid(path, raw, err.Error()))
-	}
-	return allErrs
-}
-
 func validateDriverWebhooks(raw []v1beta1.WebhookConfig, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-
-	for _, wh := range raw {
+	webhookSet := sets.NewString()
+	for i, wh := range raw {
+		curPath := path.Child(fmt.Sprintf("webhooks[%d]", i))
 		if !knownWebhooks.Has(wh.Name) {
-			allErrs = append(allErrs, field.NotSupported(path, wh, knownWebhooks.List()))
+			allErrs = append(allErrs, field.NotSupported(curPath.Child("name"), wh, knownWebhooks.List()))
+			continue
 		}
+		if webhookSet.Has(wh.Name) {
+			allErrs = append(allErrs, field.Duplicate(curPath.Child("name"), wh.Name))
+			continue
+		}
+		webhookSet.Insert(wh.Name)
 		if wh.Timeout != nil {
-			if  wh.Timeout.Nanoseconds() > (1*time.Minute).Nanoseconds() {
-				allErrs = append(allErrs, field.Invalid(path, *wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
-				return allErrs
+			if wh.Timeout.Nanoseconds() > (1 * time.Minute).Nanoseconds() {
+				allErrs = append(allErrs, field.Invalid(curPath.Child("timeout"), *wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
+				continue
 			}
 		}
-
-	}
-	return allErrs
-}
-
-func validateDriverWebhookConfig(raw *v1beta1.WebhookConfig, path *field.Path) field.ErrorList {
-	allErrs := field.ErrorList{}
-	if raw.Timeout == nil {
-		return allErrs
-	}
-	if raw.Timeout.Nanoseconds() < (10*time.Second).Nanoseconds() || raw.Timeout.Nanoseconds() > (10*time.Minute).Nanoseconds() {
-		allErrs = append(allErrs, field.Invalid(path, *raw.Timeout, "timeout must be >= 5s and <= 10m"))
-		return allErrs
 	}
 	return allErrs
 }
@@ -117,7 +104,10 @@ func DriverUpdatedFieldsAllowed(cur *v1beta1.LoadBalancerDriver, old *v1beta1.Lo
 	if cur.Name != old.Name {
 		return false
 	}
-	if !reflect.DeepEqual(cur.Spec, old.Spec) {
+	if old.Spec.Url != cur.Spec.Url {
+		return false
+	}
+	if old.Spec.DriverType != cur.Spec.DriverType {
 		return false
 	}
 	return true

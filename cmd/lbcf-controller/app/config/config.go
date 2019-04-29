@@ -15,3 +15,24 @@
  */
 
 package config
+
+import (
+	"github.com/spf13/pflag"
+	"time"
+)
+
+type Config struct {
+	InformerResyncPeriod time.Duration
+	LBResyncPeriod       time.Duration
+	MinRetryDelay        time.Duration
+}
+
+func NewConfig() *Config {
+	return &Config{}
+}
+
+func (o *Config) AddFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&o.InformerResyncPeriod, "informer-resync-period", 1*time.Minute, "resync period for informers")
+	fs.DurationVar(&o.LBResyncPeriod, "lb-resync-period", 1*time.Minute, "period for ensureLoadBalancer and ensureBackend")
+	fs.DurationVar(&o.MinRetryDelay, "min-retry-delay", 1*time.Minute, "minimum retry delay for failed webhook calls")
+}

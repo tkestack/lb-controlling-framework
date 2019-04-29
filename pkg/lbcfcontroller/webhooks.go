@@ -77,7 +77,7 @@ const (
 type ResponseForFailRetryHooks struct {
 	Status                 string `json:"status"`
 	Msg                    string `json:"msg"`
-	RetryIntervalInSeconds int32  `json:"retryIntervalInSeconds"`
+	MinRetryDelayInSeconds int32  `json:"minRetryDelayInSeconds"`
 }
 
 type ValidateLoadBalancerRequest struct {
@@ -156,52 +156,20 @@ type GenerateBackendAddrResponse struct {
 	BackendAddr string `json:"backendAddr"`
 }
 
-type EnsureBackendRequest struct {
-	LBInfo   map[string]string `json:"lbInfo"`
-	Backends []BackendReg      `json:"backends"`
-}
-
-type BackendReg struct {
+type BackendOperationRequest struct {
 	RequestForRetryHooks
+	LBInfo       map[string]string `json:"lbInfo"`
 	BackendAddr  string            `json:"backendAddr"`
 	Parameters   map[string]string `json:"parameters"`
 	InjectedInfo map[string]string `json:"injectedInfo"`
 }
 
-type EnsureBackendResponse struct {
-	TargetSpec map[string]string  `json:"targetSpec"`
-	Results    []BackendRegResult `json:"results"`
-}
-
-type BackendRegResult struct {
-	RecordID string `json:"recordID"`
-	RetryID  string `json:"retryID"`
-	ResponseForFailRetryHooks
-	Ingress      []v1.LoadBalancerIngress `json:"ingress"`
-	InjectedInfo map[string]string        `json:"injectedInfo"`
-}
-
-type DeregisterBackendRequest struct {
+type BackendOperationResponse struct {
+	RecordID string            `json:"recordID"`
+	RetryID  string            `json:"retryID"`
 	LBInfo   map[string]string `json:"lbInfo"`
-	Backends []BackendDereg    `json:"backends"`
-}
-
-type BackendDereg struct {
-	RequestForRetryHooks
-	BackendAddr  string            `json:"backendAddr"`
-	Parameters   map[string]string `json:"parameters"`
-	InjectedInfo map[string]string `json:"injectedInfo"`
-}
-
-type DeregisterBackendResponse struct {
-	LBInfo  map[string]string    `json:"lbInfo"`
-	Results []BackendDeregResult `json:"results"`
-}
-
-type BackendDeregResult struct {
-	RecordID string `json:"recordID"`
-	RetryID  string `json:"retryID"`
 	ResponseForFailRetryHooks
+	InjectedInfo map[string]string `json:"injectedInfo"`
 }
 
 func callWebhook(driver *v1beta1.LoadBalancerDriver, webHookName string, payload interface{}, rsp interface{}) error {

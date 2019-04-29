@@ -1,14 +1,28 @@
+/*
+ * Copyright 2019 THL A29 Limited, a Tencent company.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package app
 
 import (
-	"time"
-
+	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	lbcfclientset "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -17,23 +31,23 @@ import (
 )
 
 func NewServer() *cobra.Command {
-	opts := newOptions()
+	cfg := config.NewConfig()
 
 	cmd := &cobra.Command{
 		Use: "lbcf-controller",
 
 		Run: func(cmd *cobra.Command, args []string) {
-			cfg, err := rest.InClusterConfig()
+			clientCfg, err := rest.InClusterConfig()
 			if err != nil {
 				klog.Fatal(err)
 			}
 
-			k8sClient := kubernetes.NewForConfigOrDie(cfg)
-			lbcfClient := lbcfclientset.NewForConfigOrDie(cfg)
-			k8sFactory := informers.NewSharedInformerFactory(k8sClient, opts.ResyncPeriod)
-			lbcfFactory := externalversions.NewSharedInformerFactory(lbcfClient, opts.ResyncPeriod)
+			k8sClient := kubernetes.NewForConfigOrDie(clientCfg)
+			lbcfClient := lbcfclientset.NewForConfigOrDie(clientCfg)
+			k8sFactory := informers.NewSharedInformerFactory(k8sClient, cfg.InformerResyncPeriod)
+			lbcfFactory := externalversions.NewSharedInformerFactory(lbcfClient, cfg.InformerResyncPeriod)
 			c := lbcfcontroller.NewController(
-				opts,
+				cfg,
 				k8sClient,
 				lbcfClient,
 				k8sFactory.Core().V1().Pods(),
@@ -48,18 +62,7 @@ func NewServer() *cobra.Command {
 			lbcfcontroller.NewAdmitServer(c).Start()
 		},
 	}
-	opts.addFlags(cmd.Flags())
+	cfg.AddFlags(cmd.Flags())
 	return cmd
 }
 
-type Options struct {
-	ResyncPeriod time.Duration
-}
-
-func newOptions() *Options {
-	return &Options{}
-}
-
-func (o *Options) addFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&o.ResyncPeriod, "resync-period", 10*time.Second, "resync period for informers")
-}

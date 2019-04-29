@@ -16,6 +16,8 @@
 
 package lbcfcontroller
 
+import "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+
 func (c *Controller) addPod(obj interface{}) {
 	// TODO: find backendGroup by pod
 
@@ -47,6 +49,7 @@ func (c *Controller) addBackendGroup(obj interface{}) {
 }
 
 func (c *Controller) updateBackendGroup(old, cur interface{}) {
+	// TODO: if obj changed, enqueue
 
 }
 
@@ -59,7 +62,16 @@ func (c *Controller) addLoadBalancer(obj interface{}) {
 }
 
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
-
+	oldObj := cur.(*v1beta1.LoadBalancer)
+	curObj := cur.(*v1beta1.LoadBalancer)
+	if !equalMap(oldObj.Spec.Attributes, curObj.Spec.Attributes) {
+		c.enqueue(curObj, c.loadBalancerQueue)
+		return
+	}
+	if !equalResyncPolicy(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
+		c.enqueue(curObj, c.loadBalancerQueue)
+		return
+	}
 }
 
 func (c *Controller) deleteLoadBalancer(obj interface{}) {
@@ -71,6 +83,7 @@ func (c *Controller) addLoadBalancerDriver(obj interface{}) {
 }
 
 func (c *Controller) updateLoadBalancerDriver(old, cur interface{}) {
+	// TODO: if obj changed, enqueue
 
 }
 
@@ -79,11 +92,22 @@ func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {
 }
 
 func (c *Controller) addBackendRecord(obj interface{}) {
+	c.enqueue(obj, c.backendQueue)
 }
 
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
-
+	oldObj := cur.(*v1beta1.BackendRecord)
+	curObj := cur.(*v1beta1.BackendRecord)
+	if !equalMap(oldObj.Spec.Parameters, curObj.Spec.Parameters) {
+		c.enqueue(curObj, c.backendQueue)
+		return
+	}
+	if !equalResyncPolicy(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
+		c.enqueue(curObj, c.loadBalancerQueue)
+		return
+	}
 }
 
 func (c *Controller) deleteBackendRecord(obj interface{}) {
+	c.enqueue(obj, c.backendQueue)
 }

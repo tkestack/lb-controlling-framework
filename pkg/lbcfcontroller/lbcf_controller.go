@@ -19,7 +19,7 @@ package lbcfcontroller
 import (
 	"time"
 
-	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app"
+	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
 
@@ -32,7 +32,7 @@ import (
 )
 
 func NewController(
-	opts *app.Options,
+	cfg *config.Config,
 	k8sClient *kubernetes.Clientset,
 	lbcfClient *lbcfclient.Clientset,
 	podInformer v1.PodInformer,
@@ -43,59 +43,60 @@ func NewController(
 	brInformer v1beta1.BackendRecordInformer,
 ) *Controller {
 	c := &Controller{
+		cfg:               cfg,
 		k8sClient:         k8sClient,
 		lbcfClient:        lbcfClient,
-		driverQueue:       NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "driver-queue"),
-		loadBalancerQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "lb-queue"),
-		backendGroupQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backendgroup-queue"),
-		backendQueue:      NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backend-queue"),
+		driverQueue:       NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "driver-queue", cfg.MinRetryDelay),
+		loadBalancerQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "lb-queue", cfg.MinRetryDelay),
+		backendGroupQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backendgroup-queue", cfg.MinRetryDelay),
+		backendQueue:      NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backend-queue", cfg.MinRetryDelay),
 	}
 
 	c.driverController = NewDriverController(lbcfClient, lbDriverInformer.Lister())
 	c.lbController = NewLoadBalancerController(lbcfClient, lbInformer.Lister(), c.driverController)
-	c.backendController = NewBackendController(lbcfClient, bgInformer.Lister(), brInformer.Lister(), c.driverController, c.lbController, NewPodProvider(podInformer.Lister()))
+	c.backendController = NewBackendController(lbcfClient,  brInformer.Lister(), c.driverController, c.lbController, NewPodProvider(podInformer.Lister()))
 
 	// enqueue backendgroup
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addPod,
 		UpdateFunc: c.updatePod,
 		DeleteFunc: c.deletePod,
-	}, opts.ResyncPeriod)
+	}, cfg.InformerResyncPeriod)
 
 	// enqueue backendgroup
 	svcInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addService,
 		UpdateFunc: c.updateService,
 		DeleteFunc: c.deleteService,
-	}, opts.ResyncPeriod)
+	}, cfg.InformerResyncPeriod)
 
 	// control loadBalancer lifecycle
 	lbInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addLoadBalancer,
 		UpdateFunc: c.updateLoadBalancer,
 		DeleteFunc: c.deleteLoadBalancer,
-	}, opts.ResyncPeriod)
+	}, cfg.InformerResyncPeriod)
 
 	// test driver health
 	lbDriverInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addLoadBalancerDriver,
 		UpdateFunc: c.updateLoadBalancerDriver,
 		DeleteFunc: c.deleteLoadBalancerDriver,
-	}, opts.ResyncPeriod)
+	}, cfg.InformerResyncPeriod)
 
 	// generate backendrecord
 	bgInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addBackendGroup,
 		UpdateFunc: c.updateBackendGroup,
 		DeleteFunc: c.deleteBackendGroup,
-	}, opts.ResyncPeriod)
+	}, cfg.InformerResyncPeriod)
 
 	// register/deregister backend
 	brInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addBackendRecord,
 		UpdateFunc: c.updateBackendRecord,
 		DeleteFunc: c.deleteBackendRecord,
-	}, opts.ResyncPeriod)
+	}, cfg.InformerResyncPeriod)
 
 	c.podListerSynced = podInformer.Informer().HasSynced
 	c.svcListerSynced = svcInformer.Informer().HasSynced
@@ -108,6 +109,7 @@ func NewController(
 }
 
 type Controller struct {
+	cfg        *config.Config
 	k8sClient  *kubernetes.Clientset
 	lbcfClient *lbcfclient.Clientset
 
@@ -146,6 +148,7 @@ func (c *Controller) run() {
 		go wait.Until(c.lbWorker, time.Second, wait.NeverStop)
 		go wait.Until(c.driverWorker, time.Second, wait.NeverStop)
 		go wait.Until(c.backendGroupWorker, time.Second, wait.NeverStop)
+		go wait.Until(c.backendWorker, time.Second, wait.NeverStop)
 	}
 }
 
@@ -177,7 +180,18 @@ func (c *Controller) backendWorker() {
 	}
 }
 
-type SyncFunc func(string) (error, *time.Duration)
+type SyncFunc func(string) *SyncResult
+
+type SyncResult struct {
+	err error
+
+	operationFailed   bool
+	asyncOperation    bool
+	periodicOperation bool
+
+	minRetryDelay   *time.Duration
+	minResyncPeriod *time.Duration
+}
 
 const (
 	DefaultRetryInterval = 10 * time.Second
@@ -189,14 +203,17 @@ func (c *Controller) processNextItem(queue IntervalRateLimitingInterface, syncFu
 		return false
 	}
 	defer queue.Done(key)
-	if err, delay := syncFunc(key.(string)); err != nil {
-		if delay == nil {
-			queue.AddIntervalRateLimited(key, DefaultWebhookTimeout)
-		} else {
-			queue.AddIntervalRateLimited(key, *delay)
+
+	go func() {
+		result := syncFunc(key.(string))
+		if result.err != nil {
+			queue.AddRateLimited(key)
+		} else if result.operationFailed {
+			queue.AddIntervalRateLimited(key, result.minRetryDelay)
+		} else if result.asyncOperation || result.periodicOperation {
+			queue.Forget(key)
+			queue.AddIntervalRateLimited(key, result.minRetryDelay)
 		}
-	} else {
-		queue.Forget(key)
-	}
+	}()
 	return true
 }

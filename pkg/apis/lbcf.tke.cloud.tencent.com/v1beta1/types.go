@@ -44,6 +44,8 @@ type LoadBalancerSpec struct {
 	LBSpec   map[string]string `json:"lbSpec"`
 	// +optional
 	Attributes map[string]string `json:"attributes"`
+	// +optional
+	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -64,27 +66,27 @@ type LoadBalancerStatus struct {
 
 type LoadBalancerCondition struct {
 	// Type is the type of the condition.
-	Type LoadBalancerConditionType
+	Type LoadBalancerConditionType `json:"type"`
 	// Status is the status of the condition.
 	// Can be True, False, Unknown.
-	Status ConditionStatus
+	Status ConditionStatus `json:"status"`
 	// Last time the condition transitioned from one status to another.
 	// +optional
-	LastTransitionTime metav1.Time
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// Unique, one-word, CamelCase reason for the condition's last transition.
 	// +optional
-	Reason string
+	Reason string `json:"reason,omitempty"`
 	// Human-readable message indicating details about last transition.
 	// +optional
-	Message string
+	Message string `json:"message,omitempty"`
 }
 
 type LoadBalancerConditionType string
 
 const (
-	LBCreated   LoadBalancerConditionType = "Created"
-	LBSatisfied LoadBalancerConditionType = "Satisfied"
-	LBDeleted  LoadBalancerConditionType = "Deleted"
+	LBCreated       LoadBalancerConditionType = "Created"
+	LBEnsured       LoadBalancerConditionType = "Ensured"
+	LBReadyToDelete LoadBalancerConditionType = "ReadyToDelete"
 )
 
 // +genclient
@@ -109,6 +111,8 @@ type BackendGroupSpec struct {
 	Static []string `json:"static,omitempty"`
 	// +optional
 	Parameters map[string]string `json:"parameters"`
+	// +optional
+	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy"`
 }
 
 type ServiceBackend struct {
@@ -139,8 +143,8 @@ type SelectPodByLabel struct {
 }
 
 type BackendGroupStatus struct {
-	Backends           int32                                             `json:"backends"`
-	RegisteredBackends int32                                             `json:"registeredBackends"`
+	Backends           int32 `json:"backends"`
+	RegisteredBackends int32 `json:"registeredBackends"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -186,19 +190,19 @@ const (
 
 type LoadBalancerDriverCondition struct {
 	// Type is the type of the condition.
-	Type LoadBalancerDriverConditionType
+	Type LoadBalancerDriverConditionType `json:"type"`
 	// Status is the status of the condition.
 	// Can be True, False, Unknown.
-	Status ConditionStatus
+	Status ConditionStatus `json:"status"`
 	// Last time the condition transitioned from one status to another.
 	// +optional
-	LastTransitionTime metav1.Time
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// Unique, one-word, CamelCase reason for the condition's last transition.
 	// +optional
-	Reason string
+	Reason string `json:"reason,omitempty"`
 	// Human-readable message indicating details about last transition.
 	// +optional
-	Message string
+	Message string `json:"message,omitempty"`
 }
 
 type LoadBalancerDriverStatus struct {
@@ -236,6 +240,7 @@ type BackendRecordSpec struct {
 	Parameters         map[string]string     `json:"parameters"`
 	PodBackendInfo     *PodBackendRecord     `json:"podBackend"`
 	ServiceBackendInfo *ServiceBackendRecord `json:"serviceBackend"`
+	ResyncPolicy       *ResyncPolicyConfig   `json:"resyncPolicy"`
 }
 
 type PodBackendRecord struct {
@@ -369,24 +374,26 @@ type BackendRecordStatus struct {
 type BackendRecordConditionType string
 
 const (
-	BackendRegistered BackendRecordConditionType = "Registered"
+	BackendAddrGenerated BackendRecordConditionType = "AddrGenerated"
+	BackendRegistered    BackendRecordConditionType = "Registered"
+	BackendReadyToDelete BackendRecordConditionType = "ReadyToDelete"
 )
 
 type BackendRecordCondition struct {
 	// Type is the type of the condition.
-	Type BackendRecordConditionType
+	Type BackendRecordConditionType `json:"type"`
 	// Status is the status of the condition.
 	// Can be True, False, Unknown.
-	Status ConditionStatus
+	Status ConditionStatus `json:"status"`
 	// Last time the condition transitioned from one status to another.
 	// +optional
-	LastTransitionTime metav1.Time
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// Unique, one-word, CamelCase reason for the condition's last transition.
 	// +optional
-	Reason string
+	Reason string `json:"reason,omitempty"`
 	// Human-readable message indicating details about last transition.
 	// +optional
-	Message string
+	Message string `json:"message"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -456,12 +463,25 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 
 type ConditionReason string
 
-const(
+const (
 	ReasonOperationInProgress ConditionReason = "InProgres"
-	ReasonOperationFailed ConditionReason = "OperationFailed"
-	ReasonInvalidResponse ConditionReason = "InvalidResponse"
+	ReasonOperationFailed     ConditionReason = "OperationFailed"
+	ReasonInvalidResponse     ConditionReason = "InvalidResponse"
 )
 
-func (c ConditionReason) String() string{
+func (c ConditionReason) String() string {
 	return string(c)
+}
+
+type ResyncPolicyType string
+
+const (
+	PolicyIfNotSucc ResyncPolicyType = "IfNotSucc"
+	PolicyAlways    ResyncPolicyType = "Always"
+)
+
+type ResyncPolicyConfig struct {
+	Policy ResyncPolicyType `json:"policy"`
+	// +optional
+	MinPeriod *Duration `json:"minPeriod"`
 }

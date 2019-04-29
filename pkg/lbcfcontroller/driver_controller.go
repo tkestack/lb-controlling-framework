@@ -19,12 +19,12 @@ package lbcfcontroller
 import (
 	"strings"
 	"sync"
-	"time"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -57,19 +57,25 @@ func (c *DriverController) getDriver(namespace, name string) (DriverConnector, b
 	return obj.(DriverConnector), ok
 }
 
-func (c *DriverController) syncDriver(key string) (error, *time.Duration) {
+func (c *DriverController) syncDriver(key string) *SyncResult {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
-		return err, nil
+		return &SyncResult{err: err}
 	}
 	driver, err := c.lister.LoadBalancerDrivers(name).Get(namespace)
-	if err != nil {
-		return err, nil
+	if errors.IsNotFound(err) {
+		c.driverStore.Delete(namespacedNameKeyFunc(namespace, name))
+		return &SyncResult{err: err}
+	} else if err != nil {
+		return &SyncResult{err: err}
 	}
+
 	if driver.DeletionTimestamp != nil {
 		c.driverStore.Delete(namespacedNameKeyFunc(namespace, name))
-		return nil, nil
+		return &SyncResult{}
 	}
+
+	// create DriverConnector
 	if len(driver.Status.Conditions) == 0 {
 		driver.Status = lbcfapi.LoadBalancerDriverStatus{
 			Conditions: []lbcfapi.LoadBalancerDriverCondition{
@@ -82,18 +88,20 @@ func (c *DriverController) syncDriver(key string) (error, *time.Duration) {
 		}
 		_, err := c.lbcfClient.LbcfV1beta1().LoadBalancerDrivers(namespace).UpdateStatus(driver)
 		if err != nil {
-			return err, nil
+			return &SyncResult{err: err}
 		}
 		c.driverStore.Store(key, NewDriverConnector(driver))
-		return nil, nil
+		return &SyncResult{}
 	}
+
+	// update DriverConnector
 	dc, ok := c.driverStore.Load(key)
 	if !ok {
-		// TODO: this shouldn't happen
-		return nil, nil
+		// this shouldn't happen
+		return &SyncResult{}
 	}
-	dc.(DriverConnector).SetDraining(driver.Labels)
-	return nil, nil
+	dc.(DriverConnector).UpdateConfig(driver)
+	return &SyncResult{}
 }
 
 const (
@@ -113,11 +121,13 @@ type DriverConnector interface {
 
 	CallGenerateBackendAddr(req *GenerateBackendAddrRequest) (*GenerateBackendAddrResponse, error)
 
-	CallEnsureBackend(req *EnsureBackendRequest) (*EnsureBackendResponse, error)
+	CallEnsureBackend(req *BackendOperationRequest) (*BackendOperationResponse, error)
 
-	CallDeregisterBackend(req *DeregisterBackendRequest) (*DeregisterBackendResponse, error)
+	CallDeregisterBackend(req *BackendOperationRequest) (*BackendOperationResponse, error)
 
-	SetDraining(labels map[string]string)
+	GetConfig() *lbcfapi.LoadBalancerDriver
+
+	UpdateConfig(*lbcfapi.LoadBalancerDriver)
 
 	IsDraining() bool
 
@@ -126,20 +136,19 @@ type DriverConnector interface {
 
 func NewDriverConnector(config *lbcfapi.LoadBalancerDriver) DriverConnector {
 	return &DriverConnectorImpl{
-		config: *config,
+		config: config.DeepCopy(),
 	}
 }
 
 type DriverConnectorImpl struct {
 	sync.RWMutex
 
-	config   lbcfapi.LoadBalancerDriver
-	draining bool
+	config *lbcfapi.LoadBalancerDriver
 }
 
 func (d *DriverConnectorImpl) CallValidateLoadBalancer(req *ValidateLoadBalancerRequest) (*ValidateLoadBalancerResponse, error) {
 	rsp := &ValidateLoadBalancerResponse{}
-	if err := callWebhook(&d.config, ValidateBEHook, req, rsp); err != nil {
+	if err := callWebhook(d.GetConfig(), ValidateBEHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -147,7 +156,7 @@ func (d *DriverConnectorImpl) CallValidateLoadBalancer(req *ValidateLoadBalancer
 
 func (d *DriverConnectorImpl) CallCreateLoadBalancer(req *CreateLoadBalancerRequest) (*CreateLoadBalancerResponse, error) {
 	rsp := &CreateLoadBalancerResponse{}
-	if err := callWebhook(&d.config, CreateLBHook, req, rsp); err != nil {
+	if err := callWebhook(d.GetConfig(), CreateLBHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -155,7 +164,7 @@ func (d *DriverConnectorImpl) CallCreateLoadBalancer(req *CreateLoadBalancerRequ
 
 func (d *DriverConnectorImpl) CallEnsureLoadBalancer(req *EnsureLoadBalancerRequest) (*EnsureLoadBalancerResponse, error) {
 	rsp := &EnsureLoadBalancerResponse{}
-	if err := callWebhook(&d.config, EnsureLBHook, req, rsp); err != nil {
+	if err := callWebhook(d.GetConfig(), EnsureLBHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -163,7 +172,7 @@ func (d *DriverConnectorImpl) CallEnsureLoadBalancer(req *EnsureLoadBalancerRequ
 
 func (d *DriverConnectorImpl) CallDeleteLoadBalancer(req *DeleteLoadBalancerRequest) (*DeleteLoadBalancerResponse, error) {
 	rsp := &DeleteLoadBalancerResponse{}
-	if err := callWebhook(&d.config, DeleteLBHook, req, rsp); err != nil {
+	if err := callWebhook(d.GetConfig(), DeleteLBHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -171,7 +180,7 @@ func (d *DriverConnectorImpl) CallDeleteLoadBalancer(req *DeleteLoadBalancerRequ
 
 func (d *DriverConnectorImpl) CallValidateBackend(req *ValidateBackendRequest) (*ValidateBackendResponse, error) {
 	rsp := &ValidateBackendResponse{}
-	if err := callWebhook(&d.config, ValidateBEHook, req, rsp); err != nil {
+	if err := callWebhook(d.GetConfig(), ValidateBEHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -179,45 +188,49 @@ func (d *DriverConnectorImpl) CallValidateBackend(req *ValidateBackendRequest) (
 
 func (d *DriverConnectorImpl) CallGenerateBackendAddr(req *GenerateBackendAddrRequest) (*GenerateBackendAddrResponse, error) {
 	rsp := &GenerateBackendAddrResponse{}
-	if err := callWebhook(&d.config, GenerateBEAddrHook, req, rsp); err != nil {
+	if err := callWebhook(d.GetConfig(), GenerateBEAddrHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
 }
 
-func (d *DriverConnectorImpl) CallEnsureBackend(req *EnsureBackendRequest) (*EnsureBackendResponse, error) {
-	rsp := &EnsureBackendResponse{}
-	if err := callWebhook(&d.config, EnsureBEHook, req, rsp); err != nil {
+func (d *DriverConnectorImpl) CallEnsureBackend(req *BackendOperationRequest) (*BackendOperationResponse, error) {
+	rsp := &BackendOperationResponse{}
+	if err := callWebhook(d.GetConfig(), EnsureBEHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
 }
 
-func (d *DriverConnectorImpl) CallDeregisterBackend(req *DeregisterBackendRequest) (*DeregisterBackendResponse, error) {
-	rsp := &DeregisterBackendResponse{}
-	if err := callWebhook(&d.config, DeregBEHook, req, rsp); err != nil {
+func (d *DriverConnectorImpl) CallDeregisterBackend(req *BackendOperationRequest) (*BackendOperationResponse, error) {
+	rsp := &BackendOperationResponse{}
+	if err := callWebhook(d.GetConfig(), DeregBEHook, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
 }
 
-func (d *DriverConnectorImpl) SetDraining(labels map[string]string) {
+func (d *DriverConnectorImpl) UpdateConfig(obj *lbcfapi.LoadBalancerDriver) {
 	d.Lock()
 	defer d.Unlock()
-	if v, ok := labels[driverDrainingLabel]; !ok || strings.ToUpper(v) != "TRUE" {
-		d.draining = true
-		return
-	}
-	d.draining = false
-	return
+	d.config = obj.DeepCopy()
 }
 
 func (d *DriverConnectorImpl) IsDraining() bool {
 	d.RLock()
 	defer d.RUnlock()
-	return d.draining
+	if v, ok := d.config.Labels[driverDrainingLabel]; !ok || strings.ToUpper(v) != "TRUE" {
+		return true
+	}
+	return false
 }
 
 func (d *DriverConnectorImpl) Start() {
 	panic("implement me")
+}
+
+func (d *DriverConnectorImpl) GetConfig() *lbcfapi.LoadBalancerDriver {
+	d.RLock()
+	defer d.Unlock()
+	return d.config.DeepCopy()
 }

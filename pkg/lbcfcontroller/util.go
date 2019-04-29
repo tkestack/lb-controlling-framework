@@ -19,8 +19,6 @@ package lbcfcontroller
 import (
 	"encoding/json"
 	"fmt"
-	corev1 "k8s.io/client-go/listers/core/v1"
-	"k8s.io/klog"
 	"strings"
 	"time"
 
@@ -28,7 +26,9 @@ import (
 
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
+	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/api/v1/pod"
 )
 
@@ -40,30 +40,35 @@ func DefaultControllerRateLimiter() workqueue.RateLimiter {
 	)
 }
 
-
 type IntervalRateLimitingInterface interface {
 	workqueue.RateLimitingInterface
 
-	AddIntervalRateLimited(item interface{}, minInterval time.Duration)
+	AddIntervalRateLimited(item interface{}, minInterval *time.Duration)
 }
 
-func NewIntervalRateLimitingQueue(rateLimiter workqueue.RateLimiter, name string) IntervalRateLimitingInterface{
+func NewIntervalRateLimitingQueue(rateLimiter workqueue.RateLimiter, name string, defaultDelay time.Duration) IntervalRateLimitingInterface {
 	return &IntervalRateLimitingQueue{
+		defaultRetryDelay: defaultDelay,
 		DelayingInterface: workqueue.NewNamedDelayingQueue(name),
-		rateLimiter: rateLimiter,
+		rateLimiter:       rateLimiter,
 	}
 }
 
 type IntervalRateLimitingQueue struct {
+	defaultRetryDelay time.Duration
+
 	workqueue.DelayingInterface
 
 	rateLimiter workqueue.RateLimiter
 }
 
-func (q *IntervalRateLimitingQueue) AddIntervalRateLimited(item interface{}, minInterval time.Duration){
+func (q *IntervalRateLimitingQueue) AddIntervalRateLimited(item interface{}, minInterval *time.Duration) {
+	if minInterval == nil {
+		minInterval = &q.defaultRetryDelay
+	}
 	delay := q.rateLimiter.When(item)
-	if minInterval.Nanoseconds() > delay.Nanoseconds(){
-		delay = minInterval
+	if minInterval.Nanoseconds() > delay.Nanoseconds() {
+		delay = *minInterval
 	}
 	q.DelayingInterface.AddAfter(item, delay)
 }
@@ -99,36 +104,54 @@ func getLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.Lo
 	return lbcfapi.ConditionFalse
 }
 
-func addLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfapi.LoadBalancerCondition) lbcfapi.LoadBalancerStatus {
-	newStatus := lbStatus.DeepCopy()
+func addLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfapi.LoadBalancerCondition) {
 	found := false
-	for i := range newStatus.Conditions {
-		if newStatus.Conditions[i].Type == expectCondition.Type {
+	for i := range lbStatus.Conditions {
+		if lbStatus.Conditions[i].Type == expectCondition.Type {
 			found = true
-			newStatus.Conditions[i] = expectCondition
+			lbStatus.Conditions[i] = expectCondition
 			break
 		}
 	}
 	if !found {
-		newStatus.Conditions = append(newStatus.Conditions, expectCondition)
+		lbStatus.Conditions = append(lbStatus.Conditions, expectCondition)
 	}
-	return *newStatus
 }
 
-func addBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition lbcfapi.BackendRecordCondition) lbcfapi.BackendRecordStatus{
-	cpy := beStatus.DeepCopy()
+func backendRegistered(backend *lbcfapi.BackendRecord) bool {
+	condition := getBackendCondition(&backend.Status, lbcfapi.BackendRegistered)
+	if condition == nil {
+		return false
+	}
+	return condition.Status == lbcfapi.ConditionTrue
+}
+
+func backendNeedEnsure(backend *lbcfapi.BackendRecord, period time.Duration) bool {
+	condition := getBackendCondition(&backend.Status, lbcfapi.BackendRegistered)
+	return time.Now().After(condition.LastTransitionTime.Time.Add(period))
+}
+
+func getBackendCondition(status *lbcfapi.BackendRecordStatus, conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {
+	for i := range status.Conditions {
+		if status.Conditions[i].Type == conditionType {
+			return &status.Conditions[i]
+		}
+	}
+	return nil
+}
+
+func addBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition lbcfapi.BackendRecordCondition) {
 	found := false
-	for i := range cpy.Conditions{
-		if cpy.Conditions[i].Type != expectCondition.Type{
+	for i := range beStatus.Conditions {
+		if beStatus.Conditions[i].Type == expectCondition.Type {
 			found = true
-			cpy.Conditions[i] = expectCondition
+			beStatus.Conditions[i] = expectCondition
 			break
 		}
 	}
-	if !found{
-		cpy.Conditions = append(cpy.Conditions, expectCondition)
+	if !found {
+		beStatus.Conditions = append(beStatus.Conditions, expectCondition)
 	}
-	return *cpy
 }
 
 type BackendType string
@@ -165,19 +188,19 @@ func isDriverDraining(labels map[string]string) bool {
 	return false
 }
 
-func calculateRetryInterval(defaultInterval time.Duration, userValueInSeconds int32) time.Duration{
-	if userValueInSeconds == 0{
-		return defaultInterval
+func calculateRetryInterval(userValueInSeconds int32) time.Duration {
+	if userValueInSeconds == 0 {
+		return DefaultWebhookTimeout
 	}
 	dur, err := time.ParseDuration(fmt.Sprintf("%ds", userValueInSeconds))
-	if err != nil{
+	if err != nil {
 		klog.Warningf("parse retryIntervalInSeconds failed: %v", err)
-		return defaultInterval
+		return DefaultWebhookTimeout
 	}
 	return dur
 }
 
-func NewPodProvider(lister corev1.PodLister) PodProvider{
+func NewPodProvider(lister corev1.PodLister) PodProvider {
 	return &PodProviderImpl{
 		lister: lister,
 	}
@@ -191,17 +214,17 @@ type PodProviderImpl struct {
 	lister corev1.PodLister
 }
 
-func (p *PodProviderImpl) GetPod(name string, namespace string) (*v1.Pod, error){
+func (p *PodProviderImpl) GetPod(name string, namespace string) (*v1.Pod, error) {
 	return p.lister.Pods(namespace).Get(name)
 }
 
-func containerPortToK8sContainerPort(port lbcfapi.ContainerPort) v1.ContainerPort{
+func containerPortToK8sContainerPort(port lbcfapi.ContainerPort) v1.ContainerPort {
 	return v1.ContainerPort{
-		Name: port.Name,
-		HostPort: port.HostPort,
+		Name:          port.Name,
+		HostPort:      port.HostPort,
 		ContainerPort: port.ContainerPort,
-		Protocol: v1.Protocol(port.Protocol),
-		HostIP: port.HostIP,
+		Protocol:      v1.Protocol(port.Protocol),
+		HostIP:        port.HostIP,
 	}
 }
 
@@ -211,19 +234,18 @@ func recordIndex(obj interface{}) (string, error) {
 	return string(index), err
 }
 
-func hasFinalizer(all []string, expect string) bool{
-	for i := range all{
-		if all[i] == expect{
+func hasFinalizer(all []string, expect string) bool {
+	for i := range all {
+		if all[i] == expect {
 			return true
 		}
 	}
 	return false
 }
 
-
-func removeFinalizer(all []string, toDelete string) []string{
+func removeFinalizer(all []string, toDelete string) []string {
 	var ret []string
-	for i := range all{
+	for i := range all {
 		if all[i] != toDelete {
 			ret = append(ret, all[i])
 		}
@@ -231,9 +253,55 @@ func removeFinalizer(all []string, toDelete string) []string{
 	return ret
 }
 
-func namespacedNameKeyFunc(namespace, name string) string{
-	if len(namespace) > 0{
+func namespacedNameKeyFunc(namespace, name string) string {
+	if len(namespace) > 0 {
 		return namespace + "/" + name
 	}
 	return name
+}
+
+func getResyncPeriod(cfg *lbcfapi.ResyncPolicyConfig) *time.Duration {
+	if cfg == nil {
+		return nil
+	}
+	if cfg.Policy == lbcfapi.PolicyIfNotSucc {
+		return nil
+	}
+	if cfg.MinPeriod == nil {
+		t := 30 * time.Second
+		return &t
+	}
+	return &cfg.MinPeriod.Duration
+}
+
+func equalMap(a map[string]string, b map[string]string) bool{
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func equalResyncPolicy(a *lbcfapi.ResyncPolicyConfig, b *lbcfapi.ResyncPolicyConfig) bool{
+	if (a == nil && b != nil) || (a != nil && b == nil) {
+		return false
+	}
+	if a == nil {
+		return true
+	}
+	if a.Policy != b.Policy {
+		return false
+	}
+	if a.Policy == lbcfapi.PolicyAlways {
+		oldPeriod := getResyncPeriod(a)
+		curPeriod := getResyncPeriod(b)
+		if oldPeriod.Nanoseconds() != curPeriod.Nanoseconds() {
+			return false
+		}
+	}
+	return true
 }
