@@ -60,9 +60,9 @@ func NewServer() *cobra.Command {
 			k8sFactory.Start(wait.NeverStop)
 			lbcfFactory.Start(wait.NeverStop)
 			lbcfcontroller.NewAdmitServer(c).Start()
+			<-wait.NeverStop
 		},
 	}
 	cfg.AddFlags(cmd.Flags())
 	return cmd
 }
-

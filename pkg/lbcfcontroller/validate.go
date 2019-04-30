@@ -151,8 +151,8 @@ func validateBackends(raw *lbcfapi.BackendGroupSpec, path *field.Path) field.Err
 		return allErrs
 	}
 
-	if raw.Static == nil {
-		allErrs = append(allErrs, field.Required(path.Child("service/pods/static"), "one of \"service, pods, static\" must be specified"))
+	if raw.Static == nil || len(raw.Static) == 0 {
+		allErrs = append(allErrs, field.Required(path.Child("service/pods/static"), "one of \"service, pods, static\" must be specified. if static is specified, it must not be empty array"))
 	}
 	return allErrs
 }

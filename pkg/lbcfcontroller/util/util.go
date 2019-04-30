@@ -99,21 +99,24 @@ func (q *IntervalRateLimitingQueue) Forget(item interface{}) {
 }
 
 func PodAvailable(obj *v1.Pod) bool {
-	return obj.Status.PodIP != "" && pod.IsPodReady(obj)
+	return obj.Status.PodIP != "" && obj.DeletionTimestamp == nil && pod.IsPodReady(obj)
 }
 
 func LBCreated(lb *lbcfapi.LoadBalancer) bool {
 	condition := getLBCondition(&lb.Status, lbcfapi.LBCreated)
-	return condition == lbcfapi.ConditionTrue
+	if condition == nil {
+		return false
+	}
+	return condition.Status == lbcfapi.ConditionTrue
 }
 
-func getLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) lbcfapi.ConditionStatus {
+func getLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
 	for i := range status.Conditions {
 		if status.Conditions[i].Type == conditionType {
-			return status.Conditions[i].Status
+			return &status.Conditions[i]
 		}
 	}
-	return lbcfapi.ConditionFalse
+	return nil
 }
 
 func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfapi.LoadBalancerCondition) {
@@ -128,28 +131,6 @@ func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 	if !found {
 		lbStatus.Conditions = append(lbStatus.Conditions, expectCondition)
 	}
-}
-
-func BackendRegistered(backend *lbcfapi.BackendRecord) bool {
-	condition := getBackendCondition(&backend.Status, lbcfapi.BackendRegistered)
-	if condition == nil {
-		return false
-	}
-	return condition.Status == lbcfapi.ConditionTrue
-}
-
-func BackendNeedEnsure(backend *lbcfapi.BackendRecord, period time.Duration) bool {
-	condition := getBackendCondition(&backend.Status, lbcfapi.BackendRegistered)
-	return time.Now().After(condition.LastTransitionTime.Time.Add(period))
-}
-
-func getBackendCondition(status *lbcfapi.BackendRecordStatus, conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {
-	for i := range status.Conditions {
-		if status.Conditions[i].Type == conditionType {
-			return &status.Conditions[i]
-		}
-	}
-	return nil
 }
 
 func AddBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition lbcfapi.BackendRecordCondition) {
@@ -180,7 +161,7 @@ func GetBackendType(bg *lbcfapi.BackendGroup) BackendType {
 		return TypePod
 	} else if bg.Spec.Service != nil {
 		return TypeService
-	} else if bg.Spec.Service != nil {
+	} else if len(bg.Spec.Static) > 0 {
 		return TypeStatic
 	}
 	return TypeUnknown
@@ -195,13 +176,13 @@ func GetDriverNamespace(driverName string, defaultNamespace string) string {
 
 func IsDriverDraining(labels map[string]string) bool {
 	if v, ok := labels[lbcfapi.DriverDrainingLabel]; !ok || strings.ToUpper(v) != "TRUE" {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 func CalculateRetryInterval(userValueInSeconds int32) time.Duration {
-	if userValueInSeconds == 0 {
+	if userValueInSeconds <= 0 {
 		return DefaultRetryInterval
 	}
 	dur, err := time.ParseDuration(fmt.Sprintf("%ds", userValueInSeconds))
@@ -498,9 +479,7 @@ func (s *SyncResult) GetResyncPeriodic() time.Duration {
 	return s.minResyncPeriod
 }
 
-var patchTemplate = `[
-		 {"op":"add","path":"/metadata/finalizers","value":["{{ .Finalizer }}"]}
-]`
+var patchTemplate = `[{"op":"add","path":"/metadata/finalizers/-","value":["{{ .Finalizer }}"]}]`
 
 func MakeFinalizerPatch(finalizer string) []byte {
 	t := template.Must(template.New("patch").Parse(patchTemplate))

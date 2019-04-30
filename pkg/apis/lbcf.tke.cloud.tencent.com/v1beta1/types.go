@@ -469,7 +469,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 type ConditionReason string
 
 const (
-	ReasonOperationInProgress ConditionReason = "InProgres"
+	ReasonOperationInProgress ConditionReason = "OperationInProgres"
 	ReasonOperationFailed     ConditionReason = "OperationFailed"
 	ReasonInvalidResponse     ConditionReason = "InvalidResponse"
 )
