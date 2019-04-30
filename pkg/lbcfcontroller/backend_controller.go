@@ -163,12 +163,16 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
-		result := c.setOperationSucc(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
+		cpy := backend.DeepCopy()
+		if len(rsp.InjectedInfo) > 0 {
+			cpy.Status.InjectedInfo = rsp.InjectedInfo
+		}
+		result := c.setOperationSucc(cpy, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
 		if result.IsError() {
 			return result
 		}
-		if backend.Spec.ResyncPolicy != nil && backend.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways {
-			return util.PeriodicResult(util.GetResyncPeriod(backend.Spec.ResyncPolicy.MinPeriod))
+		if cpy.Spec.ResyncPolicy != nil && cpy.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways {
+			return util.PeriodicResult(util.GetResyncPeriod(cpy.Spec.ResyncPolicy.MinPeriod))
 		}
 		return util.SuccResult()
 	case webhooks.StatusFail:
