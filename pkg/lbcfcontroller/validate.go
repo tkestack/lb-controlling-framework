@@ -22,11 +22,12 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
-	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -36,12 +37,7 @@ const (
 	LBDriverWebhook LBDriverType = "Webhook"
 )
 
-const (
-	DefaultWebhookTimeout = 10 * time.Second
-	SystemDriverPrefix    = "lbcf-"
-)
-
-func ValidateLoadBalancerDriver(raw *v1beta1.LoadBalancerDriver) field.ErrorList {
+func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
@@ -56,13 +52,13 @@ func ValidateLoadBalancerDriver(raw *v1beta1.LoadBalancerDriver) field.ErrorList
 func validateDriverName(name string, namespace string, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if namespace == "kube-system" {
-		if !strings.HasPrefix(name, SystemDriverPrefix) {
-			allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metadata.name must start with %q for drivers in namespace %q", SystemDriverPrefix, "kube-system")))
+		if !strings.HasPrefix(name, lbcfapi.SystemDriverPrefix) {
+			allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metadata.name must start with %q for drivers in namespace %q", lbcfapi.SystemDriverPrefix, "kube-system")))
 		}
 		return allErrs
 	}
-	if strings.HasPrefix(name, SystemDriverPrefix) {
-		allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metaname.name must not start with %q for drivers not in namespace %q", SystemDriverPrefix, "kube-system")))
+	if strings.HasPrefix(name, lbcfapi.SystemDriverPrefix) {
+		allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metaname.name must not start with %q for drivers not in namespace %q", lbcfapi.SystemDriverPrefix, "kube-system")))
 	}
 	return allErrs
 }
@@ -76,13 +72,13 @@ func validateDriverType(raw string, path *field.Path) field.ErrorList {
 	return allErrs
 }
 
-func validateDriverWebhooks(raw []v1beta1.WebhookConfig, path *field.Path) field.ErrorList {
+func validateDriverWebhooks(raw []lbcfapi.WebhookConfig, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	webhookSet := sets.NewString()
 	for i, wh := range raw {
 		curPath := path.Child(fmt.Sprintf("webhooks[%d]", i))
-		if !knownWebhooks.Has(wh.Name) {
-			allErrs = append(allErrs, field.NotSupported(curPath.Child("name"), wh, knownWebhooks.List()))
+		if !webhooks.KnownWebhooks.Has(wh.Name) {
+			allErrs = append(allErrs, field.NotSupported(curPath.Child("name"), wh, webhooks.KnownWebhooks.List()))
 			continue
 		}
 		if webhookSet.Has(wh.Name) {
@@ -100,7 +96,7 @@ func validateDriverWebhooks(raw []v1beta1.WebhookConfig, path *field.Path) field
 	return allErrs
 }
 
-func DriverUpdatedFieldsAllowed(cur *v1beta1.LoadBalancerDriver, old *v1beta1.LoadBalancerDriver) bool {
+func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.LoadBalancerDriver) bool {
 	if cur.Name != old.Name {
 		return false
 	}
@@ -113,7 +109,7 @@ func DriverUpdatedFieldsAllowed(cur *v1beta1.LoadBalancerDriver, old *v1beta1.Lo
 	return true
 }
 
-func LBUpdatedFieldsAllowed(cur *v1beta1.LoadBalancer, old *v1beta1.LoadBalancer) bool {
+func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer) bool {
 	if cur.Name != old.Name {
 		return false
 	}
@@ -126,13 +122,13 @@ func LBUpdatedFieldsAllowed(cur *v1beta1.LoadBalancer, old *v1beta1.LoadBalancer
 	return true
 }
 
-func ValidateBackendGroup(raw *v1beta1.BackendGroup) field.ErrorList {
+func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 	allErrs := field.ErrorList{}
 	allErrs = append(allErrs, validateBackends(&raw.Spec, field.NewPath("spec"))...)
 	return allErrs
 }
 
-func validateBackends(raw *v1beta1.BackendGroupSpec, path *field.Path) field.ErrorList {
+func validateBackends(raw *lbcfapi.BackendGroupSpec, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if raw.Service != nil {
@@ -161,13 +157,13 @@ func validateBackends(raw *v1beta1.BackendGroupSpec, path *field.Path) field.Err
 	return allErrs
 }
 
-func validateServiceBackend(raw *v1beta1.ServiceBackend, path *field.Path) field.ErrorList {
+func validateServiceBackend(raw *lbcfapi.ServiceBackend, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	allErrs = append(allErrs, validatePortSelector(raw.Port, path.Child("port"))...)
 	return allErrs
 }
 
-func validatePodBackend(raw *v1beta1.PodBackend, path *field.Path) field.ErrorList {
+func validatePodBackend(raw *lbcfapi.PodBackend, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	allErrs = append(allErrs, validatePortSelector(raw.Port, path.Child("port"))...)
 	if raw.ByLabel != nil {
@@ -182,7 +178,7 @@ func validatePodBackend(raw *v1beta1.PodBackend, path *field.Path) field.ErrorLi
 	return allErrs
 }
 
-func validatePortSelector(raw v1beta1.PortSelector, path *field.Path) field.ErrorList {
+func validatePortSelector(raw lbcfapi.PortSelector, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if raw.PortNumber <= 0 || raw.PortNumber > 65535 {
@@ -198,8 +194,8 @@ func validatePortSelector(raw v1beta1.PortSelector, path *field.Path) field.Erro
 	return allErrs
 }
 
-func BackendGroupUpdateFieldsAllowed(cur *v1beta1.BackendGroup, old *v1beta1.BackendGroup) bool {
-	if getBackendType(cur) != getBackendType(old) {
+func BackendGroupUpdateFieldsAllowed(cur *lbcfapi.BackendGroup, old *lbcfapi.BackendGroup) bool {
+	if util.GetBackendType(cur) != util.GetBackendType(old) {
 		return false
 	}
 	return true

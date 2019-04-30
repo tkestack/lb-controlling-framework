@@ -14,48 +14,38 @@
  * limitations under the License.
  */
 
-package lbcfcontroller
+package webhooks
 
 import (
-	"encoding/json"
-	"fmt"
-	"path"
-
 	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 
-	"github.com/parnurzeal/gorequest"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
-	WebhookPrefix      = "lbcf"
-	ValidateLBHook     = "validateLoadBalancer"
-	CreateLBHook       = "createLoadBalancer"
-	EnsureLBHook       = "ensureLoadBalancer"
-	DeleteLBHook       = "deleteLoadBalancer"
-	ValidateBEHook     = "validateBackend"
-	GenerateBEAddrHook = "generateBackendAddr"
-	EnsureBEHook       = "ensureBackend"
-	DeregBEHook        = "deregisterBackend"
-	UpdateBEHook       = "updateBackend"
+	WebhookPrefix        = "lbcf"
+	ValidateLoadBalancer = "validateLoadBalancer"
+	CreateLoadBalancer   = "createLoadBalancer"
+	EnsureLoadBalancer   = "ensureLoadBalancer"
+	DeleteLoadBalancer   = "deleteLoadBalancer"
+	ValidateBackend      = "validateBackend"
+	GenerateBackendAddr  = "generateBackendAddr"
+	EnsureBackend        = "ensureBackend"
+	DeregBackend         = "deregisterBackend"
+	UpdateBackend        = "updateBackend"
 )
 
-var knownWebhooks = sets.NewString(
-	ValidateLBHook,
-	CreateLBHook,
-	EnsureLBHook,
-	DeleteLBHook,
-	ValidateBEHook,
-	GenerateBEAddrHook,
-	EnsureBEHook,
-	DeregBEHook,
-	UpdateBEHook,
-)
-
-const (
-	OperationCreate = "Create"
-	OperationUpdate = "Update"
+var KnownWebhooks = sets.NewString(
+	ValidateLoadBalancer,
+	CreateLoadBalancer,
+	EnsureLoadBalancer,
+	DeleteLoadBalancer,
+	ValidateBackend,
+	GenerateBackendAddr,
+	EnsureBackend,
+	DeregBackend,
+	UpdateBackend,
 )
 
 type RequestForRetryHooks struct {
@@ -82,7 +72,7 @@ type ResponseForFailRetryHooks struct {
 
 type ValidateLoadBalancerRequest struct {
 	LBSpec        map[string]string `json:"lbSpec"`
-	Operation     string            `json:"operation"`
+	Operation     OperationType `json:"operation"`
 	Attributes    map[string]string `json:"attributes"`
 	OldAttributes map[string]string `json:"oldAttributes,omitempty"`
 }
@@ -125,7 +115,7 @@ type DeleteLoadBalancerResponse struct {
 type ValidateBackendRequest struct {
 	BackendType   string            `json:"backendType"`
 	LBInfo        map[string]string `json:"lbInfo"`
-	Operation     string            `json:"operation"`
+	Operation     OperationType `json:"operation"`
 	Parameters    map[string]string `json:"parameters"`
 	OldParameters map[string]string `json:"OldParameters,omitempty"`
 }
@@ -141,7 +131,7 @@ type GenerateBackendAddrRequest struct {
 }
 
 type PodBackendInGenerateAddrRequest struct {
-	Pod  v1.Pod           `json:"pod"`
+	Pod  v1.Pod               `json:"pod"`
 	Port v1beta1.PortSelector `json:"port"`
 }
 
@@ -172,25 +162,10 @@ type BackendOperationResponse struct {
 	InjectedInfo map[string]string `json:"injectedInfo"`
 }
 
-func callWebhook(driver *v1beta1.LoadBalancerDriver, webHookName string, payload interface{}, rsp interface{}) error {
-	u := driver.Spec.Url
-	u.Path = path.Join(WebhookPrefix, webHookName)
-	timeout := DefaultWebhookTimeout
-	for _, h := range driver.Spec.Webhooks {
-		if h.Name == webHookName {
-			if h.Timeout != nil {
-				timeout = h.Timeout.Duration
-			}
-			break
-		}
-	}
-	_, body, errs := gorequest.New().Timeout(timeout).Post(u.String()).Send(payload).EndBytes()
-	if len(errs) > 0 {
-		return fmt.Errorf("%v", errs)
-	}
-	if err := json.Unmarshal(body, rsp); err != nil {
-		return err
-	}
-	return nil
-}
+type OperationType string
+
+const (
+	OperationCreate OperationType = "Create"
+	OperationUpdate OperationType = "Update"
+)
 

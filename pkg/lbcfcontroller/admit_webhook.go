@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	lbcf "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	admission "k8s.io/api/admission/v1beta1"
 )
@@ -50,19 +52,10 @@ type MutateAdmitWebhook interface {
 	MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse
 }
 
-const (
-	lbFinalizerPatch string = `[
-		 {"op":"add","path":"/metadata/finalizers","value":["lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"]}
-	]`
-	bgFinalizerPatch string = `[
-		 {"op":"add","path":"/metadata/finalizers","value":["lbcf.tke.cloud.tencent.com/deregister-backend-group"]}
-	]`
-)
-
 func (c *Controller) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	reviewResponse := &admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
-	reviewResponse.Patch = []byte(lbFinalizerPatch)
+	reviewResponse.Patch = util.MakeFinalizerPatch(lbcf.FinalizerDeleteLB)
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return reviewResponse
@@ -75,7 +68,7 @@ func (c *Controller) MutateDriver(ar *admission.AdmissionReview) (adResponse *ad
 func (c *Controller) MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse {
 	reviewResponse := &admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
-	reviewResponse.Patch = []byte(bgFinalizerPatch)
+	reviewResponse.Patch = util.MakeFinalizerPatch(lbcf.FinalizerDeregisterBackendGroup)
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return reviewResponse
@@ -87,7 +80,7 @@ func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancer failed: %v", err))
 	}
 
-	driverNamespace := getDriverNamespace(lb.Spec.LBDriver, lb.Namespace)
+	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)
 	driver, exist := c.driverCtrl.getDriver(driverNamespace, lb.Spec.LBDriver)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
@@ -96,9 +89,9 @@ func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("driver %q is draining, all LoadBalancer creating operation for that dirver is denied", lb.Spec.LBDriver))
 	}
 
-	req := &ValidateLoadBalancerRequest{
+	req := &webhooks.ValidateLoadBalancerRequest{
 		LBSpec:     lb.Spec.LBSpec,
-		Operation:  OperationCreate,
+		Operation:  webhooks.OperationCreate,
 		Attributes: lb.Spec.Attributes,
 	}
 	rsp, err := driver.CallValidateLoadBalancer(req)
@@ -125,32 +118,19 @@ func (c *Controller) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("update to non-attributes fields is not permitted"))
 	}
 
-	driverNamespace := getDriverNamespace(curObj.Spec.LBDriver, curObj.Namespace)
+	driverNamespace := util.GetDriverNamespace(curObj.Spec.LBDriver, curObj.Namespace)
 	driver, exist := c.driverCtrl.getDriver(driverNamespace, curObj.Spec.LBDriver)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", curObj.Spec.LBDriver, driverNamespace))
 	}
 
-	needUpdate := false
-	if len(curObj.Spec.Attributes) != len(oldObj.Spec.Attributes) {
-		needUpdate = true
-	} else {
-		for k, v := range curObj.Spec.Attributes {
-			if oldObj.Spec.Attributes[k] == v {
-				continue
-			}
-			needUpdate = true
-			break
-		}
-	}
-
-	if !needUpdate {
+	if util.MapEqual(curObj.Spec.Attributes, oldObj.Spec.Attributes) {
 		return toAdmissionResponse(nil)
 	}
 
-	req := &ValidateLoadBalancerRequest{
+	req := &webhooks.ValidateLoadBalancerRequest{
 		LBSpec:        curObj.Spec.LBSpec,
-		Operation:     OperationUpdate,
+		Operation:     webhooks.OperationUpdate,
 		Attributes:    curObj.Spec.Attributes,
 		OldAttributes: oldObj.Spec.Attributes,
 	}
@@ -208,8 +188,8 @@ func (c *Controller) ValidateDriverDelete(ar *admission.AdmissionReview) *admiss
 	if err := json.Unmarshal(ar.Request.Object.Raw, driver); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
 	}
-	if isDriverDraining(driver.Labels) {
-		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete", driverDrainingLabel))
+	if util.IsDriverDraining(driver.Labels) {
+		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete", lbcf.DriverDrainingLabel))
 	}
 
 	lbList, err := c.lbCtrl.listLoadBalancerByDriver(driver.Name, driver.Namespace)
@@ -245,15 +225,15 @@ func (c *Controller) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *
 	if lb.DeletionTimestamp != nil {
 		return toAdmissionResponse(fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name))
 	}
-	driverNamespace := getDriverNamespace(lb.Spec.LBDriver, bg.Namespace)
+	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, bg.Namespace)
 	driver, exist := c.driverCtrl.getDriver(lb.Spec.LBDriver, driverNamespace)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
 	}
-	req := &ValidateBackendRequest{
-		BackendType: string(getBackendType(bg)),
+	req := &webhooks.ValidateBackendRequest{
+		BackendType: string(util.GetBackendType(bg)),
 		LBInfo:      lb.Status.LBInfo,
-		Operation:   OperationCreate,
+		Operation:   webhooks.OperationCreate,
 		Parameters:  bg.Spec.Parameters,
 	}
 	rsp, err := driver.CallValidateBackend(req)
@@ -281,19 +261,7 @@ func (c *Controller) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("update to backend type is not permitted"))
 	}
 
-	needUpdate := false
-	if len(curObj.Spec.Parameters) != len(oldObj.Spec.Parameters) {
-		needUpdate = true
-	} else {
-		for k, v := range curObj.Spec.Parameters {
-			if oldObj.Spec.Parameters[k] == v {
-				continue
-			}
-			needUpdate = true
-			break
-		}
-	}
-	if !needUpdate {
+	if util.MapEqual(curObj.Spec.Parameters, oldObj.Spec.Parameters) {
 		return toAdmissionResponse(nil)
 	}
 
@@ -301,16 +269,16 @@ func (c *Controller) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
 	}
-	driverNamespace := getDriverNamespace(lb.Spec.LBDriver, curObj.Namespace)
+	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, curObj.Namespace)
 	driver, exist := c.driverCtrl.getDriver(lb.Spec.LBDriver, driverNamespace)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
 	}
 
-	req := &ValidateBackendRequest{
-		BackendType: string(getBackendType(curObj)),
+	req := &webhooks.ValidateBackendRequest{
+		BackendType: string(util.GetBackendType(curObj)),
 		LBInfo:      lb.Status.LBInfo,
-		Operation:   OperationUpdate,
+		Operation:   webhooks.OperationUpdate,
 		Parameters:  curObj.Spec.Parameters,
 	}
 	rsp, err := driver.CallValidateBackend(req)

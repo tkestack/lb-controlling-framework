@@ -22,6 +22,7 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers/core/v1"
@@ -46,16 +47,16 @@ func NewController(
 		cfg:               cfg,
 		k8sClient:         k8sClient,
 		lbcfClient:        lbcfClient,
-		driverQueue:       NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "driver-queue", cfg.MinRetryDelay),
-		loadBalancerQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "lb-queue", cfg.MinRetryDelay),
-		backendGroupQueue: NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backendgroup-queue", cfg.MinRetryDelay),
-		backendQueue:      NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backend-queue", cfg.MinRetryDelay),
+		driverQueue:       util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "driver-queue", cfg.MinRetryDelay),
+		loadBalancerQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "lb-queue", cfg.MinRetryDelay),
+		backendGroupQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backendgroup-queue", cfg.MinRetryDelay),
+		backendQueue:      util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backend-queue", cfg.MinRetryDelay),
 	}
 
 	c.driverCtrl = NewDriverController(lbcfClient, lbDriverInformer.Lister())
 	c.lbCtrl = NewLoadBalancerController(lbcfClient, lbInformer.Lister(), c.driverCtrl)
-	c.backendCtrl = NewBackendController(lbcfClient, brInformer.Lister(), c.driverCtrl, NewPodProvider(podInformer.Lister()))
-	c.backendGroupCtrl = NewBackendGroupController(lbcfClient, lbInformer.Lister(), bgInformer.Lister(), brInformer.Lister(), NewPodProvider(podInformer.Lister()))
+	c.backendCtrl = NewBackendController(lbcfClient, brInformer.Lister(), c.driverCtrl, util.NewPodProvider(podInformer.Lister()))
+	c.backendGroupCtrl = NewBackendGroupController(lbcfClient, lbInformer.Lister(), bgInformer.Lister(), brInformer.Lister(), util.NewPodProvider(podInformer.Lister()))
 
 	// enqueue backendgroup
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
@@ -126,10 +127,10 @@ type Controller struct {
 	BackendGroupListerSynced  cache.InformerSynced
 	BackendRecordListerSynced cache.InformerSynced
 
-	driverQueue       IntervalRateLimitingInterface
-	loadBalancerQueue IntervalRateLimitingInterface
-	backendGroupQueue IntervalRateLimitingInterface
-	backendQueue      IntervalRateLimitingInterface
+	driverQueue       util.IntervalRateLimitingInterface
+	loadBalancerQueue util.IntervalRateLimitingInterface
+	backendGroupQueue util.IntervalRateLimitingInterface
+	backendQueue      util.IntervalRateLimitingInterface
 }
 
 func (c *Controller) Start() {
@@ -182,24 +183,7 @@ func (c *Controller) backendWorker() {
 	}
 }
 
-type SyncFunc func(string) *SyncResult
-
-type SyncResult struct {
-	err error
-
-	operationFailed   bool
-	asyncOperation    bool
-	periodicOperation bool
-
-	minRetryDelay   *time.Duration
-	minResyncPeriod *time.Duration
-}
-
-const (
-	DefaultRetryInterval = 10 * time.Second
-)
-
-func (c *Controller) processNextItem(queue IntervalRateLimitingInterface, syncFunc SyncFunc) bool {
+func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, syncFunc util.SyncFunc) bool {
 	key, quit := queue.Get()
 	if quit {
 		return false
@@ -208,13 +192,16 @@ func (c *Controller) processNextItem(queue IntervalRateLimitingInterface, syncFu
 
 	go func() {
 		result := syncFunc(key.(string))
-		if result.err != nil {
+		if result.IsError() {
 			queue.AddRateLimited(key)
-		} else if result.operationFailed {
-			queue.AddIntervalRateLimited(key, result.minRetryDelay)
-		} else if result.asyncOperation || result.periodicOperation {
+		} else if result.IsFailed() {
+			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
+		} else if result.IsAsync()  {
 			queue.Forget(key)
-			queue.AddIntervalRateLimited(key, result.minRetryDelay)
+			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
+		} else if result.IsPeriodic(){
+			queue.Forget(key)
+			queue.AddIntervalRateLimited(key, result.GetResyncPeriodic())
 		}
 	}()
 	return true

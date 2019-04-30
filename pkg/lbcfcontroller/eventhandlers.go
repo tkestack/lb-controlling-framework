@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/api/core/v1"
 )
@@ -43,7 +44,7 @@ func (c *Controller) updatePod(old, cur interface{}) {
 		}
 		return
 	}
-	if curRelate != nil && (podAvailable(oldPod) != podAvailable(curPod)) {
+	if curRelate != nil && (util.PodAvailable(oldPod) != util.PodAvailable(curPod)) {
 		c.enqueue(curRelate, c.backendGroupQueue)
 		return
 	}
@@ -84,7 +85,7 @@ func (c *Controller) deleteBackendGroup(obj interface{}) {
 func (c *Controller) addLoadBalancer(obj interface{}) {
 	lb := obj.(*v1beta1.LoadBalancer)
 	c.enqueue(obj, c.loadBalancerQueue)
-	if group, _ := c.backendGroupCtrl.LBRelatedGroup(lb); group != nil{
+	if group, _ := c.backendGroupCtrl.LBRelatedGroup(lb); group != nil {
 		c.enqueue(group, c.backendGroupQueue)
 	}
 }
@@ -92,14 +93,14 @@ func (c *Controller) addLoadBalancer(obj interface{}) {
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 	oldObj := cur.(*v1beta1.LoadBalancer)
 	curObj := cur.(*v1beta1.LoadBalancer)
-	if !equalMap(oldObj.Spec.Attributes, curObj.Spec.Attributes) {
+	if !util.MapEqual(oldObj.Spec.Attributes, curObj.Spec.Attributes) {
 		c.enqueue(curObj, c.loadBalancerQueue)
-		if curRelate, _ := c.backendGroupCtrl.LBRelatedGroup(curObj); curRelate != nil{
+		if curRelate, _ := c.backendGroupCtrl.LBRelatedGroup(curObj); curRelate != nil {
 			c.enqueue(curRelate, c.backendGroupQueue)
 		}
 		return
 	}
-	if !equalResyncPolicy(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
+	if !util.ResyncPolicyEqual(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
 		c.enqueue(curObj, c.loadBalancerQueue)
 		return
 	}
@@ -128,11 +129,11 @@ func (c *Controller) addBackendRecord(obj interface{}) {
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := cur.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
-	if !equalMap(oldObj.Spec.Parameters, curObj.Spec.Parameters) {
+	if !util.MapEqual(oldObj.Spec.Parameters, curObj.Spec.Parameters) {
 		c.enqueue(curObj, c.backendQueue)
 		return
 	}
-	if !equalResyncPolicy(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
+	if !util.ResyncPolicyEqual(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
 		c.enqueue(curObj, c.loadBalancerQueue)
 		return
 	}

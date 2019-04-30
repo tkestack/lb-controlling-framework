@@ -27,6 +27,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	SystemDriverPrefix = "lbcf-"
+
+	// labels of LoadBalancerDriver
+	DriverDrainingLabel = "lbcf.tke.cloud.tencent.com/driver-draining"
+	LabelDriverName     = "lbcf.tke.cloud.tencent.com/lb-driver"
+	LabelLBName         = "lbcf.tke.cloud.tencent.com/lb-name"
+	LabelGroupName      = "lbcf.tke.cloud.tencent.com/backend-group"
+	LabelServiceName    = "lbcf.tke.cloud.tencent.com/backend-service"
+	LabelPodName        = "lbcf.tke.cloud.tencent.com/backend-pod"
+	LabelStaticAddr     = "lbcf.tke.cloud.tencent.com/backend-static-addr"
+
+	FinalizerDeleteLB               = "lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"
+	FinalizerDeregisterBackend      = "lbcf.tke.cloud.tencent.com/deregister-backend"
+	FinalizerDeregisterBackendGroup = "lbcf.tke.cloud.tencent.com/deregister-backend-group"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -244,7 +261,7 @@ type BackendRecordSpec struct {
 }
 
 type PodBackendRecord struct {
-	Name string        `json:"name"`
+	Name string       `json:"name"`
 	Port PortSelector `json:"port"`
 }
 
@@ -257,18 +274,6 @@ type ServiceBackendRecord struct {
 type NodeBackendRecord struct {
 	Name string `json:"name"`
 }
-
-//type ContainerPort struct {
-//	// +optional
-//	Name string `json:"name,omitempty"`
-//	// +optional
-//	HostPort      int32 `json:"hostPort,omitempty"`
-//	ContainerPort int32 `json:"containerPort"`
-//	// +optional
-//	Protocol string `json:"protocol,omitempty"`
-//	// +optional
-//	HostIP string `json:"hostIP,omitempty"`
-//}
 
 type ServicePort struct {
 	// +optional
