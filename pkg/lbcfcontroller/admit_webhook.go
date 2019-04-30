@@ -54,6 +54,9 @@ const (
 	lbFinalizerPatch string = `[
 		 {"op":"add","path":"/metadata/finalizers","value":["lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"]}
 	]`
+	bgFinalizerPatch string = `[
+		 {"op":"add","path":"/metadata/finalizers","value":["lbcf.tke.cloud.tencent.com/deregister-backend-group"]}
+	]`
 )
 
 func (c *Controller) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionResponse {
@@ -70,7 +73,12 @@ func (c *Controller) MutateDriver(ar *admission.AdmissionReview) (adResponse *ad
 }
 
 func (c *Controller) MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse {
-	return toAdmissionResponse(nil)
+	reviewResponse := &admission.AdmissionResponse{}
+	reviewResponse.Allowed = true
+	reviewResponse.Patch = []byte(bgFinalizerPatch)
+	pt := admission.PatchTypeJSONPatch
+	reviewResponse.PatchType = &pt
+	return reviewResponse
 }
 
 func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
@@ -80,7 +88,7 @@ func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *
 	}
 
 	driverNamespace := getDriverNamespace(lb.Spec.LBDriver, lb.Namespace)
-	driver, exist := c.driverController.getDriver(driverNamespace, lb.Spec.LBDriver)
+	driver, exist := c.driverCtrl.getDriver(driverNamespace, lb.Spec.LBDriver)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
 	}
@@ -118,7 +126,7 @@ func (c *Controller) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *
 	}
 
 	driverNamespace := getDriverNamespace(curObj.Spec.LBDriver, curObj.Namespace)
-	driver, exist := c.driverController.getDriver(driverNamespace, curObj.Spec.LBDriver)
+	driver, exist := c.driverCtrl.getDriver(driverNamespace, curObj.Spec.LBDriver)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", curObj.Spec.LBDriver, driverNamespace))
 	}
@@ -204,14 +212,14 @@ func (c *Controller) ValidateDriverDelete(ar *admission.AdmissionReview) *admiss
 		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete", driverDrainingLabel))
 	}
 
-	lbList, err := c.lbController.listLoadBalancerByDriver(driver.Name, driver.Namespace)
+	lbList, err := c.lbCtrl.listLoadBalancerByDriver(driver.Name, driver.Namespace)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("unable to list LoadBalancers for driver, err: %v", err))
 	} else if len(lbList) > 0 {
 		return toAdmissionResponse(fmt.Errorf("all LoadBalancers must be deleted, %d remaining", len(lbList)))
 	}
 
-	beList, err := c.backendController.listBackendByDriver(driver.Name, driver.Namespace)
+	beList, err := c.backendCtrl.listBackendByDriver(driver.Name, driver.Namespace)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("unable to list BackendRecords for driver, err: %v", err))
 	} else if len(beList) > 0 {
@@ -230,7 +238,7 @@ func (c *Controller) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
-	lb, err := c.lbController.getLoadBalancer(bg.Spec.LBName, bg.Namespace)
+	lb, err := c.lbCtrl.getLoadBalancer(bg.Spec.LBName, bg.Namespace)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
 	}
@@ -238,7 +246,7 @@ func (c *Controller) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name))
 	}
 	driverNamespace := getDriverNamespace(lb.Spec.LBDriver, bg.Namespace)
-	driver, exist := c.driverController.getDriver(lb.Spec.LBDriver, driverNamespace)
+	driver, exist := c.driverCtrl.getDriver(lb.Spec.LBDriver, driverNamespace)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
 	}
@@ -289,12 +297,12 @@ func (c *Controller) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(nil)
 	}
 
-	lb, err := c.lbController.getLoadBalancer(curObj.Spec.LBName, curObj.Namespace)
+	lb, err := c.lbCtrl.getLoadBalancer(curObj.Spec.LBName, curObj.Namespace)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
 	}
 	driverNamespace := getDriverNamespace(lb.Spec.LBDriver, curObj.Namespace)
-	driver, exist := c.driverController.getDriver(lb.Spec.LBDriver, driverNamespace)
+	driver, exist := c.driverCtrl.getDriver(lb.Spec.LBDriver, driverNamespace)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
 	}

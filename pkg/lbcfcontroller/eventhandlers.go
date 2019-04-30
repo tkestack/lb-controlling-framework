@@ -16,19 +16,44 @@
 
 package lbcfcontroller
 
-import "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+import (
+	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+
+	"k8s.io/api/core/v1"
+)
 
 func (c *Controller) addPod(obj interface{}) {
-	// TODO: find backendGroup by pod
-
+	pod := obj.(*v1.Pod)
+	if related, _ := c.backendGroupCtrl.PodRelatedGroup(pod); related != nil {
+		c.enqueue(related, c.backendGroupQueue)
+	}
 }
 
 func (c *Controller) updatePod(old, cur interface{}) {
-
+	oldPod := old.(*v1.Pod)
+	curPod := cur.(*v1.Pod)
+	oldRelate, _ := c.backendGroupCtrl.PodRelatedGroup(oldPod)
+	curRelate, _ := c.backendGroupCtrl.PodRelatedGroup(curPod)
+	if oldRelate != curRelate {
+		if curRelate != nil {
+			c.enqueue(curRelate, c.backendGroupQueue)
+		}
+		if oldRelate != nil {
+			c.enqueue(oldRelate, c.backendGroupQueue)
+		}
+		return
+	}
+	if curRelate != nil && (podAvailable(oldPod) != podAvailable(curPod)) {
+		c.enqueue(curRelate, c.backendGroupQueue)
+		return
+	}
 }
 
 func (c *Controller) deletePod(obj interface{}) {
-
+	pod := obj.(*v1.Pod)
+	if related, _ := c.backendGroupCtrl.PodRelatedGroup(pod); related != nil {
+		c.enqueue(related, c.backendGroupQueue)
+	}
 }
 
 func (c *Controller) addService(obj interface{}) {
@@ -49,8 +74,7 @@ func (c *Controller) addBackendGroup(obj interface{}) {
 }
 
 func (c *Controller) updateBackendGroup(old, cur interface{}) {
-	// TODO: if obj changed, enqueue
-
+	c.enqueue(cur, c.backendGroupQueue)
 }
 
 func (c *Controller) deleteBackendGroup(obj interface{}) {
@@ -58,7 +82,11 @@ func (c *Controller) deleteBackendGroup(obj interface{}) {
 }
 
 func (c *Controller) addLoadBalancer(obj interface{}) {
+	lb := obj.(*v1beta1.LoadBalancer)
 	c.enqueue(obj, c.loadBalancerQueue)
+	if group, _ := c.backendGroupCtrl.LBRelatedGroup(lb); group != nil{
+		c.enqueue(group, c.backendGroupQueue)
+	}
 }
 
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
@@ -66,6 +94,9 @@ func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 	curObj := cur.(*v1beta1.LoadBalancer)
 	if !equalMap(oldObj.Spec.Attributes, curObj.Spec.Attributes) {
 		c.enqueue(curObj, c.loadBalancerQueue)
+		if curRelate, _ := c.backendGroupCtrl.LBRelatedGroup(curObj); curRelate != nil{
+			c.enqueue(curRelate, c.backendGroupQueue)
+		}
 		return
 	}
 	if !equalResyncPolicy(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
@@ -83,8 +114,7 @@ func (c *Controller) addLoadBalancerDriver(obj interface{}) {
 }
 
 func (c *Controller) updateLoadBalancerDriver(old, cur interface{}) {
-	// TODO: if obj changed, enqueue
-
+	c.enqueue(cur, c.driverQueue)
 }
 
 func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {

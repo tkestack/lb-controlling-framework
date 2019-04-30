@@ -245,7 +245,7 @@ type BackendRecordSpec struct {
 
 type PodBackendRecord struct {
 	Name string        `json:"name"`
-	Port ContainerPort `json:"port"`
+	Port PortSelector `json:"port"`
 }
 
 type ServiceBackendRecord struct {
@@ -258,17 +258,17 @@ type NodeBackendRecord struct {
 	Name string `json:"name"`
 }
 
-type ContainerPort struct {
-	// +optional
-	Name string `json:"name,omitempty"`
-	// +optional
-	HostPort      int32 `json:"hostPort,omitempty"`
-	ContainerPort int32 `json:"containerPort"`
-	// +optional
-	Protocol string `json:"protocol,omitempty"`
-	// +optional
-	HostIP string `json:"hostIP,omitempty"`
-}
+//type ContainerPort struct {
+//	// +optional
+//	Name string `json:"name,omitempty"`
+//	// +optional
+//	HostPort      int32 `json:"hostPort,omitempty"`
+//	ContainerPort int32 `json:"containerPort"`
+//	// +optional
+//	Protocol string `json:"protocol,omitempty"`
+//	// +optional
+//	HostIP string `json:"hostIP,omitempty"`
+//}
 
 type ServicePort struct {
 	// +optional

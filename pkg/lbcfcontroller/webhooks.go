@@ -142,7 +142,7 @@ type GenerateBackendAddrRequest struct {
 
 type PodBackendInGenerateAddrRequest struct {
 	Pod  v1.Pod           `json:"pod"`
-	Port v1.ContainerPort `json:"port"`
+	Port v1beta1.PortSelector `json:"port"`
 }
 
 type ServiceBackendInGenerateAddrRequest struct {
@@ -194,66 +194,3 @@ func callWebhook(driver *v1beta1.LoadBalancerDriver, webHookName string, payload
 	return nil
 }
 
-//func callValidateLoadBalancer(driver *v1beta1.LoadBalancerDriver, req *ValidateLoadBalancerRequest) (*ValidateLoadBalancerResponse, error) {
-//	rsp := &ValidateLoadBalancerResponse{}
-//	if err := callWebhook(driver, ValidateBEHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}
-//
-//func callCreateLoadBalancer(driver *v1beta1.LoadBalancerDriver, req *CreateLoadBalancerRequest) (*CreateLoadBalancerResponse, error) {
-//	rsp := &CreateLoadBalancerResponse{}
-//	if err := callWebhook(driver, CreateLBHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}
-//
-//func callEnsureLoadBalancer(driver *v1beta1.LoadBalancerDriver, req *EnsureLoadBalancerRequest) (*EnsureLoadBalancerResponse, error) {
-//	rsp := &EnsureLoadBalancerResponse{}
-//	if err := callWebhook(driver, EnsureLBHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}
-//
-//func callDeleteLoadBalancer(driver *v1beta1.LoadBalancerDriver, req *DeleteLoadBalancerRequest) (*DeleteLoadBalancerResponse, error) {
-//	rsp := &DeleteLoadBalancerResponse{}
-//	if err := callWebhook(driver, DeleteLBHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}
-//
-//func callValidateBackend(driver *v1beta1.LoadBalancerDriver, req *ValidateBackendRequest) (*ValidateBackendResponse, error) {
-//	rsp := &ValidateBackendResponse{}
-//	if err := callWebhook(driver, ValidateBEHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}
-//
-//func callGenerateBackendAddr(driver *v1beta1.LoadBalancerDriver, req *GenerateBackendAddrRequest) (*GenerateBackendAddrResponse, error) {
-//	rsp := &GenerateBackendAddrResponse{}
-//	if err := callWebhook(driver, GenerateBEAddrHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}
-//
-//func callEnsureBackend(driver *v1beta1.LoadBalancerDriver, req *EnsureBackendRequest) (*EnsureBackendResponse, error) {
-//	rsp := &EnsureBackendResponse{}
-//	if err := callWebhook(driver, EnsureBEHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}
-//
-//func callDeregisterBackend(driver *v1beta1.LoadBalancerDriver, req *DeregisterBackendRequest) (*DeregisterBackendResponse, error) {
-//	rsp := &DeregisterBackendResponse{}
-//	if err := callWebhook(driver, DeregBEHook, req, rsp); err != nil {
-//		return nil, err
-//	}
-//	return rsp, nil
-//}

@@ -52,9 +52,10 @@ func NewController(
 		backendQueue:      NewIntervalRateLimitingQueue(DefaultControllerRateLimiter(), "backend-queue", cfg.MinRetryDelay),
 	}
 
-	c.driverController = NewDriverController(lbcfClient, lbDriverInformer.Lister())
-	c.lbController = NewLoadBalancerController(lbcfClient, lbInformer.Lister(), c.driverController)
-	c.backendController = NewBackendController(lbcfClient,  brInformer.Lister(), c.driverController, c.lbController, NewPodProvider(podInformer.Lister()))
+	c.driverCtrl = NewDriverController(lbcfClient, lbDriverInformer.Lister())
+	c.lbCtrl = NewLoadBalancerController(lbcfClient, lbInformer.Lister(), c.driverCtrl)
+	c.backendCtrl = NewBackendController(lbcfClient, brInformer.Lister(), c.driverCtrl, NewPodProvider(podInformer.Lister()))
+	c.backendGroupCtrl = NewBackendGroupController(lbcfClient, lbInformer.Lister(), bgInformer.Lister(), brInformer.Lister(), NewPodProvider(podInformer.Lister()))
 
 	// enqueue backendgroup
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
@@ -113,9 +114,10 @@ type Controller struct {
 	k8sClient  *kubernetes.Clientset
 	lbcfClient *lbcfclient.Clientset
 
-	driverController  *DriverController
-	lbController      *LoadBalancerController
-	backendController *BackendController
+	driverCtrl       *DriverController
+	lbCtrl           *LoadBalancerController
+	backendCtrl      *BackendController
+	backendGroupCtrl *BackendGroupController
 
 	podListerSynced           cache.InformerSynced
 	svcListerSynced           cache.InformerSynced
@@ -144,7 +146,7 @@ func (c *Controller) run() {
 		c.BackendRecordListerSynced) {
 		return
 	}
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 10; i++ {
 		go wait.Until(c.lbWorker, time.Second, wait.NeverStop)
 		go wait.Until(c.driverWorker, time.Second, wait.NeverStop)
 		go wait.Until(c.backendGroupWorker, time.Second, wait.NeverStop)
@@ -161,22 +163,22 @@ func (c *Controller) enqueue(obj interface{}, queue workqueue.RateLimitingInterf
 }
 
 func (c *Controller) lbWorker() {
-	for c.processNextItem(c.loadBalancerQueue, c.lbController.syncLB) {
+	for c.processNextItem(c.loadBalancerQueue, c.lbCtrl.syncLB) {
 	}
 }
 
 func (c *Controller) driverWorker() {
-	for c.processNextItem(c.driverQueue, c.driverController.syncDriver) {
+	for c.processNextItem(c.driverQueue, c.driverCtrl.syncDriver) {
 	}
 }
 
 func (c *Controller) backendGroupWorker() {
-	for c.processNextItem(c.backendGroupQueue, c.backendController.syncBackendGroup) {
+	for c.processNextItem(c.backendGroupQueue, c.backendGroupCtrl.syncBackendGroup) {
 	}
 }
 
 func (c *Controller) backendWorker() {
-	for c.processNextItem(c.backendQueue, c.backendController.syncBackendRecord) {
+	for c.processNextItem(c.backendQueue, c.backendCtrl.syncBackendRecord) {
 	}
 }
 

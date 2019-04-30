@@ -34,7 +34,7 @@ type BackendProvider interface {
 	listBackendByDriver(driverName string, driverNamespace string) ([]*lbcfapi.BackendRecord, error)
 }
 
-func NewBackendController(client *lbcfclient.Clientset, brLister v1beta1.BackendRecordLister, driverProvider DriverProvider, lbProvider LoadBalancerProvider, podProvider PodProvider) *BackendController {
+func NewBackendController(client *lbcfclient.Clientset, brLister v1beta1.BackendRecordLister, driverProvider DriverProvider, podProvider PodProvider) *BackendController {
 	return &BackendController{
 		client:         client,
 		brLister:       brLister,
@@ -50,10 +50,6 @@ type BackendController struct {
 
 	driverProvider DriverProvider
 	podProvider    PodProvider
-}
-
-func (c *BackendController) syncBackendGroup(key string) *SyncResult {
-	return &SyncResult{}
 }
 
 func (c *BackendController) syncBackendRecord(key string) *SyncResult {
@@ -108,7 +104,7 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 	}
 
 	if backend.Spec.PodBackendInfo != nil {
-		pod, err := c.podProvider.GetPod(backend.Spec.PodBackendInfo.Name, backend.Namespace)
+		pod, err := c.podProvider.GetPod(backend.Namespace, backend.Spec.PodBackendInfo.Name)
 		if err != nil {
 			return &SyncResult{err: err}
 		}
@@ -119,7 +115,7 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 			},
 			PodBackend: &PodBackendInGenerateAddrRequest{
 				Pod:  *pod,
-				Port: containerPortToK8sContainerPort(backend.Spec.PodBackendInfo.Port),
+				Port: backend.Spec.PodBackendInfo.Port,
 			},
 		}
 		rsp, err := driver.CallGenerateBackendAddr(req)

@@ -19,4 +19,5 @@ package lbcfcontroller
 const(
 	DeleteLBFinalizer = "lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"
 	DeregisterBackendFinalizer = "lbcf.tke.cloud.tencent.com/deregister-backend"
+	DeregisterBackendGroupFinalizer = "lbcf.tke.cloud.tencent.com/deregister-backend-group"
 )

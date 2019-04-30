@@ -17,7 +17,6 @@
 package lbcfcontroller
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +25,7 @@ import (
 
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
+	apilabel "k8s.io/apimachinery/pkg/labels"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
@@ -207,32 +207,37 @@ func NewPodProvider(lister corev1.PodLister) PodProvider {
 }
 
 type PodProvider interface {
-	GetPod(name string, namespace string) (*v1.Pod, error)
+	GetPod(namespace string, name string) (*v1.Pod, error)
+	Select(labels map[string]string) ([]*v1.Pod, error)
 }
 
 type PodProviderImpl struct {
 	lister corev1.PodLister
 }
 
-func (p *PodProviderImpl) GetPod(name string, namespace string) (*v1.Pod, error) {
+func (p *PodProviderImpl) GetPod(namespace string, name string) (*v1.Pod, error) {
 	return p.lister.Pods(namespace).Get(name)
 }
 
-func containerPortToK8sContainerPort(port lbcfapi.ContainerPort) v1.ContainerPort {
-	return v1.ContainerPort{
-		Name:          port.Name,
-		HostPort:      port.HostPort,
-		ContainerPort: port.ContainerPort,
-		Protocol:      v1.Protocol(port.Protocol),
-		HostIP:        port.HostIP,
-	}
+func (p *PodProviderImpl) Select(labels map[string]string) ([]*v1.Pod, error) {
+	return p.lister.List(apilabel.SelectorFromSet(apilabel.Set(labels)))
 }
 
-func recordIndex(obj interface{}) (string, error) {
-	r := obj.(*lbcfapi.BackendRecord)
-	index, err := json.Marshal(r.Spec.LBInfo)
-	return string(index), err
-}
+//func containerPortToK8sContainerPort(port lbcfapi.ContainerPort) v1.ContainerPort {
+//	return v1.ContainerPort{
+//		Name:          port.Name,
+//		HostPort:      port.HostPort,
+//		ContainerPort: port.ContainerPort,
+//		Protocol:      v1.Protocol(port.Protocol),
+//		HostIP:        port.HostIP,
+//	}
+//}
+//
+//func recordIndex(obj interface{}) (string, error) {
+//	r := obj.(*lbcfapi.BackendRecord)
+//	index, err := json.Marshal(r.Spec.LBInfo)
+//	return string(index), err
+//}
 
 func hasFinalizer(all []string, expect string) bool {
 	for i := range all {
@@ -274,7 +279,7 @@ func getResyncPeriod(cfg *lbcfapi.ResyncPolicyConfig) *time.Duration {
 	return &cfg.MinPeriod.Duration
 }
 
-func equalMap(a map[string]string, b map[string]string) bool{
+func equalMap(a map[string]string, b map[string]string) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -286,7 +291,7 @@ func equalMap(a map[string]string, b map[string]string) bool{
 	return true
 }
 
-func equalResyncPolicy(a *lbcfapi.ResyncPolicyConfig, b *lbcfapi.ResyncPolicyConfig) bool{
+func equalResyncPolicy(a *lbcfapi.ResyncPolicyConfig, b *lbcfapi.ResyncPolicyConfig) bool {
 	if (a == nil && b != nil) || (a != nil && b == nil) {
 		return false
 	}
@@ -304,4 +309,14 @@ func equalResyncPolicy(a *lbcfapi.ResyncPolicyConfig, b *lbcfapi.ResyncPolicyCon
 		}
 	}
 	return true
+}
+
+type ErrorList []error
+
+func (e ErrorList) Error() string {
+	var msg []string
+	for i, err := range e {
+		msg = append(msg, fmt.Sprintf("%d: %v", i+1, err))
+	}
+	return strings.Join(msg, "\n")
 }
