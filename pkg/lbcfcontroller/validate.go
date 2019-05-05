@@ -31,12 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
-type LBDriverType string
-
-const (
-	LBDriverWebhook LBDriverType = "Webhook"
-)
-
 func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList {
 	allErrs := field.ErrorList{}
 
@@ -65,8 +59,8 @@ func validateDriverName(name string, namespace string, path *field.Path) field.E
 
 func validateDriverType(raw string, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if raw != string(LBDriverWebhook) {
-		allErrs = append(allErrs, field.Invalid(path, raw, fmt.Sprintf("driverType must be %v", LBDriverWebhook)))
+	if raw != string(lbcfapi.WebhookDriver) {
+		allErrs = append(allErrs, field.Invalid(path, raw, fmt.Sprintf("driverType must be %v", lbcfapi.WebhookDriver)))
 
 	}
 	return allErrs

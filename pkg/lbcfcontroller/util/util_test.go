@@ -17,6 +17,9 @@
 package util
 
 import (
+	"fmt"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,12 +107,12 @@ func TestPodAvailable(t *testing.T) {
 	}
 	for _, pod := range shouldBind {
 		if !PodAvailable(&pod) {
-			t.Errorf("pod should bind, but return false, pod: %+v", pod)
+			t.Fatalf("pod should bind, but return false, pod: %+v", pod)
 		}
 	}
 	for _, pod := range shouldNotBind {
 		if PodAvailable(&pod) {
-			t.Errorf("pod should not bind, but return true, pod: %+v", pod)
+			t.Fatalf("pod should not bind, but return true, pod: %+v", pod)
 		}
 	}
 }
@@ -172,12 +175,12 @@ func TestLBCreated(t *testing.T) {
 	}
 	for i, lb := range created {
 		if !LBCreated(lb) {
-			t.Errorf("expect created, index: %d", i)
+			t.Fatalf("expect created, index: %d", i)
 		}
 	}
 	for i, lb := range notCreated {
 		if LBCreated(lb) {
-			t.Errorf("expect not-created, index: %d", i)
+			t.Fatalf("expect not-created, index: %d", i)
 		}
 	}
 }
@@ -273,16 +276,16 @@ func TestAddLBCondition(t *testing.T) {
 	for _, tc := range testCases {
 		AddLBCondition(tc.status, tc.condition)
 		if len(tc.status.Conditions) != len(tc.expect.Conditions) {
-			t.Errorf("case: %s. wrong length, expect: %d, get: %d", tc.name, len(tc.expect.Conditions), len(tc.status.Conditions))
+			t.Fatalf("case: %s. wrong length, expect: %d, get: %d", tc.name, len(tc.expect.Conditions), len(tc.status.Conditions))
 		}
 		for _, c := range tc.expect.Conditions {
 			get := getLBCondition(tc.status, c.Type)
 			if get == nil {
-				t.Errorf("case: %s. not found", tc.name)
+				t.Fatalf("case: %s. not found", tc.name)
 				continue
 			}
 			if *get != c {
-				t.Errorf("case: %s, condition not equal, expect: %+v, get: %+v", tc.name, c, *get)
+				t.Fatalf("case: %s, condition not equal, expect: %+v, get: %+v", tc.name, c, *get)
 			}
 		}
 	}
@@ -379,7 +382,7 @@ func TestAddBackendCondition(t *testing.T) {
 	for _, tc := range testCases {
 		AddBackendCondition(tc.status, tc.condition)
 		if len(tc.status.Conditions) != len(tc.expect.Conditions) {
-			t.Errorf("case: %s. wrong length, expect: %d, get: %d", tc.name, len(tc.expect.Conditions), len(tc.status.Conditions))
+			t.Fatalf("case: %s. wrong length, expect: %d, get: %d", tc.name, len(tc.expect.Conditions), len(tc.status.Conditions))
 		}
 		for _, c := range tc.expect.Conditions {
 			found := false
@@ -387,12 +390,12 @@ func TestAddBackendCondition(t *testing.T) {
 				if tc.status.Conditions[i].Type == c.Type {
 					found = true
 					if tc.status.Conditions[i] != c {
-						t.Errorf("case: %s, condition not equal, expect: %+v, get: %+v", tc.name, c, tc.status.Conditions[i])
+						t.Fatalf("case: %s, condition not equal, expect: %+v, get: %+v", tc.name, c, tc.status.Conditions[i])
 					}
 				}
 			}
 			if !found {
-				t.Errorf("case: %s. not found", tc.name)
+				t.Fatalf("case: %s. not found", tc.name)
 				continue
 			}
 		}
@@ -464,7 +467,7 @@ func TestGetBackendType(t *testing.T) {
 	}
 	for _, c := range cases {
 		if get := GetBackendType(c.backendGroup); get != c.backendType {
-			t.Errorf("case %s: expect type %s, get %s", c.name, c.backendType, get)
+			t.Fatalf("case %s: expect type %s, get %s", c.name, c.backendType, get)
 		}
 	}
 }
@@ -493,7 +496,7 @@ func TestGetDriverNamespace(t *testing.T) {
 	}
 	for _, c := range cases {
 		if get := GetDriverNamespace(c.driverName, c.namespace); get != c.expectNamespace {
-			t.Errorf("case %s: expect %s, get %s", c.name, c.expectNamespace, get)
+			t.Fatalf("case %s: expect %s, get %s", c.name, c.expectNamespace, get)
 		}
 	}
 }
@@ -552,7 +555,7 @@ func TestIsDriverDraining(t *testing.T) {
 
 	for _, c := range cases {
 		if get := IsDriverDraining(c.driver.Labels); get != c.expect {
-			t.Errorf("case %s: expect %v, get %v", c.name, c.expect, get)
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
 		}
 	}
 }
@@ -584,8 +587,856 @@ func TestCalculateRetryInterval(t *testing.T) {
 
 	for _, c := range cases {
 		if get := CalculateRetryInterval(c.userValue); get != c.expected {
-			t.Errorf("case %s: expect %v, get %v", c.name, c.expected, get)
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expected, get)
 		}
+	}
+}
+
+func TestHasFinalizer(t *testing.T) {
+	type testCase struct {
+		name    string
+		all     []string
+		lookfor string
+		expect  bool
+	}
+
+	cases := []testCase{
+		{
+			name: "true",
+			all: []string{
+				"a", "b", "c",
+			},
+			lookfor: "b",
+			expect:  true,
+		},
+		{
+			name: "false",
+			all: []string{
+				"a", "b", "c",
+			},
+			lookfor: "d",
+			expect:  false,
+		},
+	}
+	for _, c := range cases {
+		if get := HasFinalizer(c.all, c.lookfor); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestRemoveFinalizer(t *testing.T) {
+	type testCase struct {
+		name     string
+		all      []string
+		toRemove string
+		expect   []string
+	}
+
+	cases := []testCase{
+		{
+			name: "removed",
+			all: []string{
+				"a", "b", "c",
+			},
+			toRemove: "a",
+			expect: []string{
+				"b", "c",
+			},
+		},
+		{
+			name: "not-changed",
+			all: []string{
+				"a", "b", "c",
+			},
+			toRemove: "d",
+			expect: []string{
+				"a", "b", "c",
+			},
+		},
+	}
+	for _, c := range cases {
+		get := RemoveFinalizer(c.all, c.toRemove)
+		if len(get) != len(c.expect) {
+			t.Fatalf("error len")
+		}
+		for i := range get {
+			if get[i] != c.expect[i] {
+				t.Fatalf("different value, index %d", i)
+			}
+		}
+	}
+}
+
+func TestNamespacedNameKeyFunc(t *testing.T) {
+	type testCase struct {
+		name   string
+		ns     string
+		n      string
+		expect string
+	}
+
+	cases := []testCase{
+		{
+			name:   "has-namespace",
+			ns:     "test",
+			n:      "name",
+			expect: "test/name",
+		},
+		{
+			name:   "no-namespace",
+			n:      "name",
+			expect: "name",
+		},
+	}
+
+	for _, c := range cases {
+		if get := NamespacedNameKeyFunc(c.ns, c.n); get != c.expect {
+			t.Fatalf("case %s: expect %s, get %s", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestGetDuration(t *testing.T) {
+	type testCase struct {
+		name         string
+		cfg          *lbcfapi.Duration
+		defaultValue time.Duration
+		expect       time.Duration
+	}
+	cases := []testCase{
+		{
+			name:         "nil-cfg",
+			cfg:          nil,
+			defaultValue: DefaultEnsurePeriod,
+			expect:       DefaultEnsurePeriod,
+		},
+		{
+			name: "has-cfg",
+			cfg: &lbcfapi.Duration{
+				Duration: 3 * time.Second,
+			},
+			defaultValue: DefaultEnsurePeriod,
+			expect:       3 * time.Second,
+		},
+	}
+
+	for _, c := range cases {
+		if get := GetDuration(c.cfg, c.defaultValue); get != c.expect {
+			t.Fatalf("case %s, expect %s, get %s", c.name, c.expect.String(), get.String())
+		}
+	}
+}
+
+func TestMapEqual(t *testing.T) {
+	type tc struct {
+		name   string
+		m1     map[string]string
+		m2     map[string]string
+		expect bool
+	}
+
+	cases := []tc{
+		{
+			name: "equal",
+			m1: map[string]string{
+				"k1": "v1",
+			},
+			m2: map[string]string{
+				"k1": "v1",
+			},
+			expect: true,
+		}, {
+			name: "not-equal1",
+			m1: map[string]string{
+				"k1": "v1",
+			},
+			m2: map[string]string{
+				"k1": "v11",
+			},
+			expect: false,
+		}, {
+			name: "not-euqal2",
+			m1: map[string]string{
+				"k1": "v1",
+			},
+			m2: map[string]string{
+				"k11": "v1",
+			},
+			expect: false,
+		}, {
+			name: "not-equal3",
+			m1: map[string]string{
+				"k1": "v1",
+			},
+			m2: map[string]string{
+				"k1": "v1",
+				"k2": "v2",
+			},
+			expect: false,
+		},
+	}
+
+	for _, c := range cases {
+		if get := MapEqual(c.m1, c.m2); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestResyncPolicyEqual(t *testing.T) {
+	type tc struct {
+		name   string
+		a      *lbcfapi.ResyncPolicyConfig
+		b      *lbcfapi.ResyncPolicyConfig
+		expect bool
+	}
+
+	cases := []tc{
+		{
+			name:   "nil-equal",
+			a:      nil,
+			b:      nil,
+			expect: true,
+		},
+		{
+			name: "IfNotSucc-equal",
+			a: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyIfNotSucc,
+			},
+			b: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyIfNotSucc,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: time.Second,
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "always-equal",
+			a: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: 5 * time.Second,
+				},
+			},
+			b: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: 5 * time.Second,
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "always-equal2",
+			a: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+			},
+			b: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+			},
+			expect: true,
+		},
+		{
+			name: "always-period-not-equal",
+			a: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+			},
+			b: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: DefaultEnsurePeriod,
+				},
+			},
+			expect: false,
+		}, {
+			name: "always-period-not-equal2",
+			a: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: 2 * DefaultEnsurePeriod,
+				},
+			},
+			b: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: DefaultEnsurePeriod,
+				},
+			},
+			expect: false,
+		},
+		{
+			name: "policy-not-equal",
+			a: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyIfNotSucc,
+			},
+			b: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: DefaultEnsurePeriod,
+				},
+			},
+			expect: false,
+		}, {
+			name: "nil-not-equal",
+			a:    nil,
+			b: &lbcfapi.ResyncPolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: DefaultEnsurePeriod,
+				},
+			},
+			expect: false,
+		},
+	}
+
+	for _, c := range cases {
+		if get := ResyncPolicyEqual(c.a, c.b); get != c.expect {
+			t.Fatalf("case %s, expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestMakeBackendName(t *testing.T) {
+	lbName := "lb"
+	groupName := "group"
+	podName := "pod"
+	p := "tcp"
+	p2 := "Tcp"
+	p3 := "TCP"
+	p4 := "udp"
+	equals := []lbcfapi.PortSelector{
+		{
+			PortNumber: 12324,
+			Protocol:   &p,
+		},
+		{
+			PortNumber: 12324,
+		},
+		{
+			PortNumber: 12324,
+			Protocol:   &p2,
+		},
+		{
+			PortNumber: 12324,
+			Protocol:   &p3,
+		},
+	}
+	notEqual := lbcfapi.PortSelector{
+		PortNumber: 12324,
+		Protocol:   &p4,
+	}
+	ne := MakeBackendName(lbName, groupName, podName, notEqual)
+	lastOne := ""
+	for i := range equals {
+		n := MakeBackendName(lbName, groupName, podName, equals[i])
+		if i == 0 {
+			lastOne = n
+		} else {
+			if lastOne != n {
+				t.Fatalf("expect %s, get %s", lastOne, n)
+			}
+		}
+		if n == ne {
+			t.Fatalf("should not equal")
+		}
+	}
+}
+
+func TestMakeBackendLabels(t *testing.T) {
+	driverName := "driver"
+	lbName := "lb"
+	groupName := "group"
+	podName := "pod-0"
+	svcName := "my-svc"
+	statidAddr := "1.1.1.1"
+	get := MakeBackendLabels(driverName, lbName, groupName, svcName, podName, statidAddr)
+	expect := map[string]string{
+		lbcfapi.LabelDriverName:  driverName,
+		lbcfapi.LabelLBName:      lbName,
+		lbcfapi.LabelGroupName:   groupName,
+		lbcfapi.LabelPodName:     podName,
+		lbcfapi.LabelServiceName: svcName,
+		lbcfapi.LabelStaticAddr:  statidAddr,
+	}
+	if !MapEqual(get, expect) {
+		t.Fatalf("expect %v, get %v", expect, get)
+	}
+}
+
+func TestIterateBackends(t *testing.T) {
+	i := 0
+	increase := func(*lbcfapi.BackendRecord) error {
+		i++
+		return nil
+	}
+	backends := []*lbcfapi.BackendRecord{
+		{},
+		{},
+		{},
+		{},
+	}
+	err := IterateBackends(backends, increase)
+	if err != nil {
+		t.Fatalf("expect nil err, get %v", err)
+	}
+	if i != len(backends) {
+		t.Fatalf("expect %d, get %d", len(backends), i)
+	}
+
+	allErr := func(record *lbcfapi.BackendRecord) error {
+		return fmt.Errorf("fake error")
+	}
+	err = IterateBackends(backends, allErr)
+	el := err.(ErrorList)
+	if len(el) != len(backends) {
+		t.Fatalf("wrong len")
+	}
+	for _, e := range el {
+		if e.Error() != "fake error" {
+			t.Fatalf("wrong err.Error() %s", e.Error())
+		}
+	}
+}
+
+func TestFilterPods(t *testing.T) {
+	allPods := []*v1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "selected 1",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "selected 2",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "ignored",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "selected 3",
+			},
+		},
+	}
+	filterByName := func(pod *v1.Pod) bool {
+		if strings.HasPrefix(pod.Name, "selected") {
+			return true
+		}
+		return false
+	}
+
+	get := FilterPods(allPods, filterByName)
+	if len(get) != 3 {
+		t.Fatalf("expect 3, get %d", len(get))
+	}
+	expectedSet := sets.NewString()
+	expectedSet.Insert("selected 1", "selected 2", "selected 3")
+	getNameSet := sets.NewString()
+	for _, g := range get {
+		if getNameSet.Has(g.Name) {
+			t.Fatalf("already exist %s", g.Name)
+		}
+		getNameSet.Insert(g.Name)
+	}
+	if !expectedSet.Equal(getNameSet) {
+		t.Fatalf("expect %v, get %v", expectedSet.List(), getNameSet.List())
+	}
+}
+
+func TestIsPodMatchBackendGroup(t *testing.T) {
+	type tc struct {
+		name   string
+		group  *lbcfapi.BackendGroup
+		pod    *v1.Pod
+		expect bool
+	}
+
+	cases := []tc{
+		{
+			name: "byName-match",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						ByName: []string{
+							"my-pod-0",
+						},
+					},
+				},
+			},
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod-0",
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "byName-not-match",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						ByName: []string{
+							"my-pod-0",
+						},
+					},
+				},
+			},
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod-1",
+				},
+			},
+			expect: false,
+		},
+		{
+			name: "byLabel-match",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"k1": "v1",
+								"k2": "v2",
+							},
+						},
+					},
+				},
+			},
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"k1": "v1",
+						"k2": "v2",
+						"k3": "v3",
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "byLabel-not-match",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"k1": "v1",
+								"k2": "v2",
+							},
+						},
+					},
+				},
+			},
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"k1": "v1",
+					},
+				},
+			},
+			expect: false,
+		},
+		{
+			name: "byLabel-except-not-match",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"k1": "v1",
+								"k2": "v2",
+							},
+							Except: []string{
+								"my-pod-0",
+							},
+						},
+					},
+				},
+			},
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod-0",
+					Labels: map[string]string{
+						"k1": "v1",
+						"k2": "v2",
+					},
+				},
+			},
+			expect: false,
+		},
+		{
+			name: "namespace-not-match",
+			group: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						ByName: []string{
+							"my-pod-0",
+						},
+					},
+				},
+			},
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-pod-0",
+					Namespace: "another-ns",
+				},
+			},
+			expect: false,
+		},
+		{
+			name: "non-pod-backend",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Static: []string{
+						"1.1.1.1",
+					},
+				},
+			},
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pod-0",
+				},
+			},
+			expect: false,
+		},
+	}
+
+	for _, c := range cases {
+		if get := IsPodMatchBackendGroup(c.group, c.pod); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestIsLBMatchBackendGroup(t *testing.T) {
+	type tc struct {
+		name   string
+		group  *lbcfapi.BackendGroup
+		lb     *lbcfapi.LoadBalancer
+		expect bool
+	}
+
+	cases := []tc{
+		{
+			name: "match",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "my-lb",
+				},
+			},
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-lb",
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "name-not-match",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "my-lb",
+				},
+			},
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-lb",
+				},
+			},
+			expect: false,
+		},
+		{
+			name: "namespace-not-match",
+			group: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "my-lb",
+				},
+			},
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-lb",
+					Namespace: "another-namespace",
+				},
+			},
+			expect: false,
+		},
+	}
+	for _, c := range cases {
+		if get := IsLBMatchBackendGroup(c.group, c.lb); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestCompareBackendRecords(t *testing.T) {
+	expectAdd := &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "expect-add",
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:   "lb",
+			LBDriver: "driver",
+			LBInfo: map[string]string{
+				"lbID": "1234",
+			},
+			LBAttributes: map[string]string{
+				"attr1": "v1",
+			},
+			PodBackendInfo: &lbcfapi.PodBackendRecord{
+				Name: "my-pod-0",
+				Port: lbcfapi.PortSelector{
+					PortNumber: 8080,
+				},
+			},
+			Parameters: map[string]string{},
+		},
+	}
+
+	expectDelete := &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "expect-delete",
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:   "lb",
+			LBDriver: "driver",
+			LBInfo: map[string]string{
+				"lbID": "1234",
+			},
+			LBAttributes: map[string]string{
+				"attr1": "v1",
+			},
+			PodBackendInfo: &lbcfapi.PodBackendRecord{
+				Name: "my-pod-1",
+				Port: lbcfapi.PortSelector{
+					PortNumber: 8080,
+				},
+			},
+			Parameters: map[string]string{},
+		},
+	}
+
+	expectUpdate1 := &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "update1",
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:   "lb",
+			LBDriver: "driver",
+			LBInfo: map[string]string{
+				"lbID": "1234",
+			},
+			LBAttributes: map[string]string{
+				"attr1": "v1",
+			},
+			PodBackendInfo: &lbcfapi.PodBackendRecord{
+				Name: "my-pod-1",
+				Port: lbcfapi.PortSelector{
+					PortNumber: 8080,
+				},
+			},
+			Parameters: map[string]string{
+				"para1": "value1",
+			},
+		},
+	}
+	expectUpdate2 := expectUpdate1.DeepCopy()
+	expectUpdate2.Name = "update2"
+
+	expectUpdate3 := expectUpdate1.DeepCopy()
+	expectUpdate3.Name = "update3"
+
+	update1 := expectUpdate1.DeepCopy()
+	update1.Spec.LBAttributes["update-attr"] = "value"
+
+	update2 := expectUpdate2.DeepCopy()
+	update2.Spec.Parameters["update-para"] = "value"
+
+	update3 := expectUpdate3.DeepCopy()
+	update3.Spec.ResyncPolicy = &lbcfapi.ResyncPolicyConfig{
+		Policy: lbcfapi.PolicyAlways,
+		MinPeriod: &lbcfapi.Duration{
+			Duration: 30 * time.Second,
+		},
+	}
+
+	expectSame := &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "expect-same",
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:   "lb",
+			LBDriver: "driver",
+			LBInfo: map[string]string{
+				"lbID": "1234",
+			},
+			LBAttributes: map[string]string{
+				"attr1": "v1",
+			},
+			PodBackendInfo: &lbcfapi.PodBackendRecord{
+				Name: "my-pod-0",
+				Port: lbcfapi.PortSelector{
+					PortNumber: 8080,
+				},
+			},
+			Parameters: map[string]string{},
+		},
+	}
+	expect := []*lbcfapi.BackendRecord{expectAdd, expectSame, expectUpdate1, expectUpdate2, expectUpdate3}
+	have := []*lbcfapi.BackendRecord{expectDelete, expectSame, update1, update2, update3}
+
+	getAdd, getUpdate, getDelete := CompareBackendRecords(expect, have)
+	if len(getAdd) != 1 {
+		t.Fatalf("expect 1, get %d", len(getAdd))
+	} else if getAdd[0] != expectAdd {
+		t.Fatalf("expectAdd %+v, getAdd %+v", expectAdd, getAdd)
+	}
+
+	if len(getUpdate) != 3 {
+		for _, g := range getUpdate {
+			t.Log(g.Name)
+		}
+		t.Fatalf("expect update 3, get %d", len(getUpdate))
+	}
+
+	if len(getDelete) != 1 {
+		t.Fatalf("expect 1, get %d", len(getDelete))
+	} else if getDelete[0] != expectDelete {
+		t.Fatalf("expectDelete %+v, getDelete %+v", expectDelete, getDelete)
+	}
+}
+
+func TestSyncResult(t *testing.T) {
+	succ := SuccResult()
+	empty := SyncResult{}
+	if *succ != empty {
+		t.Fatalf("expect %+v, get %+v", empty, *succ)
+	}
+
+	if !ErrorResult(fmt.Errorf("fake error")).IsError() {
+		t.Fatalf("expect error")
+	}
+
+	if !FailResult(5 * time.Second).IsFailed() {
+		t.Fatalf("expect fail")
+	}
+
+	if !AsyncResult(5 * time.Second).IsAsync() {
+		t.Fatalf("expect async")
+	}
+
+	if !PeriodicResult(5 * time.Second).IsPeriodic() {
+		t.Fatalf("expect periodic")
 	}
 }
 
@@ -615,7 +1466,7 @@ func TestMakeFinalizerPatch(t *testing.T) {
 	}
 	for _, c := range cases {
 		if get := MakeFinalizerPatch(c.finalizer); string(get) != c.expectedPatch {
-			t.Errorf("case %s: expect %s, get %s", c.name, c.expectedPatch, string(get))
+			t.Fatalf("case %s: expect %s, get %s", c.name, c.expectedPatch, string(get))
 		}
 	}
 }

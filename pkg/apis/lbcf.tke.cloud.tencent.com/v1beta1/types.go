@@ -187,6 +187,12 @@ type LoadBalancerDriver struct {
 	Status LoadBalancerDriverStatus `json:"status,omitempty"`
 }
 
+type DriverType string
+
+const (
+	WebhookDriver DriverType = "Webhook"
+)
+
 type LoadBalancerDriverSpec struct {
 	DriverType string `json:"driverType"`
 	Url        URL    `json:"url"`

@@ -106,7 +106,7 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 	}
 
 	if backend.Spec.PodBackendInfo != nil {
-		pod, err := c.podProvider.GetPod(backend.Namespace, backend.Spec.PodBackendInfo.Name)
+		pod, err := c.podProvider.Get(backend.Namespace, backend.Spec.PodBackendInfo.Name)
 		if err != nil {
 			return util.ErrorResult(err)
 		}
@@ -172,7 +172,7 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 			return result
 		}
 		if cpy.Spec.ResyncPolicy != nil && cpy.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways {
-			return util.PeriodicResult(util.GetResyncPeriod(cpy.Spec.ResyncPolicy.MinPeriod))
+			return util.PeriodicResult(util.GetDuration(cpy.Spec.ResyncPolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
 		return util.SuccResult()
 	case webhooks.StatusFail:

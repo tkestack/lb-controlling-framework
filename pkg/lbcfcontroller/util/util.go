@@ -42,6 +42,7 @@ import (
 
 const (
 	DefaultRetryInterval = 10 * time.Second
+	DefaultEnsurePeriod  = 1 * time.Minute
 )
 
 func DefaultControllerRateLimiter() workqueue.RateLimiter {
@@ -194,7 +195,7 @@ func CalculateRetryInterval(userValueInSeconds int32) time.Duration {
 }
 
 type PodProvider interface {
-	GetPod(namespace string, name string) (*v1.Pod, error)
+	Get(namespace string, name string) (*v1.Pod, error)
 	Select(labels map[string]string) ([]*v1.Pod, error)
 }
 
@@ -208,7 +209,7 @@ type PodProviderImpl struct {
 	lister corev1.PodLister
 }
 
-func (p *PodProviderImpl) GetPod(namespace string, name string) (*v1.Pod, error) {
+func (p *PodProviderImpl) Get(namespace string, name string) (*v1.Pod, error) {
 	return p.lister.Pods(namespace).Get(name)
 }
 
@@ -238,13 +239,14 @@ func RemoveFinalizer(all []string, toDelete string) []string {
 func NamespacedNameKeyFunc(namespace, name string) string {
 	if len(namespace) > 0 {
 		return namespace + "/" + name
+
 	}
 	return name
 }
 
-func GetResyncPeriod(cfg *lbcfapi.Duration) time.Duration {
+func GetDuration(cfg *lbcfapi.Duration, defaultValue time.Duration) time.Duration {
 	if cfg == nil {
-		return 30 * time.Second
+		return defaultValue
 	}
 	return cfg.Duration
 }
@@ -262,21 +264,26 @@ func MapEqual(a map[string]string, b map[string]string) bool {
 }
 
 func ResyncPolicyEqual(a *lbcfapi.ResyncPolicyConfig, b *lbcfapi.ResyncPolicyConfig) bool {
-	if (a == nil && b != nil) || (a != nil && b == nil) {
-		return false
-	}
-	if a == nil {
+	if a == b {
 		return true
+	}
+	if a == nil || b == nil {
+		return false
 	}
 	if a.Policy != b.Policy {
 		return false
 	}
 	if a.Policy == lbcfapi.PolicyAlways {
-		oldPeriod := GetResyncPeriod(a.MinPeriod)
-		curPeriod := GetResyncPeriod(b.MinPeriod)
-		if oldPeriod.Nanoseconds() != curPeriod.Nanoseconds() {
+		if a.MinPeriod == b.MinPeriod {
+			return true
+		}
+		if a.MinPeriod == nil || b.MinPeriod == nil {
 			return false
 		}
+		if a.MinPeriod.Duration.Nanoseconds() != b.MinPeriod.Duration.Nanoseconds() {
+			return false
+		}
+		return true
 	}
 	return true
 }
@@ -320,9 +327,9 @@ func CallWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload
 func MakeBackendName(lbName, groupName, podName string, port lbcfapi.PortSelector) string {
 	protocol := "TCP"
 	if port.Protocol != nil {
-		protocol = *port.Protocol
+		protocol = strings.ToUpper(*port.Protocol)
 	}
-	raw := fmt.Sprintf("%s-%s-%s-%d-%s", lbName, groupName, podName, port.PortNumber, protocol)
+	raw := fmt.Sprintf("%s_%s_%s_%d_%+v", lbName, groupName, podName, port.PortNumber, protocol)
 	h := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", h)
 }
@@ -335,6 +342,12 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAd
 	if podName != "" {
 		ret[lbcfapi.LabelPodName] = podName
 	}
+	if svcName != "" {
+		ret[lbcfapi.LabelServiceName] = svcName
+	}
+	if staticAddr != "" {
+		ret[lbcfapi.LabelStaticAddr] = staticAddr
+	}
 	return ret
 }
 
@@ -345,7 +358,7 @@ func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendR
 	if !MapEqual(curObj.Spec.Parameters, expectObj.Spec.Parameters) {
 		return true
 	}
-	if !ResyncPolicyEqual(curObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
+	if !ResyncPolicyEqual(curObj.Spec.ResyncPolicy, expectObj.Spec.ResyncPolicy) {
 		return true
 	}
 	return false
@@ -354,9 +367,14 @@ func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendR
 func IterateBackends(all []*lbcfapi.BackendRecord, handler func(*lbcfapi.BackendRecord) error) error {
 	var errList []error
 	for _, record := range all {
-		errList = append(errList, handler(record))
+		if err := handler(record); err != nil {
+			errList = append(errList, err)
+		}
 	}
-	return ErrorList(errList)
+	if len(errList) > 0 {
+		return ErrorList(errList)
+	}
+	return nil
 }
 
 func FilterPods(all []*v1.Pod, filter func(pod *v1.Pod) bool) []*v1.Pod {
@@ -409,6 +427,7 @@ func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.Back
 		cur, ok := haveRecords[k]
 		if !ok {
 			needCreate = append(needCreate, v)
+			continue
 		}
 		if needUpdateRecord(cur, v) {
 			needUpdate = append(needUpdate, v)

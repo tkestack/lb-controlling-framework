@@ -113,7 +113,7 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 			pods = util.FilterPods(pods, filter)
 		} else if len(group.Spec.Pods.ByName) > 0 {
 			for _, podName := range group.Spec.Pods.ByName {
-				pod, err := c.podProvider.GetPod(namespace, podName)
+				pod, err := c.podProvider.Get(namespace, podName)
 				if errors.IsNotFound(err) {
 					continue
 				} else if err != nil {
