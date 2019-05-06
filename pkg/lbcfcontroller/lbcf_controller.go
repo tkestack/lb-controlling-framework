@@ -17,6 +17,7 @@
 package lbcfcontroller
 
 import (
+	"k8s.io/klog"
 	"time"
 
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
@@ -158,8 +159,10 @@ func (c *Controller) run() {
 func (c *Controller) enqueue(obj interface{}, queue workqueue.RateLimitingInterface) {
 	key, err := controller.KeyFunc(obj)
 	if err != nil {
+		klog.Errorf("enqueue failed: %v", err)
 		return
 	}
+	klog.Infof("enqueue %s", key)
 	queue.Add(key)
 }
 
@@ -193,13 +196,17 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 	go func() {
 		result := syncFunc(key.(string))
 		if result.IsError() {
+			klog.Infof("sync err: %v", result.GetError())
 			queue.AddRateLimited(key)
 		} else if result.IsFailed() {
+			klog.Infof("sync failed")
 			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
-		} else if result.IsAsync()  {
+		} else if result.IsAsync() {
+			klog.Infof("sync async")
 			queue.Forget(key)
 			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
-		} else if result.IsPeriodic(){
+		} else if result.IsPeriodic() {
+			klog.Infof("sync period")
 			queue.Forget(key)
 			queue.AddIntervalRateLimited(key, result.GetResyncPeriodic())
 		}

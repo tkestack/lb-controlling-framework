@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"fmt"
+	"k8s.io/klog"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
@@ -73,6 +74,7 @@ func (c *LoadBalancerController) listLoadBalancerByDriver(driverName string, dri
 }
 
 func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
+	klog.Infof("start syncLB %s", key)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)
@@ -85,15 +87,18 @@ func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
 	}
 
 	if lb.DeletionTimestamp != nil {
+		klog.Infof("%v", lb.DeletionTimestamp)
 		if !util.HasFinalizer(lb.Finalizers, lbcfapi.FinalizerDeleteLB) {
+			klog.Infof("skip delete")
 			return util.SuccResult()
 		}
+		klog.Infof("start delete")
 		return c.deleteLoadBalancer(lb)
 	}
 
 	if !util.LBCreated(lb) {
 		result := c.createLoadBalancer(lb)
-		if result.IsError() || result.IsAsync() {
+		if result.IsError() || result.IsFailed() || result.IsAsync() {
 			return result
 		}
 	}
@@ -120,7 +125,7 @@ func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	switch rsp.Status {
 	case webhooks.StatusSucc:
 		cpy := lb.DeepCopy()
-		if len(rsp.LBInfo) >= 0 {
+		if len(rsp.LBInfo) > 0 {
 			cpy.Status.LBInfo = rsp.LBInfo
 		} else {
 			cpy.Status.LBInfo = cpy.Spec.LBSpec
@@ -131,9 +136,11 @@ func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 			LastTransitionTime: v1.Now(),
 			Message:            rsp.Msg,
 		})
-		if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
+		latest, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy)
+		if err != nil {
 			return util.ErrorResult(err)
 		}
+		*lb = *latest
 		return util.SuccResult()
 	case webhooks.StatusFail:
 		return c.setOperationFailed(lb, rsp.ResponseForFailRetryHooks, lbcfapi.LBCreated)

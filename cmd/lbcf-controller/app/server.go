@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 )
 
@@ -37,11 +38,8 @@ func NewServer() *cobra.Command {
 		Use: "lbcf-controller",
 
 		Run: func(cmd *cobra.Command, args []string) {
-			clientCfg, err := rest.InClusterConfig()
-			if err != nil {
-				klog.Fatal(err)
-			}
-
+			klog.Infof("hello world")
+			clientCfg := getClientConfigOrDie(cfg.KubeConfig)
 			k8sClient := kubernetes.NewForConfigOrDie(clientCfg)
 			lbcfClient := lbcfclientset.NewForConfigOrDie(clientCfg)
 			k8sFactory := informers.NewSharedInformerFactory(k8sClient, cfg.InformerResyncPeriod)
@@ -59,10 +57,25 @@ func NewServer() *cobra.Command {
 			c.Start()
 			k8sFactory.Start(wait.NeverStop)
 			lbcfFactory.Start(wait.NeverStop)
-			lbcfcontroller.NewAdmitServer(c).Start()
+			lbcfcontroller.NewAdmitServer(c, cfg.ServerCrt, cfg.ServerKey).Start()
 			<-wait.NeverStop
 		},
 	}
 	cfg.AddFlags(cmd.Flags())
 	return cmd
+}
+
+func getClientConfigOrDie(kubeConfig string) *rest.Config {
+	if kubeConfig != "" {
+		clientCfg, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
+		if err != nil {
+			klog.Fatal(err)
+		}
+		return clientCfg
+	}
+	clientCfg, err := rest.InClusterConfig()
+	if err != nil {
+		klog.Fatal(err)
+	}
+	return clientCfg
 }

@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -70,8 +69,8 @@ type LoadBalancerSpec struct {
 // LoadBalancerList is a top-level list type. The client methods for lists are automatically created.
 // You are not supposed to create a separated client for this one.
 type LoadBalancerList struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []LoadBalancer `json:"items"`
 }
@@ -195,7 +194,7 @@ const (
 
 type LoadBalancerDriverSpec struct {
 	DriverType string `json:"driverType"`
-	Url        URL    `json:"url"`
+	Url        string `json:"url"`
 	// +optional
 	Webhooks []WebhookConfig `json:"webhooks"`
 }
@@ -426,28 +425,28 @@ const (
 	ConditionUnknown ConditionStatus = "Unknown"
 )
 
-type URL struct {
-	url.URL
-}
-
-func (u *URL) UnmarshalJSON(b []byte) error {
-	var str string
-	err := json.Unmarshal(b, &str)
-	if err != nil {
-		return err
-	}
-
-	parsed, err := url.Parse(str)
-	if err != nil {
-		return fmt.Errorf("invalid URL: %v, err: %v", str, err)
-	}
-	u.URL = *parsed
-	return nil
-}
-
-func (u URL) MarshalJSON() ([]byte, error) {
-	return json.Marshal(u.URL.String())
-}
+//type URL struct {
+//	url.URL
+//}
+//
+//func (u *URL) UnmarshalJSON(b []byte) error {
+//	var str string
+//	err := json.Unmarshal(b, &str)
+//	if err != nil {
+//		return err
+//	}
+//
+//	parsed, err := url.Parse(str)
+//	if err != nil {
+//		return fmt.Errorf("invalid URL: %v, err: %v", str, err)
+//	}
+//	u.URL = *parsed
+//	return nil
+//}
+//
+//func (u URL) MarshalJSON() ([]byte, error) {
+//	return json.Marshal(u.URL.String())
+//}
 
 type Duration struct {
 	time.Duration

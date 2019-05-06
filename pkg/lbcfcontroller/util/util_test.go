@@ -1451,21 +1451,21 @@ func TestMakeFinalizerPatch(t *testing.T) {
 		{
 			name:          "lb-patch",
 			finalizer:     lbcfapi.FinalizerDeleteLB,
-			expectedPatch: `[{"op":"add","path":"/metadata/finalizers/-","value":["lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"]}]`,
+			expectedPatch: `[{"op":"add","path":"/metadata/finalizers/-","value":"lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"}]`,
 		},
 		{
 			name:          "backend-patch",
 			finalizer:     lbcfapi.FinalizerDeregisterBackend,
-			expectedPatch: `[{"op":"add","path":"/metadata/finalizers/-","value":["lbcf.tke.cloud.tencent.com/deregister-backend"]}]`,
+			expectedPatch: `[{"op":"add","path":"/metadata/finalizers/-","value":"lbcf.tke.cloud.tencent.com/deregister-backend"}]`,
 		},
 		{
 			name:          "backend-group-patch",
 			finalizer:     lbcfapi.FinalizerDeregisterBackendGroup,
-			expectedPatch: `[{"op":"add","path":"/metadata/finalizers/-","value":["lbcf.tke.cloud.tencent.com/deregister-backend-group"]}]`,
+			expectedPatch: `[{"op":"add","path":"/metadata/finalizers/-","value":"lbcf.tke.cloud.tencent.com/deregister-backend-group"}]`,
 		},
 	}
 	for _, c := range cases {
-		if get := MakeFinalizerPatch(c.finalizer); string(get) != c.expectedPatch {
+		if get := MakeFinalizerPatch(false, c.finalizer); string(get) != c.expectedPatch {
 			t.Fatalf("case %s: expect %s, get %s", c.name, c.expectedPatch, string(get))
 		}
 	}

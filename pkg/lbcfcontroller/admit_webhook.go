@@ -25,6 +25,7 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	admission "k8s.io/api/admission/v1beta1"
+	"k8s.io/klog"
 )
 
 type AdmitWebhook interface {
@@ -53,9 +54,14 @@ type MutateAdmitWebhook interface {
 }
 
 func (c *Controller) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	obj := &lbcf.LoadBalancer{}
+	err := json.Unmarshal(ar.Request.Object.Raw, obj)
+	if err != nil {
+		return toAdmissionResponse(err)
+	}
 	reviewResponse := &admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
-	reviewResponse.Patch = util.MakeFinalizerPatch(lbcf.FinalizerDeleteLB)
+	reviewResponse.Patch = util.MakeFinalizerPatch(len(obj.Finalizers) == 0, lbcf.FinalizerDeleteLB)
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return reviewResponse
@@ -65,17 +71,22 @@ func (c *Controller) MutateDriver(ar *admission.AdmissionReview) (adResponse *ad
 	return toAdmissionResponse(nil)
 }
 
-func (c *Controller) MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse {
+func (c *Controller) MutateBackendGroup(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	obj := &lbcf.BackendGroup{}
+	err := json.Unmarshal(ar.Request.Object.Raw, obj)
+	if err != nil {
+		return toAdmissionResponse(err)
+	}
 	reviewResponse := &admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
-	reviewResponse.Patch = util.MakeFinalizerPatch(lbcf.FinalizerDeregisterBackendGroup)
+	reviewResponse.Patch = util.MakeFinalizerPatch(len(obj.Finalizers) == 0, lbcf.FinalizerDeregisterBackendGroup)
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return reviewResponse
 }
 
 func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
-	lb := lbcf.LoadBalancer{}
+	lb := &lbcf.LoadBalancer{}
 	if err := json.Unmarshal(ar.Request.Object.Raw, lb); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancer failed: %v", err))
 	}
@@ -149,8 +160,10 @@ func (c *Controller) ValidateLoadBalancerDelete(ar *admission.AdmissionReview) *
 }
 
 func (c *Controller) ValidateDriverCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	klog.Infof("start ValidateDriverCreate")
 	d := &lbcf.LoadBalancerDriver{}
 	if err := json.Unmarshal(ar.Request.Object.Raw, d); err != nil {
+		klog.Errorf(err.Error())
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
 	}
 
@@ -185,6 +198,7 @@ func (c *Controller) ValidateDriverUpdate(ar *admission.AdmissionReview) *admiss
 
 func (c *Controller) ValidateDriverDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	driver := &lbcf.LoadBalancerDriver{}
+	klog.Infof("raw: %s", string(ar.Request.Object.Raw))
 	if err := json.Unmarshal(ar.Request.Object.Raw, driver); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
 	}
@@ -218,7 +232,7 @@ func (c *Controller) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
-	lb, err := c.lbCtrl.getLoadBalancer(bg.Spec.LBName, bg.Namespace)
+	lb, err := c.lbCtrl.getLoadBalancer(bg.Namespace, bg.Spec.LBName)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
 	}
@@ -226,7 +240,7 @@ func (c *Controller) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name))
 	}
 	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, bg.Namespace)
-	driver, exist := c.driverCtrl.getDriver(lb.Spec.LBDriver, driverNamespace)
+	driver, exist := c.driverCtrl.getDriver(driverNamespace, lb.Spec.LBDriver)
 	if !exist {
 		return toAdmissionResponse(fmt.Errorf("driver %q not found in namespace %s", lb.Spec.LBDriver, driverNamespace))
 	}

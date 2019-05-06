@@ -17,17 +17,20 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/logs"
+
+	"k8s.io/klog"
 )
 
 func main() {
 	command := app.NewServer()
-	logs.InitLogs()
-	defer logs.FlushLogs()
+	klog.InitFlags(flag.NewFlagSet(os.Args[0], flag.ContinueOnError))
+	flag.Set("logtostderr", "true")
+	defer klog.Flush()
 
 	if err := command.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

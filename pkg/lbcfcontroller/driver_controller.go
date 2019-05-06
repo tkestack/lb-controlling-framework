@@ -17,6 +17,7 @@
 package lbcfcontroller
 
 import (
+	"k8s.io/klog"
 	"strings"
 	"sync"
 
@@ -60,14 +61,15 @@ func (c *DriverController) getDriver(namespace, name string) (DriverConnector, b
 }
 
 func (c *DriverController) syncDriver(key string) *util.SyncResult {
+	klog.Infof("start syncDriver %s", key)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
-	driver, err := c.lister.LoadBalancerDrivers(name).Get(namespace)
+	driver, err := c.lister.LoadBalancerDrivers(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		c.driverStore.Delete(util.NamespacedNameKeyFunc(namespace, name))
-		return util.ErrorResult(err)
+		return util.SuccResult()
 	} else if err != nil {
 		return util.ErrorResult(err)
 	}
@@ -92,15 +94,15 @@ func (c *DriverController) syncDriver(key string) *util.SyncResult {
 		if err != nil {
 			return util.ErrorResult(err)
 		}
-		c.driverStore.Store(key, NewDriverConnector(driver))
+		c.driverStore.Store(util.NamespacedNameKeyFunc(namespace, name), NewDriverConnector(driver))
 		return util.SuccResult()
 	}
 
 	// update DriverConnector
-	dc, ok := c.driverStore.Load(key)
+	dc, ok := c.driverStore.Load(util.NamespacedNameKeyFunc(namespace, name))
 	if !ok {
-		// this shouldn't happen
-		return util.SuccResult()
+		dc = NewDriverConnector(driver)
+		c.driverStore.Store(util.NamespacedNameKeyFunc(namespace, name), dc)
 	}
 	dc.(DriverConnector).UpdateConfig(driver)
 	return util.SuccResult()
@@ -146,7 +148,7 @@ type DriverConnectorImpl struct {
 
 func (d *DriverConnectorImpl) CallValidateLoadBalancer(req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
 	rsp := &webhooks.ValidateLoadBalancerResponse{}
-	if err := util.CallWebhook(d.GetConfig(), webhooks.ValidateBackend, req, rsp); err != nil {
+	if err := util.CallWebhook(d.GetConfig(), webhooks.ValidateLoadBalancer, req, rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil
@@ -217,7 +219,7 @@ func (d *DriverConnectorImpl) UpdateConfig(obj *lbcfapi.LoadBalancerDriver) {
 func (d *DriverConnectorImpl) IsDraining() bool {
 	d.RLock()
 	defer d.RUnlock()
-	if v, ok := d.config.Labels[lbcfapi.DriverDrainingLabel]; !ok || strings.ToUpper(v) != "TRUE" {
+	if v, ok := d.config.Labels[lbcfapi.DriverDrainingLabel]; ok && strings.ToUpper(v) == "TRUE" {
 		return true
 	}
 	return false
@@ -229,6 +231,6 @@ func (d *DriverConnectorImpl) Start() {
 
 func (d *DriverConnectorImpl) GetConfig() *lbcfapi.LoadBalancerDriver {
 	d.RLock()
-	defer d.Unlock()
+	defer d.RUnlock()
 	return d.config.DeepCopy()
 }

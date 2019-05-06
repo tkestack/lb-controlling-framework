@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"fmt"
+	"net/url"
 	"reflect"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList
 
 	allErrs = append(allErrs, validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
 	allErrs = append(allErrs, validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
+	allErrs = append(allErrs, validateDriverUrl(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
 	//allErrs = append(allErrs, validateDriverUrl(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
 	if raw.Spec.Webhooks != nil {
 		allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec"))...)
@@ -62,6 +64,14 @@ func validateDriverType(raw string, path *field.Path) field.ErrorList {
 	if raw != string(lbcfapi.WebhookDriver) {
 		allErrs = append(allErrs, field.Invalid(path, raw, fmt.Sprintf("driverType must be %v", lbcfapi.WebhookDriver)))
 
+	}
+	return allErrs
+}
+
+func validateDriverUrl(raw string, path *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if _, err := url.Parse(raw); err != nil {
+		allErrs = append(allErrs, field.Invalid(path, raw, err.Error()))
 	}
 	return allErrs
 }
@@ -164,6 +174,7 @@ func validatePodBackend(raw *lbcfapi.PodBackend, path *field.Path) field.ErrorLi
 		if raw.ByName != nil {
 			allErrs = append(allErrs, field.Invalid(path.Child("byName"), raw.ByName, "only one of \"byLabel, byName\" is allowed"))
 		}
+		return allErrs
 	}
 
 	if raw.ByName == nil {

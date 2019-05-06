@@ -93,6 +93,9 @@ func (c *Controller) addLoadBalancer(obj interface{}) {
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 	oldObj := cur.(*v1beta1.LoadBalancer)
 	curObj := cur.(*v1beta1.LoadBalancer)
+	if curObj.DeletionTimestamp != nil {
+		c.enqueue(curObj, c.loadBalancerQueue)
+	}
 	if !util.MapEqual(oldObj.Spec.Attributes, curObj.Spec.Attributes) {
 		c.enqueue(curObj, c.loadBalancerQueue)
 		if curRelate, _ := c.backendGroupCtrl.LBRelatedGroup(curObj); curRelate != nil {
@@ -129,6 +132,9 @@ func (c *Controller) addBackendRecord(obj interface{}) {
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := cur.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
+	if curObj.DeletionTimestamp != nil {
+		c.enqueue(curObj, c.backendQueue)
+	}
 	if !util.MapEqual(oldObj.Spec.Parameters, curObj.Spec.Parameters) {
 		c.enqueue(curObj, c.backendQueue)
 		return

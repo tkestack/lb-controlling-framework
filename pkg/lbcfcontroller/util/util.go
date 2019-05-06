@@ -21,6 +21,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"path"
 	"strings"
 	"text/template"
@@ -303,7 +304,12 @@ const (
 )
 
 func CallWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload interface{}, rsp interface{}) error {
-	u := driver.Spec.Url
+	u, err := url.Parse(driver.Spec.Url)
+	if err != nil {
+		e := fmt.Errorf("invalid url: %v", err)
+		klog.Errorf("callwebhook failed: %v. driver: %s, webhookName: %s", e, driver.Name, webHookName)
+		return e
+	}
 	u.Path = path.Join(webhooks.WebhookPrefix, webHookName)
 	timeout := DefaultWebhookTimeout
 	for _, h := range driver.Spec.Webhooks {
@@ -314,12 +320,20 @@ func CallWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload
 			break
 		}
 	}
-	_, body, errs := gorequest.New().Timeout(timeout).Post(u.String()).Send(payload).EndBytes()
+	request := gorequest.New().Timeout(timeout).Post(u.String()).Send(payload)
+	debugInfo, _ := request.AsCurlCommand()
+	klog.Infof("callwebhook, %s", debugInfo)
+
+	_, body, errs := request.EndBytes()
 	if len(errs) > 0 {
-		return fmt.Errorf("%v", errs)
+		e := fmt.Errorf("webhook err: %v", errs)
+		klog.Errorf("callwebhook failed: %v. url: %s", e, u.String())
+		return e
 	}
 	if err := json.Unmarshal(body, rsp); err != nil {
-		return err
+		e := fmt.Errorf("decode webhook response err: %v, raw: %s", err, body)
+		klog.Errorf("callwebhook failed: %v. url: %s", e, u.String())
+		return e
 	}
 	return nil
 }
@@ -490,6 +504,10 @@ func (s *SyncResult) IsPeriodic() bool {
 	return s.periodicOperation
 }
 
+func (s *SyncResult) GetError() error {
+	return s.err
+}
+
 func (s *SyncResult) GetRetryDelay() time.Duration {
 	return s.minRetryDelay
 }
@@ -498,10 +516,15 @@ func (s *SyncResult) GetResyncPeriodic() time.Duration {
 	return s.minResyncPeriod
 }
 
-var patchTemplate = `[{"op":"add","path":"/metadata/finalizers/-","value":["{{ .Finalizer }}"]}]`
+var firstFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers","value":["{{ .Finalizer }}"]}]`
+var additionalFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers/-","value":"{{ .Finalizer }}"}]`
 
-func MakeFinalizerPatch(finalizer string) []byte {
-	t := template.Must(template.New("patch").Parse(patchTemplate))
+func MakeFinalizerPatch(isFirst bool, finalizer string) []byte {
+	tmpStr := firstFirnalizerPatchTemplate
+	if !isFirst {
+		tmpStr = additionalFirnalizerPatchTemplate
+	}
+	t := template.Must(template.New("patch").Parse(tmpStr))
 
 	wrapper := struct {
 		Finalizer string

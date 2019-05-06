@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"fmt"
+	"k8s.io/klog"
 	"strings"
 	"sync"
 
@@ -60,6 +61,7 @@ type BackendGroupController struct {
 }
 
 func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
+	klog.Infof("start syncBackendGroup %s", key)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)
@@ -197,6 +199,9 @@ func (c *BackendGroupController) updateBackendRecord(record *lbcfapi.BackendReco
 }
 
 func (c *BackendGroupController) deleteBackendRecord(record *lbcfapi.BackendRecord) error {
+	if record.DeletionTimestamp != nil {
+		return nil
+	}
 	err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Delete(record.Name, nil)
 	if err != nil {
 		return fmt.Errorf("delete BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
@@ -237,7 +242,7 @@ func (c *BackendGroupController) listBackendRecords(namespace string, lbName str
 	}
 	var ret []*lbcfapi.BackendRecord
 	for i := range list.Items {
-		ret[i] = &list.Items[i]
+		ret = append(ret, &list.Items[i])
 	}
 	return ret, nil
 }

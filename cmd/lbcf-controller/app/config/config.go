@@ -23,8 +23,10 @@ import (
 
 type Config struct {
 	InformerResyncPeriod time.Duration
-	LBResyncPeriod       time.Duration
 	MinRetryDelay        time.Duration
+	KubeConfig           string
+	ServerCrt            string
+	ServerKey            string
 }
 
 func NewConfig() *Config {
@@ -33,6 +35,8 @@ func NewConfig() *Config {
 
 func (o *Config) AddFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&o.InformerResyncPeriod, "informer-resync-period", 1*time.Minute, "resync period for informers")
-	fs.DurationVar(&o.LBResyncPeriod, "lb-resync-period", 1*time.Minute, "period for ensureLoadBalancer and ensureBackend")
 	fs.DurationVar(&o.MinRetryDelay, "min-retry-delay", 1*time.Minute, "minimum retry delay for failed webhook calls")
+	fs.StringVar(&o.KubeConfig, "kubeconfig", "", "Path to kubeconfig file with authorization information")
+	fs.StringVar(&o.ServerCrt, "server-crt", "server.crt", "Path to crt file for admit webhook server")
+	fs.StringVar(&o.ServerKey, "server-key", "server.key", "Path to key file for admit webhook server")
 }

@@ -26,14 +26,18 @@ import (
 	"k8s.io/klog"
 )
 
-type AdmitServer struct {
-	admitWebhook AdmitWebhook
-}
-
-func NewAdmitServer(admit AdmitWebhook) *AdmitServer {
+func NewAdmitServer(admit AdmitWebhook, crtFile string, keyFile string) *AdmitServer {
 	return &AdmitServer{
 		admitWebhook: admit,
+		crtFile:      crtFile,
+		keyFile:      keyFile,
 	}
+}
+
+type AdmitServer struct {
+	admitWebhook AdmitWebhook
+	crtFile      string
+	keyFile      string
 }
 
 func (s *AdmitServer) Start() {
@@ -57,7 +61,7 @@ func (s *AdmitServer) Start() {
 	restful.Add(ws)
 
 	go func() {
-		klog.Fatal(http.ListenAndServe(":443", nil))
+		klog.Fatal(http.ListenAndServeTLS(":443", s.crtFile, s.keyFile, nil))
 	}()
 }
 

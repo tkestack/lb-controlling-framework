@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"fmt"
+	"k8s.io/klog"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
@@ -55,6 +56,7 @@ type BackendController struct {
 }
 
 func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
+	klog.Infof("start syncBackendRecord %s", key)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)
@@ -75,7 +77,7 @@ func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
 
 	if backend.Status.BackendAddr == "" {
 		result := c.generateBackendAddr(backend)
-		if result.IsError() || result.IsAsync() {
+		if result.IsError() || result.IsFailed() || result.IsAsync() {
 			return result
 		}
 	}
@@ -128,7 +130,18 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		case webhooks.StatusSucc:
 			cpy := backend.DeepCopy()
 			cpy.Status.BackendAddr = rsp.BackendAddr
-			return c.setOperationSucc(cpy, rsp.ResponseForFailRetryHooks, lbcfapi.BackendAddrGenerated)
+			util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
+				Type:               lbcfapi.BackendAddrGenerated,
+				Status:             lbcfapi.ConditionTrue,
+				LastTransitionTime: v1.Now(),
+				Message:            rsp.Msg,
+			})
+			latest, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+			if err != nil {
+				return util.ErrorResult(err)
+			}
+			*backend = *latest
+			return util.SuccResult()
 		case webhooks.StatusFail:
 			return c.setOperationFailed(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendAddrGenerated)
 		case webhooks.StatusRunning:
@@ -251,7 +264,7 @@ func (c *BackendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp
 	if _, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy); err != nil {
 		return util.ErrorResult(err)
 	}
-	return &util.SyncResult{}
+	return util.SuccResult()
 }
 
 func (c *BackendController) setOperationFailed(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
