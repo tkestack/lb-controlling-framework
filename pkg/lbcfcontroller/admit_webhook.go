@@ -19,6 +19,7 @@ package lbcfcontroller
 import (
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	lbcf "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
@@ -72,17 +73,7 @@ func (c *Controller) MutateDriver(ar *admission.AdmissionReview) (adResponse *ad
 }
 
 func (c *Controller) MutateBackendGroup(ar *admission.AdmissionReview) *admission.AdmissionResponse {
-	obj := &lbcf.BackendGroup{}
-	err := json.Unmarshal(ar.Request.Object.Raw, obj)
-	if err != nil {
-		return toAdmissionResponse(err)
-	}
-	reviewResponse := &admission.AdmissionResponse{}
-	reviewResponse.Allowed = true
-	reviewResponse.Patch = util.MakeFinalizerPatch(len(obj.Finalizers) == 0, lbcf.FinalizerDeregisterBackendGroup)
-	pt := admission.PatchTypeJSONPatch
-	reviewResponse.PatchType = &pt
-	return reviewResponse
+	return toAdmissionResponse(nil)
 }
 
 func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
@@ -197,12 +188,12 @@ func (c *Controller) ValidateDriverUpdate(ar *admission.AdmissionReview) *admiss
 }
 
 func (c *Controller) ValidateDriverDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
-	driver := &lbcf.LoadBalancerDriver{}
-	klog.Infof("raw: %s", string(ar.Request.Object.Raw))
-	if err := json.Unmarshal(ar.Request.Object.Raw, driver); err != nil {
-		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
+	driver, err := c.lbcfClient.LbcfV1beta1().LoadBalancerDrivers(ar.Request.Namespace).Get(ar.Request.Name, v1.GetOptions{})
+	if err != nil {
+		return toAdmissionResponse(fmt.Errorf("retrieve LoadBalancerDriver %s/%s failed: %v", ar.Request.Namespace, ar.Request.Name, err))
 	}
-	if util.IsDriverDraining(driver.Labels) {
+
+	if !util.IsDriverDraining(driver.Labels) {
 		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete", lbcf.DriverDrainingLabel))
 	}
 

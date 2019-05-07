@@ -21,6 +21,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path"
 	"strings"
@@ -110,6 +111,11 @@ func LBCreated(lb *lbcfapi.LoadBalancer) bool {
 		return false
 	}
 	return condition.Status == lbcfapi.ConditionTrue
+}
+
+func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
+	condition := getLBCondition(&lb.Status, lbcfapi.LBEnsured)
+	return condition == nil || condition.Status != lbcfapi.ConditionTrue
 }
 
 func getLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
@@ -322,11 +328,16 @@ func CallWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload
 	}
 	request := gorequest.New().Timeout(timeout).Post(u.String()).Send(payload)
 	debugInfo, _ := request.AsCurlCommand()
-	klog.Infof("callwebhook, %s", debugInfo)
+	klog.V(3).Infof("callwebhook, %s", debugInfo)
 
-	_, body, errs := request.EndBytes()
+	response, body, errs := request.EndBytes()
 	if len(errs) > 0 {
 		e := fmt.Errorf("webhook err: %v", errs)
+		klog.Errorf("callwebhook failed: %v. url: %s", e, u.String())
+		return e
+	}
+	if response.StatusCode != http.StatusOK {
+		e := fmt.Errorf("http status code: %d, body: %s", response.StatusCode, body)
 		klog.Errorf("callwebhook failed: %v. url: %s", e, u.String())
 		return e
 	}
@@ -453,6 +464,25 @@ func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.Back
 		}
 	}
 	return
+}
+
+func BackendNeedEnsure(backend *lbcfapi.BackendRecord) bool {
+	if !backendIsRegistered(backend) {
+		return true
+	}
+	return backend.Spec.ResyncPolicy != nil && backend.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways
+}
+
+func backendIsRegistered(backend *lbcfapi.BackendRecord) bool {
+	for _, cond := range backend.Status.Conditions {
+		if cond.Type == lbcfapi.BackendRegistered {
+			if cond.Status == lbcfapi.ConditionTrue {
+				return true
+			}
+			return false
+		}
+	}
+	return false
 }
 
 type SyncFunc func(string) *SyncResult

@@ -27,6 +27,8 @@ import (
 )
 
 const (
+	ApiVersion = "lbcf.tke.cloud.tencent.com/vebeta1"
+
 	SystemDriverPrefix = "lbcf-"
 
 	// labels of LoadBalancerDriver

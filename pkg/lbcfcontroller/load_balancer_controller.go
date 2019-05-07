@@ -87,12 +87,9 @@ func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
 	}
 
 	if lb.DeletionTimestamp != nil {
-		klog.Infof("%v", lb.DeletionTimestamp)
 		if !util.HasFinalizer(lb.Finalizers, lbcfapi.FinalizerDeleteLB) {
-			klog.Infof("skip delete")
 			return util.SuccResult()
 		}
-		klog.Infof("start delete")
 		return c.deleteLoadBalancer(lb)
 	}
 
@@ -102,7 +99,10 @@ func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
 			return result
 		}
 	}
-	return c.ensureLoadBalancer(lb)
+	if util.LBNeedEnsure(lb) {
+		return c.ensureLoadBalancer(lb)
+	}
+	return util.SuccResult()
 }
 
 func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {

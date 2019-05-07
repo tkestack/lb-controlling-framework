@@ -74,17 +74,6 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	}
 
 	if group.DeletionTimestamp != nil {
-		if !util.HasFinalizer(group.Finalizers, lbcfapi.FinalizerDeregisterBackendGroup) {
-			return util.SuccResult()
-		}
-		if result := c.deleteAllBackend(namespace, group.Spec.LBName, group.Name); result.IsError() {
-			return result
-		}
-		cpy := group.DeepCopy()
-		cpy.Finalizers = util.RemoveFinalizer(cpy.Finalizers, lbcfapi.FinalizerDeregisterBackendGroup)
-		if _, err := c.client.LbcfV1beta1().BackendGroups(namespace).Update(cpy); err != nil {
-			return util.ErrorResult(err)
-		}
 		return util.SuccResult()
 	}
 
@@ -158,6 +147,7 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 }
 
 func (c *BackendGroupController) constructRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, podName string) *lbcfapi.BackendRecord {
+	valueTrue := true
 	return &lbcfapi.BackendRecord{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      util.MakeBackendName(lb.Name, group.Name, podName, group.Spec.Pods.Port),
@@ -165,6 +155,16 @@ func (c *BackendGroupController) constructRecord(lb *lbcfapi.LoadBalancer, group
 			Labels:    util.MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", podName, ""),
 			Finalizers: []string{
 				lbcfapi.FinalizerDeregisterBackend,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         lbcfapi.ApiVersion,
+					BlockOwnerDeletion: &valueTrue,
+					Controller:         &valueTrue,
+					Kind:               "BackendGroup",
+					Name:               group.Name,
+					UID:                group.UID,
+				},
 			},
 		},
 		Spec: lbcfapi.BackendRecordSpec{

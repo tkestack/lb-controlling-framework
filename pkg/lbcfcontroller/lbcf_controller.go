@@ -162,7 +162,6 @@ func (c *Controller) enqueue(obj interface{}, queue workqueue.RateLimitingInterf
 		klog.Errorf("enqueue failed: %v", err)
 		return
 	}
-	klog.Infof("enqueue %s", key)
 	queue.Add(key)
 }
 
@@ -196,17 +195,17 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 	go func() {
 		result := syncFunc(key.(string))
 		if result.IsError() {
-			klog.Infof("sync err: %v", result.GetError())
+			klog.Errorf("sync key %s, err: %v", key, result.GetError())
 			queue.AddRateLimited(key)
 		} else if result.IsFailed() {
-			klog.Infof("sync failed")
+			klog.Infof("sync key %s, failed", key)
 			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
 		} else if result.IsAsync() {
-			klog.Infof("sync async")
+			klog.Infof("sync key %s, async", key)
 			queue.Forget(key)
 			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
 		} else if result.IsPeriodic() {
-			klog.Infof("sync period")
+			klog.Infof("sync key %s, period", key)
 			queue.Forget(key)
 			queue.AddIntervalRateLimited(key, result.GetResyncPeriodic())
 		}

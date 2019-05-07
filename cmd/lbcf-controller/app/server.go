@@ -38,7 +38,6 @@ func NewServer() *cobra.Command {
 		Use: "lbcf-controller",
 
 		Run: func(cmd *cobra.Command, args []string) {
-			klog.Infof("hello world")
 			clientCfg := getClientConfigOrDie(cfg.KubeConfig)
 			k8sClient := kubernetes.NewForConfigOrDie(clientCfg)
 			lbcfClient := lbcfclientset.NewForConfigOrDie(clientCfg)

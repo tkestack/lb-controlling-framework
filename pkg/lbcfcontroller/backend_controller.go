@@ -81,7 +81,10 @@ func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
 			return result
 		}
 	}
-	return c.ensureBackend(backend)
+	if util.BackendNeedEnsure(backend) {
+		return c.ensureBackend(backend)
+	}
+	return util.SuccResult()
 }
 
 func (c *BackendController) listBackendByDriver(driverName string, driverNamespace string) ([]*lbcfapi.BackendRecord, error) {
