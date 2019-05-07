@@ -29,8 +29,6 @@ import (
 	"time"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
-
 	"github.com/parnurzeal/gorequest"
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
@@ -316,7 +314,7 @@ func CallWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload
 		klog.Errorf("callwebhook failed: %v. driver: %s, webhookName: %s", e, driver.Name, webHookName)
 		return e
 	}
-	u.Path = path.Join(webhooks.WebhookPrefix, webHookName)
+	u.Path = path.Join(webHookName)
 	timeout := DefaultWebhookTimeout
 	for _, h := range driver.Spec.Webhooks {
 		if h.Name == webHookName {

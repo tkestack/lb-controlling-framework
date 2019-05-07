@@ -61,9 +61,9 @@ type LoadBalancerSpec struct {
 	LBDriver string            `json:"lbDriver"`
 	LBSpec   map[string]string `json:"lbSpec"`
 	// +optional
-	Attributes map[string]string `json:"attributes"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 	// +optional
-	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy"`
+	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -128,9 +128,9 @@ type BackendGroupSpec struct {
 	// +optional
 	Static []string `json:"static,omitempty"`
 	// +optional
-	Parameters map[string]string `json:"parameters"`
+	Parameters map[string]string `json:"parameters,omitempty"`
 	// +optional
-	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy"`
+	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy,omitempty"`
 }
 
 type ServiceBackend struct {
@@ -198,12 +198,13 @@ type LoadBalancerDriverSpec struct {
 	DriverType string `json:"driverType"`
 	Url        string `json:"url"`
 	// +optional
-	Webhooks []WebhookConfig `json:"webhooks"`
+	Webhooks []WebhookConfig `json:"webhooks,omitempty"`
 }
 
 type WebhookConfig struct {
-	Name    string    `json:"name"`
-	Timeout *Duration `json:"timeout"`
+	Name string `json:"name"`
+	// +optional
+	Timeout *Duration `json:"timeout,omitempty"`
 }
 
 type LoadBalancerDriverConditionType string
@@ -257,14 +258,17 @@ type BackendRecord struct {
 }
 
 type BackendRecordSpec struct {
-	LBName             string                `json:"lbName"`
-	LBDriver           string                `json:"lbDriver"`
-	LBInfo             map[string]string     `json:"lbInfo"`
-	LBAttributes       map[string]string     `json:"lbAttributes"`
-	Parameters         map[string]string     `json:"parameters"`
-	PodBackendInfo     *PodBackendRecord     `json:"podBackend"`
-	ServiceBackendInfo *ServiceBackendRecord `json:"serviceBackend"`
-	ResyncPolicy       *ResyncPolicyConfig   `json:"resyncPolicy"`
+	LBName       string            `json:"lbName"`
+	LBDriver     string            `json:"lbDriver"`
+	LBInfo       map[string]string `json:"lbInfo"`
+	LBAttributes map[string]string `json:"lbAttributes"`
+	Parameters   map[string]string `json:"parameters"`
+	// +optional
+	PodBackendInfo *PodBackendRecord `json:"podBackend,omitempty"`
+	// +optional
+	ServiceBackendInfo *ServiceBackendRecord `json:"serviceBackend,omitempty"`
+	// +optional
+	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy,omitempty"`
 }
 
 type PodBackendRecord struct {
@@ -427,29 +431,6 @@ const (
 	ConditionUnknown ConditionStatus = "Unknown"
 )
 
-//type URL struct {
-//	url.URL
-//}
-//
-//func (u *URL) UnmarshalJSON(b []byte) error {
-//	var str string
-//	err := json.Unmarshal(b, &str)
-//	if err != nil {
-//		return err
-//	}
-//
-//	parsed, err := url.Parse(str)
-//	if err != nil {
-//		return fmt.Errorf("invalid URL: %v, err: %v", str, err)
-//	}
-//	u.URL = *parsed
-//	return nil
-//}
-//
-//func (u URL) MarshalJSON() ([]byte, error) {
-//	return json.Marshal(u.URL.String())
-//}
-
 type Duration struct {
 	time.Duration
 }
@@ -495,5 +476,5 @@ const (
 type ResyncPolicyConfig struct {
 	Policy ResyncPolicyType `json:"policy"`
 	// +optional
-	MinPeriod *Duration `json:"minPeriod"`
+	MinPeriod *Duration `json:"minPeriod,omitempty"`
 }

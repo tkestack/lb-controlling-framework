@@ -24,7 +24,6 @@ import (
 )
 
 const (
-	WebhookPrefix        = "lbcf"
 	ValidateLoadBalancer = "validateLoadBalancer"
 	CreateLoadBalancer   = "createLoadBalancer"
 	EnsureLoadBalancer   = "ensureLoadBalancer"
@@ -64,6 +63,13 @@ const (
 	StatusRunning = "Running"
 )
 
+type OperationType string
+
+const (
+	OperationCreate OperationType = "Create"
+	OperationUpdate OperationType = "Update"
+)
+
 type ResponseForFailRetryHooks struct {
 	Status                 string `json:"status"`
 	Msg                    string `json:"msg"`
@@ -72,7 +78,7 @@ type ResponseForFailRetryHooks struct {
 
 type ValidateLoadBalancerRequest struct {
 	LBSpec        map[string]string `json:"lbSpec"`
-	Operation     OperationType `json:"operation"`
+	Operation     OperationType     `json:"operation"`
 	Attributes    map[string]string `json:"attributes"`
 	OldAttributes map[string]string `json:"oldAttributes,omitempty"`
 }
@@ -115,7 +121,7 @@ type DeleteLoadBalancerResponse struct {
 type ValidateBackendRequest struct {
 	BackendType   string            `json:"backendType"`
 	LBInfo        map[string]string `json:"lbInfo"`
-	Operation     OperationType `json:"operation"`
+	Operation     OperationType     `json:"operation"`
 	Parameters    map[string]string `json:"parameters"`
 	OldParameters map[string]string `json:"OldParameters,omitempty"`
 }
@@ -161,11 +167,3 @@ type BackendOperationResponse struct {
 	ResponseForFailRetryHooks
 	InjectedInfo map[string]string `json:"injectedInfo"`
 }
-
-type OperationType string
-
-const (
-	OperationCreate OperationType = "Create"
-	OperationUpdate OperationType = "Update"
-)
-

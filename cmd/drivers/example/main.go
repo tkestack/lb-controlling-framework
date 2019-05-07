@@ -33,7 +33,7 @@ func main() {
 	defer klog.Flush()
 
 	ws := new(restful.WebService)
-	ws.Path("/lbcf")
+	ws.Path("/")
 
 	ws.Route(ws.POST(webhooks.ValidateLoadBalancer).To(ValidateLoadBalancer))
 	ws.Route(ws.POST(webhooks.CreateLoadBalancer).To(CreateLoadBalancer))
