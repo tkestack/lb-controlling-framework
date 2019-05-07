@@ -177,7 +177,7 @@ func (c *BackendGroupController) constructRecord(lb *lbcfapi.LoadBalancer, group
 				Port: group.Spec.Pods.Port,
 			},
 			Parameters:   group.Spec.Parameters,
-			ResyncPolicy: group.Spec.ResyncPolicy,
+			EnsurePolicy: group.Spec.EnsurePolicy,
 		},
 	}
 }

@@ -787,8 +787,8 @@ func TestMapEqual(t *testing.T) {
 func TestResyncPolicyEqual(t *testing.T) {
 	type tc struct {
 		name   string
-		a      *lbcfapi.ResyncPolicyConfig
-		b      *lbcfapi.ResyncPolicyConfig
+		a      *lbcfapi.EnsurePolicyConfig
+		b      *lbcfapi.EnsurePolicyConfig
 		expect bool
 	}
 
@@ -801,10 +801,10 @@ func TestResyncPolicyEqual(t *testing.T) {
 		},
 		{
 			name: "IfNotSucc-equal",
-			a: &lbcfapi.ResyncPolicyConfig{
+			a: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyIfNotSucc,
 			},
-			b: &lbcfapi.ResyncPolicyConfig{
+			b: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyIfNotSucc,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: time.Second,
@@ -814,13 +814,13 @@ func TestResyncPolicyEqual(t *testing.T) {
 		},
 		{
 			name: "always-equal",
-			a: &lbcfapi.ResyncPolicyConfig{
+			a: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: 5 * time.Second,
 				},
 			},
-			b: &lbcfapi.ResyncPolicyConfig{
+			b: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: 5 * time.Second,
@@ -830,20 +830,20 @@ func TestResyncPolicyEqual(t *testing.T) {
 		},
 		{
 			name: "always-equal2",
-			a: &lbcfapi.ResyncPolicyConfig{
+			a: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 			},
-			b: &lbcfapi.ResyncPolicyConfig{
+			b: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 			},
 			expect: true,
 		},
 		{
 			name: "always-period-not-equal",
-			a: &lbcfapi.ResyncPolicyConfig{
+			a: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 			},
-			b: &lbcfapi.ResyncPolicyConfig{
+			b: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: DefaultEnsurePeriod,
@@ -852,13 +852,13 @@ func TestResyncPolicyEqual(t *testing.T) {
 			expect: false,
 		}, {
 			name: "always-period-not-equal2",
-			a: &lbcfapi.ResyncPolicyConfig{
+			a: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: 2 * DefaultEnsurePeriod,
 				},
 			},
-			b: &lbcfapi.ResyncPolicyConfig{
+			b: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: DefaultEnsurePeriod,
@@ -868,10 +868,10 @@ func TestResyncPolicyEqual(t *testing.T) {
 		},
 		{
 			name: "policy-not-equal",
-			a: &lbcfapi.ResyncPolicyConfig{
+			a: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyIfNotSucc,
 			},
-			b: &lbcfapi.ResyncPolicyConfig{
+			b: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: DefaultEnsurePeriod,
@@ -881,7 +881,7 @@ func TestResyncPolicyEqual(t *testing.T) {
 		}, {
 			name: "nil-not-equal",
 			a:    nil,
-			b: &lbcfapi.ResyncPolicyConfig{
+			b: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
 					Duration: DefaultEnsurePeriod,
@@ -1363,7 +1363,7 @@ func TestCompareBackendRecords(t *testing.T) {
 	update2.Spec.Parameters["update-para"] = "value"
 
 	update3 := expectUpdate3.DeepCopy()
-	update3.Spec.ResyncPolicy = &lbcfapi.ResyncPolicyConfig{
+	update3.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
 		Policy: lbcfapi.PolicyAlways,
 		MinPeriod: &lbcfapi.Duration{
 			Duration: 30 * time.Second,

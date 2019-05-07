@@ -18,13 +18,13 @@ package lbcfcontroller
 
 import (
 	"fmt"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"net/url"
 	"reflect"
 	"strings"
 	"time"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	"k8s.io/api/core/v1"
@@ -38,9 +38,77 @@ func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList
 	allErrs = append(allErrs, validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
 	allErrs = append(allErrs, validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
 	allErrs = append(allErrs, validateDriverUrl(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
-	//allErrs = append(allErrs, validateDriverUrl(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
 	if raw.Spec.Webhooks != nil {
 		allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec"))...)
+	}
+	return allErrs
+}
+
+func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if raw.Spec.LBDriver == "" {
+		allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("lbDriver"), "lbDriver must be specified"))
+	}
+	if raw.Spec.EnsurePolicy != nil {
+		allErrs = append(allErrs, validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
+	}
+	return allErrs
+}
+
+func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if raw.Spec.EnsurePolicy != nil {
+		allErrs = append(allErrs, validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
+	}
+	allErrs = append(allErrs, validateBackends(&raw.Spec, field.NewPath("spec"))...)
+	return allErrs
+}
+
+func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.LoadBalancerDriver) bool {
+	if old.Spec.Url != cur.Spec.Url {
+		return false
+	}
+	if old.Spec.DriverType != cur.Spec.DriverType {
+		return false
+	}
+	return true
+}
+
+func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer) bool {
+	if cur.Spec.LBDriver != old.Spec.LBDriver {
+		return false
+	}
+	if !reflect.DeepEqual(cur.Spec.LBSpec, old.Spec.LBSpec) {
+		return false
+	}
+	return true
+}
+
+func BackendGroupUpdateFieldsAllowed(cur *lbcfapi.BackendGroup, old *lbcfapi.BackendGroup) bool {
+	if cur.Spec.LBName != old.Spec.LBName {
+		return false
+	}
+	if util.GetBackendType(cur) != util.GetBackendType(old) {
+		return false
+	}
+	return true
+}
+
+func validateEnsurePolicy(raw lbcfapi.EnsurePolicyConfig, path *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	switch raw.Policy {
+	case lbcfapi.PolicyIfNotSucc:
+		if raw.MinPeriod != nil {
+			allErrs = append(allErrs, field.Forbidden(path.Child("minPeriod"), fmt.Sprintf("minPeriod is not supported when policy is %q", string(lbcfapi.PolicyIfNotSucc))))
+		}
+	case lbcfapi.PolicyAlways:
+		if raw.MinPeriod != nil {
+			if raw.MinPeriod.Nanoseconds() < 30*time.Second.Nanoseconds() {
+				allErrs = append(allErrs, field.Invalid(path.Child("minPeriod"), raw.MinPeriod, "minPeriod must be greater or equal to 30s"))
+			}
+		}
+	default:
+		allErrs = append(allErrs, field.NotSupported(path.Child("policy"), raw.Policy, []string{string(lbcfapi.PolicyIfNotSucc), string(lbcfapi.PolicyAlways)}))
 	}
 	return allErrs
 }
@@ -81,6 +149,9 @@ func validateDriverWebhooks(raw []lbcfapi.WebhookConfig, path *field.Path) field
 	webhookSet := sets.NewString()
 	for i, wh := range raw {
 		curPath := path.Child(fmt.Sprintf("webhooks[%d]", i))
+		if wh.Name == "" {
+			allErrs = append(allErrs, field.Required(curPath.Child("name"), "name must be specified"))
+		}
 		if !webhooks.KnownWebhooks.Has(wh.Name) {
 			allErrs = append(allErrs, field.NotSupported(curPath.Child("name"), wh, webhooks.KnownWebhooks.List()))
 			continue
@@ -97,38 +168,6 @@ func validateDriverWebhooks(raw []lbcfapi.WebhookConfig, path *field.Path) field
 			}
 		}
 	}
-	return allErrs
-}
-
-func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.LoadBalancerDriver) bool {
-	if cur.Name != old.Name {
-		return false
-	}
-	if old.Spec.Url != cur.Spec.Url {
-		return false
-	}
-	if old.Spec.DriverType != cur.Spec.DriverType {
-		return false
-	}
-	return true
-}
-
-func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer) bool {
-	if cur.Name != old.Name {
-		return false
-	}
-	if cur.Spec.LBDriver != old.Spec.LBDriver {
-		return false
-	}
-	if !reflect.DeepEqual(cur.Spec.LBSpec, old.Spec.LBSpec) {
-		return false
-	}
-	return true
-}
-
-func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
-	allErrs := field.ErrorList{}
-	allErrs = append(allErrs, validateBackends(&raw.Spec, field.NewPath("spec"))...)
 	return allErrs
 }
 
@@ -174,6 +213,9 @@ func validatePodBackend(raw *lbcfapi.PodBackend, path *field.Path) field.ErrorLi
 		if raw.ByName != nil {
 			allErrs = append(allErrs, field.Invalid(path.Child("byName"), raw.ByName, "only one of \"byLabel, byName\" is allowed"))
 		}
+		if len(raw.ByLabel.Selector) == 0 {
+			allErrs = append(allErrs, field.Required(path.Child("selector"), "selector must be specified"))
+		}
 		return allErrs
 	}
 
@@ -197,11 +239,4 @@ func validatePortSelector(raw lbcfapi.PortSelector, path *field.Path) field.Erro
 		}
 	}
 	return allErrs
-}
-
-func BackendGroupUpdateFieldsAllowed(cur *lbcfapi.BackendGroup, old *lbcfapi.BackendGroup) bool {
-	if util.GetBackendType(cur) != util.GetBackendType(old) {
-		return false
-	}
-	return true
 }

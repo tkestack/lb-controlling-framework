@@ -187,8 +187,8 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		if result.IsError() {
 			return result
 		}
-		if cpy.Spec.ResyncPolicy != nil && cpy.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways {
-			return util.PeriodicResult(util.GetDuration(cpy.Spec.ResyncPolicy.MinPeriod, util.DefaultEnsurePeriod))
+		if cpy.Spec.EnsurePolicy != nil && cpy.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
+			return util.PeriodicResult(util.GetDuration(cpy.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
 		return util.SuccResult()
 	case webhooks.StatusFail:

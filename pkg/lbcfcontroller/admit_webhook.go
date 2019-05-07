@@ -82,6 +82,11 @@ func (c *Controller) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancer failed: %v", err))
 	}
 
+	errList := ValidateLoadBalancer(lb)
+	if len(errList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
+	}
+
 	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)
 	driver, exist := c.driverCtrl.getDriver(driverNamespace, lb.Spec.LBDriver)
 	if !exist {
@@ -118,6 +123,11 @@ func (c *Controller) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *
 	}
 	if !LBUpdatedFieldsAllowed(curObj, oldObj) {
 		return toAdmissionResponse(fmt.Errorf("update to non-attributes fields is not permitted"))
+	}
+
+	errList := ValidateLoadBalancer(curObj)
+	if len(errList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
 	driverNamespace := util.GetDriverNamespace(curObj.Spec.LBDriver, curObj.Namespace)
@@ -264,6 +274,11 @@ func (c *Controller) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *
 
 	if !BackendGroupUpdateFieldsAllowed(curObj, oldObj) {
 		return toAdmissionResponse(fmt.Errorf("update to backend type is not permitted"))
+	}
+
+	errList := ValidateBackendGroup(curObj)
+	if len(errList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
 	if util.MapEqual(curObj.Spec.Parameters, oldObj.Spec.Parameters) {

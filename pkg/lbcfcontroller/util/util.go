@@ -113,7 +113,10 @@ func LBCreated(lb *lbcfapi.LoadBalancer) bool {
 
 func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
 	condition := getLBCondition(&lb.Status, lbcfapi.LBEnsured)
-	return condition == nil || condition.Status != lbcfapi.ConditionTrue
+	if condition == nil || condition.Status != lbcfapi.ConditionTrue {
+		return true
+	}
+	return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
 }
 
 func getLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
@@ -268,7 +271,7 @@ func MapEqual(a map[string]string, b map[string]string) bool {
 	return true
 }
 
-func ResyncPolicyEqual(a *lbcfapi.ResyncPolicyConfig, b *lbcfapi.ResyncPolicyConfig) bool {
+func ResyncPolicyEqual(a *lbcfapi.EnsurePolicyConfig, b *lbcfapi.EnsurePolicyConfig) bool {
 	if a == b {
 		return true
 	}
@@ -381,7 +384,7 @@ func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendR
 	if !MapEqual(curObj.Spec.Parameters, expectObj.Spec.Parameters) {
 		return true
 	}
-	if !ResyncPolicyEqual(curObj.Spec.ResyncPolicy, expectObj.Spec.ResyncPolicy) {
+	if !ResyncPolicyEqual(curObj.Spec.EnsurePolicy, expectObj.Spec.EnsurePolicy) {
 		return true
 	}
 	return false
@@ -468,7 +471,7 @@ func BackendNeedEnsure(backend *lbcfapi.BackendRecord) bool {
 	if !backendIsRegistered(backend) {
 		return true
 	}
-	return backend.Spec.ResyncPolicy != nil && backend.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways
+	return backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
 }
 
 func backendIsRegistered(backend *lbcfapi.BackendRecord) bool {

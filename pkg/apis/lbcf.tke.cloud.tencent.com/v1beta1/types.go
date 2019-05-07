@@ -63,7 +63,7 @@ type LoadBalancerSpec struct {
 	// +optional
 	Attributes map[string]string `json:"attributes,omitempty"`
 	// +optional
-	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy,omitempty"`
+	EnsurePolicy *EnsurePolicyConfig `json:"ensurePolicy,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -130,7 +130,7 @@ type BackendGroupSpec struct {
 	// +optional
 	Parameters map[string]string `json:"parameters,omitempty"`
 	// +optional
-	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy,omitempty"`
+	EnsurePolicy *EnsurePolicyConfig `json:"ensurePolicy,omitempty"`
 }
 
 type ServiceBackend struct {
@@ -268,7 +268,7 @@ type BackendRecordSpec struct {
 	// +optional
 	ServiceBackendInfo *ServiceBackendRecord `json:"serviceBackend,omitempty"`
 	// +optional
-	ResyncPolicy *ResyncPolicyConfig `json:"resyncPolicy,omitempty"`
+	EnsurePolicy *EnsurePolicyConfig `json:"ensurePolicy,omitempty"`
 }
 
 type PodBackendRecord struct {
@@ -466,15 +466,15 @@ func (c ConditionReason) String() string {
 	return string(c)
 }
 
-type ResyncPolicyType string
+type EnsurePolicyType string
 
 const (
-	PolicyIfNotSucc ResyncPolicyType = "IfNotSucc"
-	PolicyAlways    ResyncPolicyType = "Always"
+	PolicyIfNotSucc EnsurePolicyType = "IfNotSucc"
+	PolicyAlways    EnsurePolicyType = "Always"
 )
 
-type ResyncPolicyConfig struct {
-	Policy ResyncPolicyType `json:"policy"`
+type EnsurePolicyConfig struct {
+	Policy EnsurePolicyType `json:"policy"`
 	// +optional
 	MinPeriod *Duration `json:"minPeriod,omitempty"`
 }

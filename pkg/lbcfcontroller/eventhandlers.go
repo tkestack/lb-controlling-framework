@@ -103,7 +103,7 @@ func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 		}
 		return
 	}
-	if !util.ResyncPolicyEqual(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
+	if !util.ResyncPolicyEqual(oldObj.Spec.EnsurePolicy, curObj.Spec.EnsurePolicy) {
 		c.enqueue(curObj, c.loadBalancerQueue)
 		return
 	}
@@ -139,7 +139,7 @@ func (c *Controller) updateBackendRecord(old, cur interface{}) {
 		c.enqueue(curObj, c.backendQueue)
 		return
 	}
-	if !util.ResyncPolicyEqual(oldObj.Spec.ResyncPolicy, curObj.Spec.ResyncPolicy) {
+	if !util.ResyncPolicyEqual(oldObj.Spec.EnsurePolicy, curObj.Spec.EnsurePolicy) {
 		c.enqueue(curObj, c.loadBalancerQueue)
 		return
 	}

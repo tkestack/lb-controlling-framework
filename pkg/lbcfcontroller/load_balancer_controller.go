@@ -179,8 +179,8 @@ func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
 			return util.ErrorResult(err)
 		}
-		if lb.Spec.ResyncPolicy != nil && lb.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways {
-			return util.PeriodicResult(util.GetDuration(lb.Spec.ResyncPolicy.MinPeriod, util.DefaultEnsurePeriod))
+		if lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
+			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
 		return util.SuccResult()
 	case webhooks.StatusFail:
@@ -247,8 +247,8 @@ func (c *LoadBalancerController) setOperationSucc(lb *lbcfapi.LoadBalancer, rsp 
 	if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
 		return util.ErrorResult(err)
 	}
-	if cType == lbcfapi.LBEnsured && lb.Spec.ResyncPolicy.Policy == lbcfapi.PolicyAlways {
-		return util.PeriodicResult(util.GetDuration(lb.Spec.ResyncPolicy.MinPeriod, util.DefaultEnsurePeriod))
+	if cType == lbcfapi.LBEnsured && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
+		return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 	}
 	return util.SuccResult()
 }
