@@ -19,22 +19,17 @@ package util
 import (
 	"bytes"
 	"crypto/md5"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
-	"path"
 	"strings"
 	"text/template"
 	"time"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"github.com/parnurzeal/gorequest"
+
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
 	k8slabel "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
-	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/api/v1/pod"
@@ -202,29 +197,6 @@ func CalculateRetryInterval(userValueInSeconds int32) time.Duration {
 	return dur
 }
 
-type PodProvider interface {
-	Get(namespace string, name string) (*v1.Pod, error)
-	Select(labels map[string]string) ([]*v1.Pod, error)
-}
-
-func NewPodProvider(lister corev1.PodLister) PodProvider {
-	return &PodProviderImpl{
-		lister: lister,
-	}
-}
-
-type PodProviderImpl struct {
-	lister corev1.PodLister
-}
-
-func (p *PodProviderImpl) Get(namespace string, name string) (*v1.Pod, error) {
-	return p.lister.Pods(namespace).Get(name)
-}
-
-func (p *PodProviderImpl) Select(labels map[string]string) ([]*v1.Pod, error) {
-	return p.lister.List(k8slabel.SelectorFromSet(k8slabel.Set(labels)))
-}
-
 func HasFinalizer(all []string, expect string) bool {
 	for i := range all {
 		if all[i] == expect {
@@ -271,7 +243,19 @@ func MapEqual(a map[string]string, b map[string]string) bool {
 	return true
 }
 
-func ResyncPolicyEqual(a *lbcfapi.EnsurePolicyConfig, b *lbcfapi.EnsurePolicyConfig) bool {
+func sliceEqual(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func EnsurePolicyEqual(a *lbcfapi.EnsurePolicyConfig, b *lbcfapi.EnsurePolicyConfig) bool {
 	if a == b {
 		return true
 	}
@@ -296,6 +280,93 @@ func ResyncPolicyEqual(a *lbcfapi.EnsurePolicyConfig, b *lbcfapi.EnsurePolicyCon
 	return true
 }
 
+func LoadBalancerNonStatusUpdated(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBalancer) bool {
+	if !MapEqual(old.Spec.Attributes, cur.Spec.Attributes) {
+		return true
+	}
+	if !EnsurePolicyEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
+		return true
+	}
+	return false
+}
+
+func BackendGroupNonStatusUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
+	if bgServiceUpdated(old, cur) {
+		return true
+	}
+	if bgPodsUpdated(old, cur) {
+		return true
+	}
+	if bgStaticUpdated(old, cur) {
+		return true
+	}
+	if !MapEqual(old.Spec.Parameters, cur.Spec.Parameters) {
+		return true
+	}
+	if !EnsurePolicyEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
+		return true
+	}
+	return false
+}
+
+// TODO: implement this
+func bgServiceUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
+	return false
+}
+
+func bgPodsUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
+	oldPods := old.Spec.Pods
+	curPods := cur.Spec.Pods
+
+	if oldPods == curPods {
+		return false
+	}
+	if oldPods == nil || curPods == nil {
+		return true
+	}
+	if oldPods.Port.PortNumber != curPods.Port.PortNumber {
+		return true
+	}
+	oldProto := "tcp"
+	if oldPods.Port.Protocol != nil {
+		oldProto = *oldPods.Port.Protocol
+	}
+	curProto := "tcp"
+	if curPods.Port.Protocol != nil {
+		curProto = *curPods.Port.Protocol
+	}
+	if oldProto != curProto {
+		return true
+	}
+	if oldPods.ByLabel != nil && curPods.ByLabel == nil {
+		return true
+	}
+	if curPods.ByLabel != nil && oldPods.ByLabel == nil {
+		return true
+	}
+	if oldPods.ByLabel != nil && curPods.ByLabel != nil {
+		if !MapEqual(oldPods.ByLabel.Selector, curPods.ByLabel.Selector) {
+			return true
+		}
+		if !sliceEqual(oldPods.ByLabel.Except, curPods.ByLabel.Except) {
+			return true
+		}
+		return false
+	}
+
+	if !sliceEqual(oldPods.ByName, curPods.ByName) {
+		return true
+	}
+	return false
+}
+
+func bgStaticUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
+	if !sliceEqual(old.Spec.Static, cur.Spec.Static) {
+		return true
+	}
+	return false
+}
+
 type ErrorList []error
 
 func (e ErrorList) Error() string {
@@ -309,46 +380,6 @@ func (e ErrorList) Error() string {
 const (
 	DefaultWebhookTimeout = 10 * time.Second
 )
-
-func CallWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload interface{}, rsp interface{}) error {
-	u, err := url.Parse(driver.Spec.Url)
-	if err != nil {
-		e := fmt.Errorf("invalid url: %v", err)
-		klog.Errorf("callwebhook failed: %v. driver: %s, webhookName: %s", e, driver.Name, webHookName)
-		return e
-	}
-	u.Path = path.Join(webHookName)
-	timeout := DefaultWebhookTimeout
-	for _, h := range driver.Spec.Webhooks {
-		if h.Name == webHookName {
-			if h.Timeout != nil {
-				timeout = h.Timeout.Duration
-			}
-			break
-		}
-	}
-	request := gorequest.New().Timeout(timeout).Post(u.String()).Send(payload)
-	debugInfo, _ := request.AsCurlCommand()
-	klog.V(3).Infof("callwebhook, %s", debugInfo)
-
-	response, body, errs := request.EndBytes()
-	if len(errs) > 0 {
-		e := fmt.Errorf("webhook err: %v", errs)
-		klog.Errorf("callwebhook failed: %v. url: %s", e, u.String())
-		return e
-	}
-	if response.StatusCode != http.StatusOK {
-		e := fmt.Errorf("http status code: %d, body: %s", response.StatusCode, body)
-		klog.Errorf("callwebhook failed: %v. url: %s", e, u.String())
-		return e
-	}
-	if err := json.Unmarshal(body, rsp); err != nil {
-		e := fmt.Errorf("decode webhook response err: %v, raw: %s", err, body)
-		klog.Errorf("callwebhook failed: %v. url: %s", e, u.String())
-		return e
-	}
-	return nil
-}
 
 func MakeBackendName(lbName, groupName, podName string, port lbcfapi.PortSelector) string {
 	protocol := "TCP"
@@ -384,7 +415,7 @@ func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendR
 	if !MapEqual(curObj.Spec.Parameters, expectObj.Spec.Parameters) {
 		return true
 	}
-	if !ResyncPolicyEqual(curObj.Spec.EnsurePolicy, expectObj.Spec.EnsurePolicy) {
+	if !EnsurePolicyEqual(curObj.Spec.EnsurePolicy, expectObj.Spec.EnsurePolicy) {
 		return true
 	}
 	return false
@@ -408,6 +439,16 @@ func FilterPods(all []*v1.Pod, filter func(pod *v1.Pod) bool) []*v1.Pod {
 	for _, pod := range all {
 		if filter(pod) {
 			ret = append(ret, pod)
+		}
+	}
+	return ret
+}
+
+func FilterBackendGroup(all []*lbcfapi.BackendGroup, filter func(*lbcfapi.BackendGroup) bool) []*lbcfapi.BackendGroup {
+	var ret []*lbcfapi.BackendGroup
+	for _, group := range all {
+		if filter(group) {
+			ret = append(ret, group)
 		}
 	}
 	return ret

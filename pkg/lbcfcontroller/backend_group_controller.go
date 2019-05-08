@@ -32,16 +32,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
+	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
-func NewBackendGroupController(client *lbcfclient.Clientset, lbLister lbcflister.LoadBalancerLister, bgLister lbcflister.BackendGroupLister, brLister lbcflister.BackendRecordLister, podProvider util.PodProvider) *BackendGroupController {
+func NewBackendGroupController(client *lbcfclient.Clientset, lbLister lbcflister.LoadBalancerLister, bgLister lbcflister.BackendGroupLister, brLister lbcflister.BackendRecordLister, podLister corev1.PodLister) *BackendGroupController {
 	return &BackendGroupController{
 		client:              client,
 		lbLister:            lbLister,
 		bgLister:            bgLister,
 		brLister:            brLister,
-		podProvider:         podProvider,
+		podLister:           podLister,
 		relatedLoadBalancer: &sync.Map{},
 		relatedPod:          &sync.Map{},
 	}
@@ -50,11 +51,10 @@ func NewBackendGroupController(client *lbcfclient.Clientset, lbLister lbcflister
 type BackendGroupController struct {
 	client *lbcfclient.Clientset
 
-	lbLister lbcflister.LoadBalancerLister
-	bgLister lbcflister.BackendGroupLister
-	brLister lbcflister.BackendRecordLister
-
-	podProvider util.PodProvider
+	lbLister  lbcflister.LoadBalancerLister
+	bgLister  lbcflister.BackendGroupLister
+	brLister  lbcflister.BackendRecordLister
+	podLister corev1.PodLister
 
 	relatedLoadBalancer *sync.Map
 	relatedPod          *sync.Map
@@ -90,7 +90,7 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	if group.Spec.Pods != nil {
 		var pods []*v1.Pod
 		if group.Spec.Pods.ByLabel != nil {
-			pods, err = c.podProvider.Select(group.Spec.Pods.ByLabel.Selector)
+			pods, err = c.podLister.List(labels.SelectorFromSet(labels.Set(group.Spec.Pods.ByLabel.Selector)))
 			if err != nil {
 				return util.ErrorResult(err)
 			}
@@ -104,7 +104,7 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 			pods = util.FilterPods(pods, filter)
 		} else if len(group.Spec.Pods.ByName) > 0 {
 			for _, podName := range group.Spec.Pods.ByName {
-				pod, err := c.podProvider.Get(namespace, podName)
+				pod, err := c.podLister.Pods(namespace).Get(podName)
 				if errors.IsNotFound(err) {
 					continue
 				} else if err != nil {
@@ -245,30 +245,4 @@ func (c *BackendGroupController) listBackendRecords(namespace string, lbName str
 		ret = append(ret, &list.Items[i])
 	}
 	return ret, nil
-}
-
-func (c *BackendGroupController) LBRelatedGroup(lb *lbcfapi.LoadBalancer) (*lbcfapi.BackendGroup, error) {
-	groupList, err := c.bgLister.BackendGroups(lb.Namespace).List(labels.Everything())
-	if err != nil {
-		return nil, err
-	}
-	for _, backendGroup := range groupList {
-		if util.IsLBMatchBackendGroup(backendGroup, lb) {
-			return backendGroup, nil
-		}
-	}
-	return nil, nil
-}
-
-func (c *BackendGroupController) PodRelatedGroup(pod *v1.Pod) (*lbcfapi.BackendGroup, error) {
-	groupList, err := c.bgLister.BackendGroups(pod.Namespace).List(labels.Everything())
-	if err != nil {
-		return nil, err
-	}
-	for _, backendGroup := range groupList {
-		if util.IsPodMatchBackendGroup(backendGroup, pod) {
-			return backendGroup, nil
-		}
-	}
-	return nil, nil
 }

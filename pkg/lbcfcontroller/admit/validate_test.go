@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package lbcfcontroller
+package admit
 
 import (
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
@@ -397,6 +397,15 @@ func TestValidateBackendGroup(t *testing.T) {
 
 	cases := []testCase{
 		{
+			name: "valid-empty-group",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "test-lb",
+				},
+			},
+			expectValid: true,
+		},
+		{
 			name: "valid-pod-backend",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
@@ -504,7 +513,7 @@ func TestValidateBackendGroup(t *testing.T) {
 			expectValid: true,
 		},
 		{
-			name: "invalid-multi-backend",
+			name: "invalid-multi-backend-svc-pod",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
 					LBName: "test-lb",
@@ -525,6 +534,64 @@ func TestValidateBackendGroup(t *testing.T) {
 						NodeSelector: map[string]string{
 							"k1": "v1",
 						},
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyAlways,
+						MinPeriod: &lbcfapi.Duration{
+							30 * time.Second,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid-multi-backend-svc-static",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "test-lb",
+					Static: []string{
+						"pod-0",
+					},
+					Service: &lbcfapi.ServiceBackend{
+						Name: "svc-name",
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+						NodeSelector: map[string]string{
+							"k1": "v1",
+						},
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyAlways,
+						MinPeriod: &lbcfapi.Duration{
+							30 * time.Second,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid-multi-backend-pod-static",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "test-lb",
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+							Protocol:   &udp,
+						},
+						ByName: []string{
+							"pod-1",
+						},
+					},
+					Static: []string{
+						"pod-0",
 					},
 					Parameters: map[string]string{
 						"p1": "v1",

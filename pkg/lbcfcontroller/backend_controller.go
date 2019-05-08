@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"fmt"
+
 	"k8s.io/klog"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -37,22 +39,24 @@ type BackendProvider interface {
 	listBackendByDriver(driverName string, driverNamespace string) ([]*lbcfapi.BackendRecord, error)
 }
 
-func NewBackendController(client *lbcfclient.Clientset, brLister v1beta1.BackendRecordLister, driverProvider DriverProvider, podProvider util.PodProvider) *BackendController {
+func NewBackendController(client *lbcfclient.Clientset, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *BackendController {
 	return &BackendController{
 		client:         client,
 		brLister:       brLister,
-		driverProvider: driverProvider,
-		podProvider:    podProvider,
+		driverLister:   driverLister,
+		podLister:      podLister,
+		webhookInvoker: invoker,
 	}
 }
 
 type BackendController struct {
 	client *lbcfclient.Clientset
 
-	brLister v1beta1.BackendRecordLister
+	brLister     v1beta1.BackendRecordLister
+	driverLister v1beta1.LoadBalancerDriverLister
+	podLister    corev1.PodLister
 
-	driverProvider DriverProvider
-	podProvider    util.PodProvider
+	webhookInvoker util.WebhookInvoker
 }
 
 func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
@@ -105,13 +109,13 @@ func (c *BackendController) listBackendByDriver(driverName string, driverNamespa
 }
 
 func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {
-	driver, exist := c.driverProvider.getDriver(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace), backend.Spec.LBDriver)
-	if !exist {
-		return util.ErrorResult(fmt.Errorf("driver %q not found for BackendRecord %s", backend.Spec.LBDriver, backend.Name))
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	if err != nil {
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
 
 	if backend.Spec.PodBackendInfo != nil {
-		pod, err := c.podProvider.Get(backend.Namespace, backend.Spec.PodBackendInfo.Name)
+		pod, err := c.podLister.Pods(backend.Namespace).Get(backend.Spec.PodBackendInfo.Name)
 		if err != nil {
 			return util.ErrorResult(err)
 		}
@@ -125,7 +129,7 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 				Port: backend.Spec.PodBackendInfo.Port,
 			},
 		}
-		rsp, err := driver.CallGenerateBackendAddr(req)
+		rsp, err := c.webhookInvoker.CallGenerateBackendAddr(driver, req)
 		if err != nil {
 			return util.ErrorResult(err)
 		}
@@ -158,9 +162,9 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 }
 
 func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
-	driver, exist := c.driverProvider.getDriver(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace), backend.Spec.LBDriver)
-	if !exist {
-		return util.ErrorResult(fmt.Errorf("driver %q not found for BackendRecord %s", backend.Spec.LBDriver, backend.Name))
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	if err != nil {
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
 
 	req := &webhooks.BackendOperationRequest{
@@ -173,7 +177,7 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		Parameters:   backend.Spec.Parameters,
 		InjectedInfo: backend.Status.InjectedInfo,
 	}
-	rsp, err := driver.CallEnsureBackend(req)
+	rsp, err := c.webhookInvoker.CallEnsureBackend(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
@@ -205,9 +209,9 @@ func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		return util.SuccResult()
 	}
 
-	driver, exist := c.driverProvider.getDriver(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace), backend.Spec.LBDriver)
-	if !exist {
-		return util.ErrorResult(fmt.Errorf("driver %q not found for BackendRecord %s", backend.Spec.LBDriver, backend.Name))
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	if err != nil {
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
 	req := &webhooks.BackendOperationRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -219,7 +223,7 @@ func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		Parameters:   backend.Spec.Parameters,
 		InjectedInfo: backend.Status.InjectedInfo,
 	}
-	rsp, err := driver.CallDeregisterBackend(req)
+	rsp, err := c.webhookInvoker.CallDeregisterBackend(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}

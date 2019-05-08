@@ -18,17 +18,12 @@ package app
 
 import (
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
-	lbcfclientset "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions"
+	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/admit"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
 )
 
 func NewServer() *cobra.Command {
@@ -38,43 +33,15 @@ func NewServer() *cobra.Command {
 		Use: "lbcf-controller",
 
 		Run: func(cmd *cobra.Command, args []string) {
-			clientCfg := getClientConfigOrDie(cfg.KubeConfig)
-			k8sClient := kubernetes.NewForConfigOrDie(clientCfg)
-			lbcfClient := lbcfclientset.NewForConfigOrDie(clientCfg)
-			k8sFactory := informers.NewSharedInformerFactory(k8sClient, cfg.InformerResyncPeriod)
-			lbcfFactory := externalversions.NewSharedInformerFactory(lbcfClient, cfg.InformerResyncPeriod)
-			c := lbcfcontroller.NewController(
-				cfg,
-				k8sClient,
-				lbcfClient,
-				k8sFactory.Core().V1().Pods(),
-				k8sFactory.Core().V1().Services(),
-				lbcfFactory.Lbcf().V1beta1().LoadBalancers(),
-				lbcfFactory.Lbcf().V1beta1().LoadBalancerDrivers(),
-				lbcfFactory.Lbcf().V1beta1().BackendGroups(),
-				lbcfFactory.Lbcf().V1beta1().BackendRecords())
-			c.Start()
-			k8sFactory.Start(wait.NeverStop)
-			lbcfFactory.Start(wait.NeverStop)
-			lbcfcontroller.NewAdmitServer(c, cfg.ServerCrt, cfg.ServerKey).Start()
+			context := context.NewContext(cfg)
+			context.WaitForCacheSync()
+
+			admit.NewAdmitServer(context, cfg.ServerCrt, cfg.ServerKey).Start()
+			lbcfcontroller.NewController(context).Start()
+
 			<-wait.NeverStop
 		},
 	}
 	cfg.AddFlags(cmd.Flags())
 	return cmd
-}
-
-func getClientConfigOrDie(kubeConfig string) *rest.Config {
-	if kubeConfig != "" {
-		clientCfg, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
-		if err != nil {
-			klog.Fatal(err)
-		}
-		return clientCfg
-	}
-	clientCfg, err := rest.InClusterConfig()
-	if err != nil {
-		klog.Fatal(err)
-	}
-	return clientCfg
 }

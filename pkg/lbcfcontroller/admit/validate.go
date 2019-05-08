@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package lbcfcontroller
+package admit
 
 import (
 	"fmt"
@@ -107,8 +107,6 @@ func validateEnsurePolicy(raw lbcfapi.EnsurePolicyConfig, path *field.Path) fiel
 				allErrs = append(allErrs, field.Invalid(path.Child("minPeriod"), raw.MinPeriod, "minPeriod must be greater or equal to 30s"))
 			}
 		}
-	default:
-		allErrs = append(allErrs, field.NotSupported(path.Child("policy"), raw.Policy, []string{string(lbcfapi.PolicyIfNotSucc), string(lbcfapi.PolicyAlways)}))
 	}
 	return allErrs
 }
@@ -192,10 +190,6 @@ func validateBackends(raw *lbcfapi.BackendGroupSpec, path *field.Path) field.Err
 			allErrs = append(allErrs, validatePodBackend(raw.Pods, path.Child("pods"))...)
 		}
 		return allErrs
-	}
-
-	if raw.Static == nil || len(raw.Static) == 0 {
-		allErrs = append(allErrs, field.Required(path.Child("service/pods/static"), "one of \"service, pods, static\" must be specified. if static is specified, it must not be empty array"))
 	}
 	return allErrs
 }

@@ -892,7 +892,7 @@ func TestResyncPolicyEqual(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if get := ResyncPolicyEqual(c.a, c.b); get != c.expect {
+		if get := EnsurePolicyEqual(c.a, c.b); get != c.expect {
 			t.Fatalf("case %s, expect %v, get %v", c.name, c.expect, get)
 		}
 	}
@@ -1468,5 +1468,460 @@ func TestMakeFinalizerPatch(t *testing.T) {
 		if get := MakeFinalizerPatch(false, c.finalizer); string(get) != c.expectedPatch {
 			t.Fatalf("case %s: expect %s, get %s", c.name, c.expectedPatch, string(get))
 		}
+	}
+}
+
+func TestLBNeedEnsure(t *testing.T) {
+	type testCase struct {
+		name   string
+		lb     *lbcfapi.LoadBalancer
+		expect bool
+	}
+	cases := []testCase{
+		{
+			name: "need-not-ensured-yet",
+			lb: &lbcfapi.LoadBalancer{
+				Status: lbcfapi.LoadBalancerStatus{
+					Conditions: []lbcfapi.LoadBalancerCondition{
+						{
+							Type:   lbcfapi.LBEnsured,
+							Status: lbcfapi.ConditionFalse,
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-periodic-ensure",
+			lb: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyAlways,
+					},
+				},
+				Status: lbcfapi.LoadBalancerStatus{
+					Conditions: []lbcfapi.LoadBalancerCondition{
+						{
+							Type:   lbcfapi.LBEnsured,
+							Status: lbcfapi.ConditionTrue,
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "no-need-policy-ifnotsucc",
+			lb: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyIfNotSucc,
+					},
+				},
+				Status: lbcfapi.LoadBalancerStatus{
+					Conditions: []lbcfapi.LoadBalancerCondition{
+						{
+							Type:   lbcfapi.LBEnsured,
+							Status: lbcfapi.ConditionTrue,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no-need-empty-policy",
+			lb: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{},
+				Status: lbcfapi.LoadBalancerStatus{
+					Conditions: []lbcfapi.LoadBalancerCondition{
+						{
+							Type:   lbcfapi.LBEnsured,
+							Status: lbcfapi.ConditionTrue,
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		if get := LBNeedEnsure(c.lb); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestLoadBalancerNonStatusUpdated(t *testing.T) {
+	type testCase struct {
+		name   string
+		old    *lbcfapi.LoadBalancer
+		cur    *lbcfapi.LoadBalancer
+		expect bool
+	}
+	cases := []testCase{
+		{
+			name: "need-attributes-updated",
+			old: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{},
+			},
+			cur: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{
+					Attributes: map[string]string{
+						"k1": "v1",
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-ensurePolicy-updated",
+			old: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{},
+			},
+			cur: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyIfNotSucc,
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "no-need-only-status-updated",
+			old: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{},
+			},
+			cur: &lbcfapi.LoadBalancer{
+				Spec: lbcfapi.LoadBalancerSpec{},
+				Status: lbcfapi.LoadBalancerStatus{
+					LBInfo: map[string]string{
+						"k1": "v1",
+					},
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		if get := LoadBalancerNonStatusUpdated(c.old, c.cur); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestBackendGroupNonStatusUpdated(t *testing.T) {
+	type testCase struct {
+		name   string
+		old    *lbcfapi.BackendGroup
+		cur    *lbcfapi.BackendGroup
+		expect bool
+	}
+	udp := "udp"
+	cases := []testCase{
+		{
+			name: "need-pod-port",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+					},
+				},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 8080,
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-pod-port-protocol",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+					},
+				},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+							Protocol:   &udp,
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-pod-label-selector",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"k1": "v1",
+							},
+						},
+					},
+				},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"k1": "v1",
+								"k2": "v2",
+							},
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-pod-label-except",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"k1": "v1",
+							},
+						},
+					},
+				},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"k1": "v1",
+							},
+							Except: []string{
+								"pod-0",
+							},
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-pod-names",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+						ByName: []string{},
+					},
+				},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+						},
+						ByName: []string{
+							"pod-0",
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-static-changed",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Static: []string{},
+				},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Static: []string{
+						"pod-0",
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-parameters-changed",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-ensurePolicy-changed",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyIfNotSucc,
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "no-need-only-status-changed",
+			old: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{},
+			},
+			cur: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{},
+				Status: lbcfapi.BackendGroupStatus{
+					Backends:           2,
+					RegisteredBackends: 2,
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		if get := BackendGroupNonStatusUpdated(c.old, c.cur); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestBackendNeedEnsure(t *testing.T) {
+	type testCase struct {
+		name    string
+		backend *lbcfapi.BackendRecord
+		expect  bool
+	}
+	cases := []testCase{
+		{
+			name: "need-not-ensured-yet",
+			backend: &lbcfapi.BackendRecord{
+				Status: lbcfapi.BackendRecordStatus{},
+			},
+			expect: true,
+		},
+		{
+			name: "need-not-ensured-yet-2",
+			backend: &lbcfapi.BackendRecord{
+				Status: lbcfapi.BackendRecordStatus{
+					Conditions: []lbcfapi.BackendRecordCondition{
+						{
+							Type:   lbcfapi.BackendRegistered,
+							Status: lbcfapi.ConditionFalse,
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "need-periodic-ensure",
+			backend: &lbcfapi.BackendRecord{
+				Spec: lbcfapi.BackendRecordSpec{
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyAlways,
+					},
+				},
+				Status: lbcfapi.BackendRecordStatus{
+					Conditions: []lbcfapi.BackendRecordCondition{
+						{
+							Type:   lbcfapi.BackendRegistered,
+							Status: lbcfapi.ConditionTrue,
+						},
+					},
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "no-need",
+			backend: &lbcfapi.BackendRecord{
+				Spec: lbcfapi.BackendRecordSpec{},
+				Status: lbcfapi.BackendRecordStatus{
+					Conditions: []lbcfapi.BackendRecordCondition{
+						{
+							Type:   lbcfapi.BackendRegistered,
+							Status: lbcfapi.ConditionTrue,
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		if get := BackendNeedEnsure(c.backend); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
+func TestFilterBackendGroup(t *testing.T) {
+	all := []*lbcfapi.BackendGroup{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "selected-1",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "ignored",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "selected-2",
+			},
+		},
+	}
+	filterFunc := func(group *lbcfapi.BackendGroup) bool {
+		if strings.HasPrefix(group.Name, "selected") {
+			return true
+		}
+		return false
+	}
+	expect := sets.NewString("selected-1", "selected-2")
+	result := FilterBackendGroup(all, filterFunc)
+	get := sets.NewString()
+	for _, r := range result {
+		get.Insert(r.Name)
+	}
+	if !get.Equal(expect) {
+		t.Fatalf("expect: %v, get %v", expect.List(), get.List())
 	}
 }

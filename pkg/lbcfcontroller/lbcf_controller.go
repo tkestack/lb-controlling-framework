@@ -17,116 +17,87 @@
 package lbcfcontroller
 
 import (
-	"k8s.io/klog"
 	"time"
 
-	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
-	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 
+	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers/core/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller"
 )
 
 func NewController(
-	cfg *config.Config,
-	k8sClient *kubernetes.Clientset,
-	lbcfClient *lbcfclient.Clientset,
-	podInformer v1.PodInformer,
-	svcInformer v1.ServiceInformer,
-	lbInformer v1beta1.LoadBalancerInformer,
-	lbDriverInformer v1beta1.LoadBalancerDriverInformer,
-	bgInformer v1beta1.BackendGroupInformer,
-	brInformer v1beta1.BackendRecordInformer,
-) *Controller {
+	context *context.Context) *Controller {
 	c := &Controller{
-		cfg:               cfg,
-		k8sClient:         k8sClient,
-		lbcfClient:        lbcfClient,
-		driverQueue:       util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "driver-queue", cfg.MinRetryDelay),
-		loadBalancerQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "lb-queue", cfg.MinRetryDelay),
-		backendGroupQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backendgroup-queue", cfg.MinRetryDelay),
-		backendQueue:      util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backend-queue", cfg.MinRetryDelay),
+		context:           context,
+		driverQueue:       util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "driver-queue", context.Cfg.MinRetryDelay),
+		loadBalancerQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "lb-queue", context.Cfg.MinRetryDelay),
+		backendGroupQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backendgroup-queue", context.Cfg.MinRetryDelay),
+		backendQueue:      util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backend-queue", context.Cfg.MinRetryDelay),
 	}
 
-	c.driverCtrl = NewDriverController(lbcfClient, lbDriverInformer.Lister())
-	c.lbCtrl = NewLoadBalancerController(lbcfClient, lbInformer.Lister(), c.driverCtrl)
-	c.backendCtrl = NewBackendController(lbcfClient, brInformer.Lister(), c.driverCtrl, util.NewPodProvider(podInformer.Lister()))
-	c.backendGroupCtrl = NewBackendGroupController(lbcfClient, lbInformer.Lister(), bgInformer.Lister(), brInformer.Lister(), util.NewPodProvider(podInformer.Lister()))
+	c.driverCtrl = NewDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
+	c.lbCtrl = NewLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), context.LBDriverInformer.Lister(), util.NewWebhookInvoker())
+	c.backendCtrl = NewBackendController(c.context.LbcfClient, c.context.BRInformer.Lister(), context.LBDriverInformer.Lister(), c.context.PodInformer.Lister(), util.NewWebhookInvoker())
+	c.backendGroupCtrl = NewBackendGroupController(c.context.LbcfClient, c.context.LBInformer.Lister(), c.context.BGInformer.Lister(), c.context.BRInformer.Lister(), c.context.PodInformer.Lister())
 
 	// enqueue backendgroup
-	podInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+	c.context.PodInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addPod,
 		UpdateFunc: c.updatePod,
 		DeleteFunc: c.deletePod,
-	}, cfg.InformerResyncPeriod)
+	}, c.context.Cfg.InformerResyncPeriod)
 
 	// enqueue backendgroup
-	svcInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+	c.context.SvcInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addService,
 		UpdateFunc: c.updateService,
 		DeleteFunc: c.deleteService,
-	}, cfg.InformerResyncPeriod)
+	}, c.context.Cfg.InformerResyncPeriod)
 
 	// control loadBalancer lifecycle
-	lbInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+	c.context.LBInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addLoadBalancer,
 		UpdateFunc: c.updateLoadBalancer,
 		DeleteFunc: c.deleteLoadBalancer,
-	}, cfg.InformerResyncPeriod)
+	}, c.context.Cfg.InformerResyncPeriod)
 
 	// test driver health
-	lbDriverInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+	c.context.LBDriverInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addLoadBalancerDriver,
 		UpdateFunc: c.updateLoadBalancerDriver,
 		DeleteFunc: c.deleteLoadBalancerDriver,
-	}, cfg.InformerResyncPeriod)
+	}, c.context.Cfg.InformerResyncPeriod)
 
 	// generate backendrecord
-	bgInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+	c.context.BGInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addBackendGroup,
 		UpdateFunc: c.updateBackendGroup,
 		DeleteFunc: c.deleteBackendGroup,
-	}, cfg.InformerResyncPeriod)
+	}, c.context.Cfg.InformerResyncPeriod)
 
 	// register/deregister backend
-	brInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+	c.context.BRInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.addBackendRecord,
 		UpdateFunc: c.updateBackendRecord,
 		DeleteFunc: c.deleteBackendRecord,
-	}, cfg.InformerResyncPeriod)
-
-	c.podListerSynced = podInformer.Informer().HasSynced
-	c.svcListerSynced = svcInformer.Informer().HasSynced
-	c.LoadBalancerListerSynced = lbInformer.Informer().HasSynced
-	c.DriverListerSynced = lbDriverInformer.Informer().HasSynced
-	c.BackendGroupListerSynced = bgInformer.Informer().HasSynced
-	c.BackendRecordListerSynced = brInformer.Informer().HasSynced
-
+	}, c.context.Cfg.InformerResyncPeriod)
 	return c
 }
 
 type Controller struct {
-	cfg        *config.Config
-	k8sClient  *kubernetes.Clientset
-	lbcfClient *lbcfclient.Clientset
+	context *context.Context
 
 	driverCtrl       *DriverController
 	lbCtrl           *LoadBalancerController
 	backendCtrl      *BackendController
 	backendGroupCtrl *BackendGroupController
-
-	podListerSynced           cache.InformerSynced
-	svcListerSynced           cache.InformerSynced
-	LoadBalancerListerSynced  cache.InformerSynced
-	DriverListerSynced        cache.InformerSynced
-	BackendGroupListerSynced  cache.InformerSynced
-	BackendRecordListerSynced cache.InformerSynced
 
 	driverQueue       util.IntervalRateLimitingInterface
 	loadBalancerQueue util.IntervalRateLimitingInterface
@@ -139,15 +110,7 @@ func (c *Controller) Start() {
 }
 
 func (c *Controller) run() {
-	if !cache.WaitForCacheSync(wait.NeverStop,
-		c.podListerSynced,
-		c.svcListerSynced,
-		c.LoadBalancerListerSynced,
-		c.DriverListerSynced,
-		c.BackendGroupListerSynced,
-		c.BackendRecordListerSynced) {
-		return
-	}
+	c.context.WaitForCacheSync()
 	for i := 0; i < 10; i++ {
 		go wait.Until(c.lbWorker, time.Second, wait.NeverStop)
 		go wait.Until(c.driverWorker, time.Second, wait.NeverStop)
@@ -211,4 +174,163 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 		}
 	}()
 	return true
+}
+
+func (c *Controller) addPod(obj interface{}) {
+	pod := obj.(*v1.Pod)
+	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(pod.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("skip pod(%s/%s) add, list backendgroup failed: %v", pod.Namespace, pod.Name, err)
+		return
+	}
+	relatedBackendGroup := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
+		if util.IsPodMatchBackendGroup(group, pod) {
+			return true
+		}
+		return false
+	})
+	for _, g := range relatedBackendGroup {
+		c.enqueue(g, c.backendGroupQueue)
+	}
+}
+
+func (c *Controller) updatePod(old, cur interface{}) {
+	oldPod := old.(*v1.Pod)
+	curPod := cur.(*v1.Pod)
+	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(curPod.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("skip pod(%s/%s) update, list backendgroup failed: %v", curPod.Namespace, curPod.Name, err)
+		return
+	}
+	relatedBackendGroup := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
+		if util.IsPodMatchBackendGroup(group, curPod) || util.IsPodMatchBackendGroup(group, oldPod) {
+			return true
+		}
+		return false
+	})
+	for _, g := range relatedBackendGroup {
+		c.enqueue(g, c.backendGroupQueue)
+	}
+}
+
+func (c *Controller) deletePod(obj interface{}) {
+	pod := obj.(*v1.Pod)
+	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(pod.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("skip pod(%s/%s) delete, list backendgroup failed: %v", pod.Namespace, pod.Name, err)
+		return
+	}
+	relatedBackendGroup := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
+		if util.IsPodMatchBackendGroup(group, pod) {
+			return true
+		}
+		return false
+	})
+	for _, g := range relatedBackendGroup {
+		c.enqueue(g, c.backendGroupQueue)
+	}
+}
+
+func (c *Controller) addService(obj interface{}) {
+	// TODO: find backendGroup by service
+
+}
+
+func (c *Controller) updateService(old, cur interface{}) {
+
+}
+
+func (c *Controller) deleteService(obj interface{}) {
+
+}
+
+func (c *Controller) addBackendGroup(obj interface{}) {
+	c.enqueue(obj, c.backendGroupQueue)
+}
+
+func (c *Controller) updateBackendGroup(old, cur interface{}) {
+	c.enqueue(cur, c.backendGroupQueue)
+}
+
+func (c *Controller) deleteBackendGroup(obj interface{}) {
+	c.enqueue(obj, c.backendGroupQueue)
+}
+
+func (c *Controller) addLoadBalancer(obj interface{}) {
+	lb := obj.(*v1beta1.LoadBalancer)
+	c.enqueue(obj, c.loadBalancerQueue)
+
+	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(lb.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("skip loadbalancer(%s/%s) add, list backendgroup failed: %v", lb.Namespace, lb.Name, err)
+	}
+	relatedGroups := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
+		return util.IsLBMatchBackendGroup(group, lb)
+	})
+	for _, g := range relatedGroups {
+		c.enqueue(g, c.backendGroupQueue)
+	}
+}
+
+func (c *Controller) updateLoadBalancer(old, cur interface{}) {
+	oldObj := cur.(*v1beta1.LoadBalancer)
+	curObj := cur.(*v1beta1.LoadBalancer)
+	if curObj.DeletionTimestamp != nil {
+		c.enqueue(curObj, c.loadBalancerQueue)
+	}
+	if !util.LoadBalancerNonStatusUpdated(oldObj, curObj) {
+		return
+	}
+	c.enqueue(curObj, c.loadBalancerQueue)
+	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(curObj.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("skip loadbalancer(%s/%s) update, list backendgroup failed: %v", curObj.Namespace, curObj.Name, err)
+	}
+	relatedGroups := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
+		return util.IsLBMatchBackendGroup(group, curObj)
+	})
+	for _, g := range relatedGroups {
+		c.enqueue(g, c.backendGroupQueue)
+	}
+}
+
+func (c *Controller) deleteLoadBalancer(obj interface{}) {
+	c.enqueue(obj, c.loadBalancerQueue)
+	// TODO: enqueu related backendgroup
+}
+
+func (c *Controller) addLoadBalancerDriver(obj interface{}) {
+	c.enqueue(obj, c.driverQueue)
+}
+
+func (c *Controller) updateLoadBalancerDriver(old, cur interface{}) {
+	c.enqueue(cur, c.driverQueue)
+}
+
+func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {
+	c.enqueue(obj, c.driverQueue)
+}
+
+func (c *Controller) addBackendRecord(obj interface{}) {
+	c.enqueue(obj, c.backendQueue)
+}
+
+func (c *Controller) updateBackendRecord(old, cur interface{}) {
+	oldObj := cur.(*v1beta1.BackendRecord)
+	curObj := cur.(*v1beta1.BackendRecord)
+	if curObj.DeletionTimestamp != nil {
+		c.enqueue(curObj, c.backendQueue)
+	}
+	if !util.MapEqual(oldObj.Spec.Parameters, curObj.Spec.Parameters) {
+		c.enqueue(curObj, c.backendQueue)
+		return
+	}
+	if !util.EnsurePolicyEqual(oldObj.Spec.EnsurePolicy, curObj.Spec.EnsurePolicy) {
+		c.enqueue(curObj, c.loadBalancerQueue)
+		return
+	}
+}
+
+func (c *Controller) deleteBackendRecord(obj interface{}) {
+	c.enqueue(obj, c.backendQueue)
 }

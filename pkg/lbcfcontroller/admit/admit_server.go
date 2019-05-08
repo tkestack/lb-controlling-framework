@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
-package lbcfcontroller
+package admit
 
 import (
 	"fmt"
 	"net/http"
+
+	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"github.com/emicklei/go-restful"
 	"k8s.io/api/admission/v1beta1"
@@ -26,12 +29,13 @@ import (
 	"k8s.io/klog"
 )
 
-func NewAdmitServer(admit AdmitWebhook, crtFile string, keyFile string) *AdmitServer {
-	return &AdmitServer{
-		admitWebhook: admit,
+func NewAdmitServer(context *context.Context, crtFile string, keyFile string) *AdmitServer {
+	s := &AdmitServer{
+		admitWebhook: NewAdmitter(context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.BRInformer.Lister(), util.NewWebhookInvoker()),
 		crtFile:      crtFile,
 		keyFile:      keyFile,
 	}
+	return s
 }
 
 type AdmitServer struct {

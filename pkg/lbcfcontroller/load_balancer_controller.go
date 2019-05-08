@@ -28,49 +28,26 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/tools/cache"
 )
 
-type LoadBalancerProvider interface {
-	getLoadBalancer(namespace, name string) (*lbcfapi.LoadBalancer, error)
-	listLoadBalancerByDriver(driverName string, driverNamespace string) ([]*lbcfapi.LoadBalancer, error)
-}
-
-func NewLoadBalancerController(client *lbcfclient.Clientset, lister v1beta1.LoadBalancerLister, driverProvider DriverProvider) *LoadBalancerController {
+func NewLoadBalancerController(client *lbcfclient.Clientset, lbLister v1beta1.LoadBalancerLister, driverLister v1beta1.LoadBalancerDriverLister, invoker util.WebhookInvoker) *LoadBalancerController {
 	return &LoadBalancerController{
 		lbcfClient:     client,
-		lister:         lister,
-		driverProvider: driverProvider,
+		lister:         lbLister,
+		driverLister:   driverLister,
+		webhookInvoker: invoker,
 	}
 }
 
 type LoadBalancerController struct {
-	lbcfClient     *lbcfclient.Clientset
-	lister         v1beta1.LoadBalancerLister
-	driverProvider DriverProvider
-}
+	lbcfClient *lbcfclient.Clientset
 
-func (c *LoadBalancerController) getLoadBalancer(namespace, name string) (*lbcfapi.LoadBalancer, error) {
-	return c.lister.LoadBalancers(namespace).Get(name)
-}
+	lister       v1beta1.LoadBalancerLister
+	driverLister v1beta1.LoadBalancerDriverLister
 
-func (c *LoadBalancerController) listLoadBalancerByDriver(driverName string, driverNamespace string) ([]*lbcfapi.LoadBalancer, error) {
-	lbList, err := c.lister.List(labels.Everything())
-	if err != nil {
-		return nil, err
-	}
-	var ret []*lbcfapi.LoadBalancer
-	for _, lb := range lbList {
-		if driverNamespace != "kube-system" && lb.Namespace != driverNamespace {
-			continue
-		}
-		if lb.Spec.LBDriver == driverName {
-			ret = append(ret, lb)
-		}
-	}
-	return ret, nil
+	webhookInvoker util.WebhookInvoker
 }
 
 func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
@@ -106,9 +83,9 @@ func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
 }
 
 func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, exist := c.driverProvider.getDriver(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace), lb.Spec.LBDriver)
-	if !exist {
-		return util.ErrorResult(fmt.Errorf("driver %q not found for LoadBalancer %s", lb.Spec.LBDriver, lb.Name))
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	if err != nil {
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
 	req := &webhooks.CreateLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -118,7 +95,7 @@ func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		LBSpec:     lb.Spec.LBSpec,
 		Attributes: lb.Spec.Attributes,
 	}
-	rsp, err := driver.CallCreateLoadBalancer(req)
+	rsp, err := c.webhookInvoker.CallCreateLoadBalancer(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
@@ -152,9 +129,9 @@ func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 }
 
 func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, exist := c.driverProvider.getDriver(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace), lb.Spec.LBDriver)
-	if !exist {
-		return util.ErrorResult(fmt.Errorf("driver %q not found for LoadBalancer %s", lb.Spec.LBDriver, lb.Name))
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	if err != nil {
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
 	req := &webhooks.EnsureLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -163,7 +140,7 @@ func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		},
 		Attributes: lb.Spec.Attributes,
 	}
-	rsp, err := driver.CallEnsureLoadBalancer(req)
+	rsp, err := c.webhookInvoker.CallEnsureLoadBalancer(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
@@ -193,9 +170,9 @@ func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 }
 
 func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, exist := c.driverProvider.getDriver(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace), lb.Spec.LBDriver)
-	if !exist {
-		return util.ErrorResult(fmt.Errorf("driver %q not found for LoadBalancer %s", lb.Spec.LBDriver, lb.Name))
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	if err != nil {
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
 	req := &webhooks.DeleteLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -205,7 +182,7 @@ func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		LBInfo:     lb.Status.LBInfo,
 		Attributes: lb.Spec.Attributes,
 	}
-	rsp, err := driver.CallDeleteLoadBalancer(req)
+	rsp, err := c.webhookInvoker.CallDeleteLoadBalancer(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
