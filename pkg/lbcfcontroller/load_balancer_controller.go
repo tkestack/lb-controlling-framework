@@ -42,7 +42,7 @@ func NewLoadBalancerController(client *lbcfclient.Clientset, lbLister v1beta1.Lo
 }
 
 type LoadBalancerController struct {
-	lbcfClient *lbcfclient.Clientset
+	lbcfClient lbcfclient.Interface
 
 	lister       v1beta1.LoadBalancerLister
 	driverLister v1beta1.LoadBalancerDriverLister

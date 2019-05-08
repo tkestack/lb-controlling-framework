@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
+	"reflect"
 	"strings"
 	"text/template"
 	"time"
@@ -281,12 +282,18 @@ func EnsurePolicyEqual(a *lbcfapi.EnsurePolicyConfig, b *lbcfapi.EnsurePolicyCon
 }
 
 func LoadBalancerNonStatusUpdated(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBalancer) bool {
-	if !MapEqual(old.Spec.Attributes, cur.Spec.Attributes) {
+	if !reflect.DeepEqual(old.Spec.Attributes, cur.Spec.Attributes) {
 		return true
 	}
-	if !EnsurePolicyEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
+	if !reflect.DeepEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
 		return true
 	}
+	//if !MapEqual(old.Spec.Attributes, cur.Spec.Attributes) {
+	//	return true
+	//}
+	//if !EnsurePolicyEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
+	//	return true
+	//}
 	return false
 }
 
@@ -609,4 +616,14 @@ func MakeFinalizerPatch(isFirst bool, finalizer string) []byte {
 		return nil
 	}
 	return buf.Bytes()
+}
+
+// copied from kubernetes/pkg/controller/endpoint/endpoints_controller.go:258
+func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatusChanged bool) sets.String {
+	if podStatusChanged {
+		groups = groups.Union(oldGroups)
+	} else {
+		groups = groups.Difference(oldGroups).Union(oldGroups.Difference(groups))
+	}
+	return groups
 }

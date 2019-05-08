@@ -18,7 +18,6 @@ package lbcfcontroller
 
 import (
 	"fmt"
-	"k8s.io/klog"
 	"strings"
 	"sync"
 
@@ -34,6 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
+	"k8s.io/kubernetes/pkg/controller"
 )
 
 func NewBackendGroupController(client *lbcfclient.Clientset, lbLister lbcflister.LoadBalancerLister, bgLister lbcflister.BackendGroupLister, brLister lbcflister.BackendRecordLister, podLister corev1.PodLister) *BackendGroupController {
@@ -49,7 +50,7 @@ func NewBackendGroupController(client *lbcfclient.Clientset, lbLister lbcflister
 }
 
 type BackendGroupController struct {
-	client *lbcfclient.Clientset
+	client lbcfclient.Interface
 
 	lbLister  lbcflister.LoadBalancerLister
 	bgLister  lbcflister.BackendGroupLister
@@ -144,6 +145,51 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 		}
 	}
 	return util.SuccResult()
+}
+
+func (c *BackendGroupController) getBackendGroupsForPod(pod *v1.Pod) sets.String {
+	set := sets.NewString()
+	groupList, err := c.bgLister.BackendGroups(pod.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("skip pod(%s/%s) add, list backendgroup failed: %v", pod.Namespace, pod.Name, err)
+		return nil
+	}
+	related := util.FilterBackendGroup(groupList, func(group *lbcfapi.BackendGroup) bool {
+		if util.IsPodMatchBackendGroup(group, pod) {
+			return true
+		}
+		return false
+	})
+
+	for _, r := range related {
+		key, err := controller.KeyFunc(r)
+		if err != nil {
+			klog.Errorf("%v", err)
+			continue
+		}
+		set.Insert(key)
+	}
+	return set
+}
+
+func (c *BackendGroupController) getBackendGroupsForLoadBalancer(lb *lbcfapi.LoadBalancer) sets.String {
+	set := sets.NewString()
+	groupList, err := c.bgLister.BackendGroups(lb.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("skip loadbalancer(%s/%s) add, list backendgroup failed: %v", lb.Namespace, lb.Name, err)
+	}
+	related := util.FilterBackendGroup(groupList, func(group *lbcfapi.BackendGroup) bool {
+		return util.IsLBMatchBackendGroup(group, lb)
+	})
+	for _, r := range related {
+		key, err := controller.KeyFunc(r)
+		if err != nil {
+			klog.Errorf("%v", err)
+			continue
+		}
+		set.Insert(key)
+	}
+	return set
 }
 
 func (c *BackendGroupController) constructRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, podName string) *lbcfapi.BackendRecord {

@@ -17,6 +17,7 @@
 package lbcfcontroller
 
 import (
+	"reflect"
 	"time"
 
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/context"
@@ -24,7 +25,6 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -178,125 +178,123 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 
 func (c *Controller) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
-	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(pod.Namespace).List(labels.Everything())
-	if err != nil {
-		klog.Errorf("skip pod(%s/%s) add, list backendgroup failed: %v", pod.Namespace, pod.Name, err)
-		return
-	}
-	relatedBackendGroup := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
-		if util.IsPodMatchBackendGroup(group, pod) {
-			return true
-		}
-		return false
-	})
-	for _, g := range relatedBackendGroup {
-		c.enqueue(g, c.backendGroupQueue)
+	for key := range c.backendGroupCtrl.getBackendGroupsForPod(pod) {
+		c.backendGroupQueue.Add(key)
 	}
 }
 
 func (c *Controller) updatePod(old, cur interface{}) {
 	oldPod := old.(*v1.Pod)
 	curPod := cur.(*v1.Pod)
-	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(curPod.Namespace).List(labels.Everything())
-	if err != nil {
-		klog.Errorf("skip pod(%s/%s) update, list backendgroup failed: %v", curPod.Namespace, curPod.Name, err)
-		return
-	}
-	relatedBackendGroup := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
-		if util.IsPodMatchBackendGroup(group, curPod) || util.IsPodMatchBackendGroup(group, oldPod) {
-			return true
+
+	labelChanged := !reflect.DeepEqual(oldPod.Labels, curPod.Labels)
+	statusChanged := util.PodAvailable(oldPod) != util.PodAvailable(curPod)
+
+	if labelChanged || statusChanged {
+		oldGroups := c.backendGroupCtrl.getBackendGroupsForPod(oldPod)
+		groups := c.backendGroupCtrl.getBackendGroupsForPod(curPod)
+		groups = util.DetermineNeededBackendGroupUpdates(oldGroups, groups, labelChanged)
+		for key := range groups {
+			c.backendGroupQueue.Add(key)
 		}
-		return false
-	})
-	for _, g := range relatedBackendGroup {
-		c.enqueue(g, c.backendGroupQueue)
 	}
 }
 
 func (c *Controller) deletePod(obj interface{}) {
-	pod := obj.(*v1.Pod)
-	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(pod.Namespace).List(labels.Everything())
-	if err != nil {
-		klog.Errorf("skip pod(%s/%s) delete, list backendgroup failed: %v", pod.Namespace, pod.Name, err)
+	if _, ok := obj.(*v1.Pod); ok {
+		c.addPod(obj)
 		return
 	}
-	relatedBackendGroup := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
-		if util.IsPodMatchBackendGroup(group, pod) {
-			return true
-		}
-		return false
-	})
-	for _, g := range relatedBackendGroup {
-		c.enqueue(g, c.backendGroupQueue)
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		klog.Errorf("Couldn't get object from tombstone %#v", obj)
+		return
 	}
+	pod, ok := tombstone.Obj.(*v1.Pod)
+	if !ok {
+		klog.Errorf("Tombstone contained object that is not a Pod: %#v", obj)
+		return
+	}
+	c.addPod(pod)
 }
 
-func (c *Controller) addService(obj interface{}) {
-	// TODO: find backendGroup by service
+// TODO: implement this
+func (c *Controller) addService(obj interface{}) {}
 
-}
+// TODO: implement this
+func (c *Controller) updateService(old, cur interface{}) {}
 
-func (c *Controller) updateService(old, cur interface{}) {
-
-}
-
-func (c *Controller) deleteService(obj interface{}) {
-
-}
+// TODO: implement this
+func (c *Controller) deleteService(obj interface{}) {}
 
 func (c *Controller) addBackendGroup(obj interface{}) {
 	c.enqueue(obj, c.backendGroupQueue)
 }
 
 func (c *Controller) updateBackendGroup(old, cur interface{}) {
+	oldGroup := old.(*v1beta1.BackendGroup)
+	curGroup := cur.(*v1beta1.BackendGroup)
+	if oldGroup.ResourceVersion == curGroup.ResourceVersion {
+		return
+	}
 	c.enqueue(cur, c.backendGroupQueue)
 }
 
 func (c *Controller) deleteBackendGroup(obj interface{}) {
-	c.enqueue(obj, c.backendGroupQueue)
+	if _, ok := obj.(*v1beta1.BackendGroup); !ok {
+		c.addBackendRecord(obj)
+		return
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		klog.Errorf("Couldn't get object from tombstone %#v", obj)
+		return
+	}
+	group, ok := tombstone.Obj.(*v1beta1.BackendGroup)
+	if !ok {
+		klog.Errorf("Tombstone contained object that is not a BackendGroup: %#v", obj)
+		return
+	}
+	c.addBackendGroup(group)
 }
 
 func (c *Controller) addLoadBalancer(obj interface{}) {
 	lb := obj.(*v1beta1.LoadBalancer)
 	c.enqueue(obj, c.loadBalancerQueue)
-
-	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(lb.Namespace).List(labels.Everything())
-	if err != nil {
-		klog.Errorf("skip loadbalancer(%s/%s) add, list backendgroup failed: %v", lb.Namespace, lb.Name, err)
-	}
-	relatedGroups := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
-		return util.IsLBMatchBackendGroup(group, lb)
-	})
-	for _, g := range relatedGroups {
-		c.enqueue(g, c.backendGroupQueue)
+	for key := range c.backendGroupCtrl.getBackendGroupsForLoadBalancer(lb) {
+		c.backendGroupQueue.Add(key)
 	}
 }
 
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 	oldObj := cur.(*v1beta1.LoadBalancer)
 	curObj := cur.(*v1beta1.LoadBalancer)
-	if curObj.DeletionTimestamp != nil {
-		c.enqueue(curObj, c.loadBalancerQueue)
-	}
-	if !util.LoadBalancerNonStatusUpdated(oldObj, curObj) {
+
+	if oldObj.ResourceVersion == curObj.ResourceVersion {
 		return
 	}
 	c.enqueue(curObj, c.loadBalancerQueue)
-	groupList, err := c.backendGroupCtrl.bgLister.BackendGroups(curObj.Namespace).List(labels.Everything())
-	if err != nil {
-		klog.Errorf("skip loadbalancer(%s/%s) update, list backendgroup failed: %v", curObj.Namespace, curObj.Name, err)
-	}
-	relatedGroups := util.FilterBackendGroup(groupList, func(group *v1beta1.BackendGroup) bool {
-		return util.IsLBMatchBackendGroup(group, curObj)
-	})
-	for _, g := range relatedGroups {
-		c.enqueue(g, c.backendGroupQueue)
+	for key := range c.backendGroupCtrl.getBackendGroupsForLoadBalancer(curObj) {
+		c.backendGroupQueue.Add(key)
 	}
 }
 
 func (c *Controller) deleteLoadBalancer(obj interface{}) {
-	c.enqueue(obj, c.loadBalancerQueue)
-	// TODO: enqueu related backendgroup
+	if _, ok := obj.(*v1beta1.LoadBalancer); ok {
+		c.addLoadBalancer(obj)
+		return
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		klog.Errorf("Couldn't get object from tombstone %#v", obj)
+		return
+	}
+	lb, ok := tombstone.Obj.(*v1beta1.LoadBalancer)
+	if !ok {
+		klog.Errorf("Tombstone contained object that is not a LoadBalancer: %#v", obj)
+		return
+	}
+	c.addLoadBalancer(lb)
 }
 
 func (c *Controller) addLoadBalancerDriver(obj interface{}) {
@@ -304,11 +302,30 @@ func (c *Controller) addLoadBalancerDriver(obj interface{}) {
 }
 
 func (c *Controller) updateLoadBalancerDriver(old, cur interface{}) {
+	oldDriver := old.(*v1beta1.LoadBalancerDriver)
+	curDriver := old.(*v1beta1.LoadBalancerDriver)
+	if oldDriver.ResourceVersion == curDriver.ResourceVersion {
+		return
+	}
 	c.enqueue(cur, c.driverQueue)
 }
 
 func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {
-	c.enqueue(obj, c.driverQueue)
+	if _, ok := obj.(*v1beta1.LoadBalancerDriver); ok {
+		c.addLoadBalancerDriver(obj)
+		return
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		klog.Errorf("Couldn't get object from tombstone %#v", obj)
+		return
+	}
+	driver, ok := tombstone.Obj.(*v1beta1.LoadBalancerDriver)
+	if !ok {
+		klog.Errorf("Tombstone contained object that is not a LoadBalancerDriver: %#v", obj)
+		return
+	}
+	c.driverQueue.Add(driver)
 }
 
 func (c *Controller) addBackendRecord(obj interface{}) {
@@ -318,19 +335,27 @@ func (c *Controller) addBackendRecord(obj interface{}) {
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := cur.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
-	if curObj.DeletionTimestamp != nil {
-		c.enqueue(curObj, c.backendQueue)
-	}
-	if !util.MapEqual(oldObj.Spec.Parameters, curObj.Spec.Parameters) {
-		c.enqueue(curObj, c.backendQueue)
+
+	if oldObj.ResourceVersion == curObj.ResourceVersion {
 		return
 	}
-	if !util.EnsurePolicyEqual(oldObj.Spec.EnsurePolicy, curObj.Spec.EnsurePolicy) {
-		c.enqueue(curObj, c.loadBalancerQueue)
-		return
-	}
+	c.enqueue(curObj, c.backendQueue)
 }
 
 func (c *Controller) deleteBackendRecord(obj interface{}) {
-	c.enqueue(obj, c.backendQueue)
+	if _, ok := obj.(*v1beta1.BackendRecord); ok {
+		c.addBackendRecord(obj)
+		return
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		klog.Errorf("Couldn't get object from tombstone %#v", obj)
+		return
+	}
+	backend, ok := tombstone.Obj.(*v1beta1.BackendRecord)
+	if !ok {
+		klog.Errorf("Tombstone contained object that is not a BackendRecord: %#v", obj)
+		return
+	}
+	c.backendQueue.Add(backend)
 }

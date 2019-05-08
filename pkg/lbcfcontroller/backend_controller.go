@@ -29,7 +29,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -46,7 +45,7 @@ func NewBackendController(client *lbcfclient.Clientset, brLister v1beta1.Backend
 }
 
 type BackendController struct {
-	client *lbcfclient.Clientset
+	client lbcfclient.Interface
 
 	brLister     v1beta1.BackendRecordLister
 	driverLister v1beta1.LoadBalancerDriverLister
@@ -85,23 +84,6 @@ func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
 		return c.ensureBackend(backend)
 	}
 	return util.SuccResult()
-}
-
-func (c *BackendController) listBackendByDriver(driverName string, driverNamespace string) ([]*lbcfapi.BackendRecord, error) {
-	recordList, err := c.brLister.List(labels.Everything())
-	if err != nil {
-		return nil, err
-	}
-	var ret []*lbcfapi.BackendRecord
-	for _, r := range recordList {
-		if driverNamespace != "kube-system" && r.Namespace != driverNamespace {
-			continue
-		}
-		if r.Spec.LBDriver == driverName {
-			ret = append(ret, r)
-		}
-	}
-	return ret, nil
 }
 
 func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {

@@ -36,7 +36,7 @@ func NewDriverController(client *lbcfclient.Clientset, lister v1beta1.LoadBalanc
 }
 
 type DriverController struct {
-	lbcfClient *lbcfclient.Clientset
+	lbcfClient lbcfclient.Interface
 	lister     v1beta1.LoadBalancerDriverLister
 }
 
