@@ -67,25 +67,29 @@ func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
 		if !util.HasFinalizer(lb.Finalizers, lbcfapi.FinalizerDeleteLB) {
 			return util.SuccResult()
 		}
-		return c.deleteLoadBalancer(lb)
+		result, _ := c.deleteLoadBalancer(lb)
+		return result
 	}
 
 	if !util.LBCreated(lb) {
-		result := c.createLoadBalancer(lb)
+		result, latest := c.createLoadBalancer(lb)
 		if result.IsError() || result.IsFailed() || result.IsAsync() {
 			return result
 		}
+		lb = latest
 	}
+
 	if util.LBNeedEnsure(lb) {
-		return c.ensureLoadBalancer(lb)
+		result, _ := c.ensureLoadBalancer(lb)
+		return result
 	}
 	return util.SuccResult()
 }
 
-func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
+func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err)), lb
 	}
 	req := &webhooks.CreateLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -97,7 +101,7 @@ func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 	rsp, err := c.webhookInvoker.CallCreateLoadBalancer(driver, req)
 	if err != nil {
-		return util.ErrorResult(err)
+		return util.ErrorResult(err), lb
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
@@ -115,10 +119,9 @@ func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		})
 		latest, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy)
 		if err != nil {
-			return util.ErrorResult(err)
+			return util.ErrorResult(err), lb
 		}
-		*lb = *latest
-		return util.SuccResult()
+		return util.SuccResult(), latest
 	case webhooks.StatusFail:
 		return c.setOperationFailed(lb, rsp.ResponseForFailRetryHooks, lbcfapi.LBCreated)
 	case webhooks.StatusRunning:
@@ -128,10 +131,10 @@ func (c *LoadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 }
 
-func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
+func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err)), lb
 	}
 	req := &webhooks.EnsureLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -142,7 +145,7 @@ func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 	rsp, err := c.webhookInvoker.CallEnsureLoadBalancer(driver, req)
 	if err != nil {
-		return util.ErrorResult(err)
+		return util.ErrorResult(err), lb
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
@@ -153,13 +156,14 @@ func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 			LastTransitionTime: v1.Now(),
 			Message:            rsp.Msg,
 		})
-		if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
-			return util.ErrorResult(err)
+		latest, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy)
+		if err != nil {
+			return util.ErrorResult(err), lb
 		}
 		if lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
-			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
+			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod)), latest
 		}
-		return util.SuccResult()
+		return util.SuccResult(), latest
 	case webhooks.StatusFail:
 		return c.setOperationFailed(lb, rsp.ResponseForFailRetryHooks, lbcfapi.LBEnsured)
 	case webhooks.StatusRunning:
@@ -169,10 +173,10 @@ func (c *LoadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 }
 
-func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
+func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err)), lb
 	}
 	req := &webhooks.DeleteLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -184,7 +188,7 @@ func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 	rsp, err := c.webhookInvoker.CallDeleteLoadBalancer(driver, req)
 	if err != nil {
-		return util.ErrorResult(err)
+		return util.ErrorResult(err), lb
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
@@ -197,13 +201,14 @@ func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		})
 		latest, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy)
 		if err != nil {
-			return util.ErrorResult(err)
+			return util.ErrorResult(err), lb
 		}
 		latest.Finalizers = util.RemoveFinalizer(latest.Finalizers, lbcfapi.FinalizerDeleteLB)
-		if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Update(latest); err != nil {
-			return util.ErrorResult(err)
+		latest, err = c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Update(latest)
+		if err != nil {
+			return util.ErrorResult(err), latest
 		}
-		return util.SuccResult()
+		return util.SuccResult(), latest
 	case webhooks.StatusFail:
 		return c.setOperationFailed(lb, rsp.ResponseForFailRetryHooks, lbcfapi.LBReadyToDelete)
 	case webhooks.StatusRunning:
@@ -213,24 +218,7 @@ func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 }
 
-func (c *LoadBalancerController) setOperationSucc(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) *util.SyncResult {
-	cpy := lb.DeepCopy()
-	util.AddLBCondition(&cpy.Status, lbcfapi.LoadBalancerCondition{
-		Type:               cType,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: v1.Now(),
-		Message:            rsp.Msg,
-	})
-	if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
-	}
-	if cType == lbcfapi.LBEnsured && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
-		return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
-	}
-	return util.SuccResult()
-}
-
-func (c *LoadBalancerController) setOperationFailed(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) *util.SyncResult {
+func (c *LoadBalancerController) setOperationFailed(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	cpy := lb.DeepCopy()
 	util.AddLBCondition(&cpy.Status, lbcfapi.LoadBalancerCondition{
 		Type:               cType,
@@ -239,13 +227,14 @@ func (c *LoadBalancerController) setOperationFailed(lb *lbcfapi.LoadBalancer, rs
 		Reason:             lbcfapi.ReasonOperationFailed.String(),
 		Message:            rsp.Msg,
 	})
-	if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
+	latest, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy)
+	if err != nil {
+		return util.ErrorResult(err), lb
 	}
-	return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+	return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)), latest
 }
 
-func (c *LoadBalancerController) setOperationRunning(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) *util.SyncResult {
+func (c *LoadBalancerController) setOperationRunning(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	cpy := lb.DeepCopy()
 	util.AddLBCondition(&cpy.Status, lbcfapi.LoadBalancerCondition{
 		Type:               cType,
@@ -254,14 +243,15 @@ func (c *LoadBalancerController) setOperationRunning(lb *lbcfapi.LoadBalancer, r
 		Reason:             lbcfapi.ReasonOperationInProgress.String(),
 		Message:            rsp.Msg,
 	})
-	if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
+	latest, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy)
+	if err != nil {
+		return util.ErrorResult(err), lb
 	}
 	delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
-	return util.AsyncResult(delay)
+	return util.AsyncResult(delay), latest
 }
 
-func (c *LoadBalancerController) setOperationInvalidResponse(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) *util.SyncResult {
+func (c *LoadBalancerController) setOperationInvalidResponse(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	cpy := lb.DeepCopy()
 	util.AddLBCondition(&cpy.Status, lbcfapi.LoadBalancerCondition{
 		Type:               cType,
@@ -270,8 +260,9 @@ func (c *LoadBalancerController) setOperationInvalidResponse(lb *lbcfapi.LoadBal
 		Reason:             lbcfapi.ReasonInvalidResponse.String(),
 		Message:            fmt.Sprintf("unknown status %q, msg: %s", rsp.Status, rsp.Msg),
 	})
-	if _, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
+	latest, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(cpy.Namespace).UpdateStatus(cpy)
+	if err != nil {
+		return util.ErrorResult(err), lb
 	}
-	return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
+	return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status)), latest
 }

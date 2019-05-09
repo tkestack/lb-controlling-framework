@@ -174,7 +174,7 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 		} else if result.IsPeriodic() {
 			klog.Infof("sync key %s, period", key)
 			queue.Forget(key)
-			queue.AddIntervalRateLimited(key, result.GetResyncPeriodic())
+			queue.AddIntervalRateLimited(key, result.GetReEnsurePeriodic())
 		}
 	}()
 	return true

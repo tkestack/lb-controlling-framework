@@ -100,7 +100,15 @@ func PodAvailable(obj *v1.Pod) bool {
 }
 
 func LBCreated(lb *lbcfapi.LoadBalancer) bool {
-	condition := getLBCondition(&lb.Status, lbcfapi.LBCreated)
+	condition := GetLBCondition(&lb.Status, lbcfapi.LBCreated)
+	if condition == nil {
+		return false
+	}
+	return condition.Status == lbcfapi.ConditionTrue
+}
+
+func LBEnsured(lb *lbcfapi.LoadBalancer) bool {
+	condition := GetLBCondition(&lb.Status, lbcfapi.LBEnsured)
 	if condition == nil {
 		return false
 	}
@@ -108,14 +116,13 @@ func LBCreated(lb *lbcfapi.LoadBalancer) bool {
 }
 
 func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
-	condition := getLBCondition(&lb.Status, lbcfapi.LBEnsured)
-	if condition == nil || condition.Status != lbcfapi.ConditionTrue {
+	if !LBEnsured(lb) {
 		return true
 	}
 	return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
 }
 
-func getLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
+func GetLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
 	for i := range status.Conditions {
 		if status.Conditions[i].Type == conditionType {
 			return &status.Conditions[i]
@@ -543,8 +550,8 @@ type SyncResult struct {
 	asyncOperation    bool
 	periodicOperation bool
 
-	minRetryDelay   time.Duration
-	minResyncPeriod time.Duration
+	minRetryDelay     time.Duration
+	minReEnsurePeriod time.Duration
 }
 
 func SuccResult() *SyncResult {
@@ -560,15 +567,15 @@ func FailResult(delay time.Duration) *SyncResult {
 }
 
 func AsyncResult(period time.Duration) *SyncResult {
-	return &SyncResult{asyncOperation: true, minResyncPeriod: period}
+	return &SyncResult{asyncOperation: true, minReEnsurePeriod: period}
 }
 
 func PeriodicResult(period time.Duration) *SyncResult {
-	return &SyncResult{periodicOperation: true, minResyncPeriod: period}
+	return &SyncResult{periodicOperation: true, minReEnsurePeriod: period}
 }
 
 func (s *SyncResult) IsSucc() bool {
-	return s.err == nil && !s.operationFailed && !s.asyncOperation && !s.periodicOperation
+	return s.err == nil && !s.operationFailed && !s.asyncOperation
 }
 
 func (s *SyncResult) IsError() bool {
@@ -595,8 +602,8 @@ func (s *SyncResult) GetRetryDelay() time.Duration {
 	return s.minRetryDelay
 }
 
-func (s *SyncResult) GetResyncPeriodic() time.Duration {
-	return s.minResyncPeriod
+func (s *SyncResult) GetReEnsurePeriodic() time.Duration {
+	return s.minReEnsurePeriod
 }
 
 var firstFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers","value":["{{ .Finalizer }}"]}]`

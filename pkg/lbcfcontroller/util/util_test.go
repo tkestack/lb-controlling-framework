@@ -279,7 +279,7 @@ func TestAddLBCondition(t *testing.T) {
 			t.Fatalf("case: %s. wrong length, expect: %d, get: %d", tc.name, len(tc.expect.Conditions), len(tc.status.Conditions))
 		}
 		for _, c := range tc.expect.Conditions {
-			get := getLBCondition(tc.status, c.Type)
+			get := GetLBCondition(tc.status, c.Type)
 			if get == nil {
 				t.Fatalf("case: %s. not found", tc.name)
 				continue
