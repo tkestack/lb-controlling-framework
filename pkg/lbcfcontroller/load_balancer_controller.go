@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func NewLoadBalancerController(client *lbcfclient.Clientset, lbLister v1beta1.LoadBalancerLister, driverLister v1beta1.LoadBalancerDriverLister, invoker util.WebhookInvoker) *LoadBalancerController {
+func NewLoadBalancerController(client lbcfclient.Interface, lbLister v1beta1.LoadBalancerLister, driverLister v1beta1.LoadBalancerDriverLister, invoker util.WebhookInvoker) *LoadBalancerController {
 	return &LoadBalancerController{
 		lbcfClient:     client,
 		lister:         lbLister,

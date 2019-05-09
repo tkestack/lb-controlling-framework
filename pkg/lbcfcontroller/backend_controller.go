@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func NewBackendController(client *lbcfclient.Clientset, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *BackendController {
+func NewBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *BackendController {
 	return &BackendController{
 		client:         client,
 		brLister:       brLister,

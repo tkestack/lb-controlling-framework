@@ -37,7 +37,7 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 )
 
-func NewBackendGroupController(client *lbcfclient.Clientset, lbLister lbcflister.LoadBalancerLister, bgLister lbcflister.BackendGroupLister, brLister lbcflister.BackendRecordLister, podLister corev1.PodLister) *BackendGroupController {
+func NewBackendGroupController(client lbcfclient.Interface, lbLister lbcflister.LoadBalancerLister, bgLister lbcflister.BackendGroupLister, brLister lbcflister.BackendRecordLister, podLister corev1.PodLister) *BackendGroupController {
 	return &BackendGroupController{
 		client:              client,
 		lbLister:            lbLister,

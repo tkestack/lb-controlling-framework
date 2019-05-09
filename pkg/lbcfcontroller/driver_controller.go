@@ -28,7 +28,7 @@ import (
 	"k8s.io/klog"
 )
 
-func NewDriverController(client *lbcfclient.Clientset, lister v1beta1.LoadBalancerDriverLister) *DriverController {
+func NewDriverController(client lbcfclient.Interface, lister v1beta1.LoadBalancerDriverLister) *DriverController {
 	return &DriverController{
 		lbcfClient: client,
 		lister:     lister,

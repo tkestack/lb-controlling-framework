@@ -193,7 +193,7 @@ func (c *Controller) updatePod(old, cur interface{}) {
 	if labelChanged || statusChanged {
 		oldGroups := c.backendGroupCtrl.getBackendGroupsForPod(oldPod)
 		groups := c.backendGroupCtrl.getBackendGroupsForPod(curPod)
-		groups = util.DetermineNeededBackendGroupUpdates(oldGroups, groups, labelChanged)
+		groups = util.DetermineNeededBackendGroupUpdates(oldGroups, groups, statusChanged)
 		for key := range groups {
 			c.backendGroupQueue.Add(key)
 		}

@@ -16,8 +16,678 @@
 
 package lbcfcontroller
 
-import "testing"
+import (
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/kubernetes/pkg/controller"
+	"testing"
+	"time"
+
+	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
+	lbcflister "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+
+	apiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/listers/core/v1"
+)
 
 func TestLBCFControllerAddPod(t *testing.T) {
+	podLabel := map[string]string{
+		"k1": "v1",
+	}
+	pod1 := newFakePod("", "pod-1", podLabel, true, false)
+	bg1 := newFakeBackendGroupOfPods("", "bg-1", 80, "tcp", podLabel, nil, nil)
 
+	pod2 := newFakePod("", "pod-2", nil, true, false)
+	bg2 := newFakeBackendGroupOfPods("", "bg-2", 80, "tcp", nil, nil, []string{"pod-2"})
+	driverCtrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
+	lbCtrl := NewLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeSuccInvoker{})
+	beCtrl := NewBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	bgCtrl := NewBackendGroupController(
+		fake.NewSimpleClientset(),
+		&fakeLBLister{},
+		&fakeBackendGroupLister{
+			list: []*lbcfapi.BackendGroup{bg1, bg2},
+		},
+		&fakeBackendLister{},
+		&fakePodLister{})
+	c := newFakeLBCFController(driverCtrl, lbCtrl, beCtrl, bgCtrl)
+
+	c.addPod(pod1)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done := c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+
+	c.addPod(pod2)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done = c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg2); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+}
+
+func TestLBCFControllerUpdatePod_PodStatusChange(t *testing.T) {
+	podLabel := map[string]string{
+		"k1": "v1",
+	}
+	oldPod1 := newFakePod("", "pod-0", podLabel, false, false)
+	curPod1 := newFakePod("", "pod-0", podLabel, true, false)
+
+	oldPod2 := newFakePod("", "pod-0", podLabel, true, false)
+	curPod2 := newFakePod("", "pod-0", podLabel, false, false)
+
+	oldPod3 := newFakePod("", "pod-0", podLabel, true, false)
+	curPod3 := newFakePod("", "pod-0", podLabel, false, true)
+
+	bg1 := newFakeBackendGroupOfPods("", "bg-0", 80, "tcp", podLabel, nil, nil)
+
+	driverCtrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
+	lbCtrl := NewLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeSuccInvoker{})
+	beCtrl := NewBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	bgCtrl := NewBackendGroupController(
+		fake.NewSimpleClientset(),
+		&fakeLBLister{},
+		&fakeBackendGroupLister{
+			list: []*lbcfapi.BackendGroup{bg1},
+		},
+		&fakeBackendLister{},
+		&fakePodLister{})
+	c := newFakeLBCFController(driverCtrl, lbCtrl, beCtrl, bgCtrl)
+
+	c.updatePod(oldPod1, curPod1)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done := c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+
+	c.updatePod(oldPod2, curPod2)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done = c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+
+	c.updatePod(oldPod3, curPod3)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done = c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+}
+
+func TestLBCFControllerUpdatePod_PodLabelChange(t *testing.T) {
+	podLabel1 := map[string]string{
+		"k1": "v1",
+	}
+	podLabel1Plus := map[string]string{
+		"k1":       "v1",
+		"addition": "value",
+	}
+	podLabel2 := map[string]string{
+		"k2": "v2",
+	}
+	oldPod1 := newFakePod("", "pod-1", nil, true, false)
+	curPod1 := newFakePod("", "pod-1", podLabel1, true, false)
+
+	oldPod2 := newFakePod("", "pod-2", podLabel1, true, false)
+	curPod2 := newFakePod("", "pod-2", nil, true, false)
+
+	oldPod3 := newFakePod("", "pod-3", podLabel1, true, false)
+	curPod3 := newFakePod("", "pod-3", podLabel2, true, false)
+
+	oldPod4 := newFakePod("", "pod-3", podLabel1, true, false)
+	curPod4 := newFakePod("", "pod-3", podLabel1Plus, true, false)
+
+	bg1 := newFakeBackendGroupOfPods("", "bg-1", 80, "tcp", podLabel1, nil, nil)
+	bg2 := newFakeBackendGroupOfPods("", "bg-2", 80, "tcp", podLabel2, nil, nil)
+
+	driverCtrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
+	lbCtrl := NewLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeSuccInvoker{})
+	beCtrl := NewBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	bgCtrl := NewBackendGroupController(
+		fake.NewSimpleClientset(),
+		&fakeLBLister{},
+		&fakeBackendGroupLister{
+			list: []*lbcfapi.BackendGroup{bg1, bg2},
+		},
+		&fakeBackendLister{},
+		&fakePodLister{})
+	c := newFakeLBCFController(driverCtrl, lbCtrl, beCtrl, bgCtrl)
+
+	c.updatePod(oldPod1, curPod1)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done := c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+
+	c.updatePod(oldPod2, curPod2)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done = c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+
+	c.updatePod(oldPod3, curPod3)
+	if c.backendGroupQueue.Len() != 2 {
+		t.Fatalf("queue length should be 2, get %d", c.backendGroupQueue.Len())
+	}
+	getKeySet := sets.NewString()
+	key1, done := c.backendGroupQueue.Get()
+	if key1 == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key1.(string); !ok {
+		t.Error("key is not a string")
+	} else {
+		getKeySet.Insert(key)
+	}
+	key2, done := c.backendGroupQueue.Get()
+	if key2 == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key2.(string); !ok {
+		t.Error("key is not a string")
+	} else {
+		getKeySet.Insert(key)
+	}
+	expectKey1, _ := controller.KeyFunc(bg1)
+	expectKey2, _ := controller.KeyFunc(bg2)
+	if !getKeySet.Has(expectKey1) {
+		t.Errorf("miss BackendGroup key %s", expectKey1)
+	}
+	if !getKeySet.Has(expectKey2) {
+		t.Errorf("miss BackendGroup key %s", expectKey2)
+	}
+	c.backendGroupQueue.Done(key1)
+	c.backendGroupQueue.Done(key2)
+
+	c.updatePod(oldPod4, curPod4)
+	if c.backendGroupQueue.Len() != 0 {
+		t.Fatalf("queue length should be 0, get %d", c.backendGroupQueue.Len())
+	}
+}
+
+func TestLBCFControllerDeletePod(t *testing.T) {
+	podLabel1 := map[string]string{
+		"k1": "v1",
+	}
+	pod1 := newFakePod("", "pod-1", podLabel1, false, false)
+	bg1 := newFakeBackendGroupOfPods("", "bg-1", 80, "tcp", podLabel1, nil, nil)
+	tomestoneKey, _ := controller.KeyFunc(pod1)
+	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: pod1}
+
+	driverCtrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
+	lbCtrl := NewLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeSuccInvoker{})
+	beCtrl := NewBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	bgCtrl := NewBackendGroupController(
+		fake.NewSimpleClientset(),
+		&fakeLBLister{},
+		&fakeBackendGroupLister{
+			list: []*lbcfapi.BackendGroup{bg1},
+		},
+		&fakeBackendLister{},
+		&fakePodLister{})
+	c := newFakeLBCFController(driverCtrl, lbCtrl, beCtrl, bgCtrl)
+
+	c.deletePod(pod1)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done := c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+
+	c.deletePod(tombstone)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done = c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+}
+
+func TestLBCFControllerAddBackendGroup(t *testing.T) {
+	driverCtrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
+	lbCtrl := NewLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeSuccInvoker{})
+	beCtrl := NewBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	bgCtrl := NewBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{}, &fakeBackendLister{}, &fakePodLister{})
+	c := newFakeLBCFController(driverCtrl, lbCtrl, beCtrl, bgCtrl)
+	bg := newFakeBackendGroupOfPods("", "bg", 80, "tcp", nil, nil, nil)
+	c.addBackendGroup(bg)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done := c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
+}
+
+func newFakeBackendGroupOfPods(namespace, name string, portNum int32, protocol string, labelSelector map[string]string, labelExcept []string, byName []string) *lbcfapi.BackendGroup {
+	group := &lbcfapi.BackendGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: lbcfapi.BackendGroupSpec{
+			Pods: &lbcfapi.PodBackend{
+				Port: lbcfapi.PortSelector{
+					PortNumber: portNum,
+					Protocol:   &protocol,
+				},
+			},
+		},
+	}
+	if len(labelSelector) > 0 {
+		group.Spec.Pods.ByLabel = &lbcfapi.SelectPodByLabel{
+			Selector: labelSelector,
+			Except:   labelExcept,
+		}
+		return group
+	}
+	group.Spec.Pods.ByName = byName
+	return group
+}
+
+func newFakePod(namespace string, name string, labels map[string]string, running bool, deleting bool) *apiv1.Pod {
+	pod := &apiv1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+	}
+	if running && !deleting {
+		pod.Status = apiv1.PodStatus{
+			PodIP: "1.1.1.1",
+			Conditions: []apiv1.PodCondition{
+				{
+					Type:   apiv1.PodReady,
+					Status: apiv1.ConditionTrue,
+				},
+			},
+		}
+	}
+
+	if deleting {
+		ts := metav1.Now()
+		pod.DeletionTimestamp = &ts
+	}
+	return pod
+}
+
+func newFakeLBCFController(driverCtrl *DriverController, lbCtrl *LoadBalancerController, backendCtrl *BackendController, bgCtrl *BackendGroupController) *Controller {
+	return &Controller{
+		driverCtrl:       driverCtrl,
+		lbCtrl:           lbCtrl,
+		backendCtrl:      backendCtrl,
+		backendGroupCtrl: bgCtrl,
+
+		driverQueue:       util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "driver-queue", 10*time.Second),
+		loadBalancerQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "lb-queue", 10*time.Second),
+		backendGroupQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backendgroup-queue", 10*time.Second),
+		backendQueue:      util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backend-queue", 10*time.Second),
+	}
+}
+
+type fakePodLister struct {
+	get  *apiv1.Pod
+	list []*apiv1.Pod
+}
+
+func (l *fakePodLister) Get(name string) (*apiv1.Pod, error) {
+	if l.get == nil {
+		return nil, errors.NewNotFound(schema.GroupResource{
+			Group:    "core/v1",
+			Resource: "Pod",
+		}, name)
+	}
+	return l.get, nil
+}
+
+func (l *fakePodLister) List(selector labels.Selector) (ret []*apiv1.Pod, err error) {
+	return l.list, nil
+}
+
+func (l *fakePodLister) Pods(namespace string) v1.PodNamespaceLister {
+	return l
+}
+
+type fakeLBLister struct {
+	get  *lbcfapi.LoadBalancer
+	list []*lbcfapi.LoadBalancer
+}
+
+func (l *fakeLBLister) Get(name string) (*lbcfapi.LoadBalancer, error) {
+	if l.get == nil {
+		return nil, errors.NewNotFound(schema.GroupResource{
+			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Resource: "LoadBalancer",
+		}, name)
+	}
+	return l.get, nil
+}
+
+func (l *fakeLBLister) List(selector labels.Selector) (ret []*lbcfapi.LoadBalancer, err error) {
+	return l.list, nil
+}
+
+func (l *fakeLBLister) LoadBalancers(namespace string) lbcflister.LoadBalancerNamespaceLister {
+	return l
+}
+
+type fakeDriverLister struct {
+	get  *lbcfapi.LoadBalancerDriver
+	list []*lbcfapi.LoadBalancerDriver
+}
+
+func (l *fakeDriverLister) Get(name string) (*lbcfapi.LoadBalancerDriver, error) {
+	if l.get == nil {
+		return nil, errors.NewNotFound(schema.GroupResource{
+			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Resource: "LoadBalancerDriver",
+		}, name)
+	}
+	return l.get, nil
+}
+
+func (l *fakeDriverLister) List(selector labels.Selector) (ret []*lbcfapi.LoadBalancerDriver, err error) {
+	return l.list, nil
+}
+
+func (l *fakeDriverLister) LoadBalancerDrivers(namespace string) lbcflister.LoadBalancerDriverNamespaceLister {
+	return l
+}
+
+type fakeBackendGroupLister struct {
+	get  *lbcfapi.BackendGroup
+	list []*lbcfapi.BackendGroup
+}
+
+func (l *fakeBackendGroupLister) Get(name string) (*lbcfapi.BackendGroup, error) {
+	if l.get == nil {
+		return nil, errors.NewNotFound(schema.GroupResource{
+			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Resource: "BackendGroup",
+		}, name)
+	}
+	return l.get, nil
+}
+
+func (l *fakeBackendGroupLister) BackendGroups(namespace string) lbcflister.BackendGroupNamespaceLister {
+	return l
+}
+
+func (l *fakeBackendGroupLister) List(selector labels.Selector) (ret []*lbcfapi.BackendGroup, err error) {
+	return l.list, nil
+}
+
+type fakeBackendLister struct {
+	get  *lbcfapi.BackendRecord
+	list []*lbcfapi.BackendRecord
+}
+
+func (l *fakeBackendLister) Get(name string) (*lbcfapi.BackendRecord, error) {
+	if l.get == nil {
+		return nil, errors.NewNotFound(schema.GroupResource{
+			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Resource: "BackendRecord",
+		}, name)
+	}
+	return l.get, nil
+}
+
+func (l *fakeBackendLister) List(selector labels.Selector) (ret []*lbcfapi.BackendRecord, err error) {
+	return l.list, nil
+}
+
+func (l *fakeBackendLister) BackendRecords(namespace string) lbcflister.BackendRecordNamespaceLister {
+	return l
+}
+
+type fakeSuccInvoker struct{}
+
+func (c *fakeSuccInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
+	return &webhooks.ValidateLoadBalancerResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: true,
+			Msg:  "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeSuccInvoker) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
+	return &webhooks.CreateLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusSucc,
+			Msg:    "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeSuccInvoker) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
+	return &webhooks.EnsureLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusSucc,
+			Msg:    "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeSuccInvoker) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
+	return &webhooks.DeleteLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusSucc,
+			Msg:    "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeSuccInvoker) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
+	return &webhooks.ValidateBackendResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: true,
+			Msg:  "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeSuccInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
+	return &webhooks.GenerateBackendAddrResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusSucc,
+			Msg:    "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeSuccInvoker) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusSucc,
+			Msg:    "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeSuccInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusSucc,
+			Msg:    "fake succ",
+		},
+	}, nil
+}
+
+type fakeFailInvoker struct{}
+
+func (c *fakeFailInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
+	return &webhooks.ValidateLoadBalancerResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: false,
+			Msg:  "fake fail",
+		},
+	}, nil
+}
+
+func (c *fakeFailInvoker) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
+	return &webhooks.CreateLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusFail,
+			Msg:    "fake fail",
+		},
+	}, nil
+}
+
+func (c *fakeFailInvoker) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
+	return &webhooks.EnsureLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusFail,
+			Msg:    "fake fail",
+		},
+	}, nil
+}
+
+func (c *fakeFailInvoker) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
+	return &webhooks.DeleteLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusFail,
+			Msg:    "fake fail",
+		},
+	}, nil
+}
+
+func (c *fakeFailInvoker) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
+	return &webhooks.ValidateBackendResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: false,
+			Msg:  "fake fail",
+		},
+	}, nil
+}
+
+func (c *fakeFailInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
+	return &webhooks.GenerateBackendAddrResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusFail,
+			Msg:    "fake fail",
+		},
+	}, nil
+}
+
+func (c *fakeFailInvoker) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusFail,
+			Msg:    "fake fail",
+		},
+	}, nil
+}
+
+func (c *fakeFailInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status: webhooks.StatusFail,
+			Msg:    "fake fail",
+		},
+	}, nil
+}
+
+func drainingDriverLister() lbcflister.LoadBalancerDriverLister {
+	return &fakeDriverLister{
+		get: &lbcfapi.LoadBalancerDriver{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-driver",
+				Labels: map[string]string{
+					lbcfapi.DriverDrainingLabel: "True",
+				},
+			},
+		},
+	}
+}
+
+func deletingDriverLister() lbcflister.LoadBalancerDriverLister {
+	ts := metav1.Now()
+	return &fakeDriverLister{
+		get: &lbcfapi.LoadBalancerDriver{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-driver",
+				DeletionTimestamp: &ts,
+			},
+		},
+	}
 }
