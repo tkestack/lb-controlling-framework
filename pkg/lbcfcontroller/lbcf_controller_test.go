@@ -1112,3 +1112,83 @@ func deletingDriverLister() lbcflister.LoadBalancerDriverLister {
 		},
 	}
 }
+
+type fakeAsyncInvoker struct{}
+
+func (c *fakeAsyncInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
+	return &webhooks.ValidateLoadBalancerResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: true,
+			Msg:  "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeAsyncInvoker) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
+	return &webhooks.CreateLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 webhooks.StatusRunning,
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeAsyncInvoker) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
+	return &webhooks.EnsureLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 webhooks.StatusRunning,
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeAsyncInvoker) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
+	return &webhooks.DeleteLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 webhooks.StatusRunning,
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeAsyncInvoker) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
+	return &webhooks.ValidateBackendResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: true,
+			Msg:  "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeAsyncInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
+	return &webhooks.GenerateBackendAddrResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 webhooks.StatusRunning,
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeAsyncInvoker) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 webhooks.StatusRunning,
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeAsyncInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 webhooks.StatusRunning,
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}

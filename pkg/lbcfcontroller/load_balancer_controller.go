@@ -236,9 +236,14 @@ func (c *LoadBalancerController) setOperationFailed(lb *lbcfapi.LoadBalancer, rs
 
 func (c *LoadBalancerController) setOperationRunning(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	cpy := lb.DeepCopy()
+	// running operation keeps Status field intact, but updates the Reason and Message field
+	status := lbcfapi.ConditionFalse
+	if curCondition := util.GetLBCondition(&lb.Status, cType); curCondition != nil {
+		status = curCondition.Status
+	}
 	util.AddLBCondition(&cpy.Status, lbcfapi.LoadBalancerCondition{
 		Type:               cType,
-		Status:             lbcfapi.ConditionFalse,
+		Status:             status,
 		LastTransitionTime: v1.Now(),
 		Reason:             lbcfapi.ReasonOperationInProgress.String(),
 		Message:            rsp.Msg,
