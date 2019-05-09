@@ -567,6 +567,10 @@ func PeriodicResult(period time.Duration) *SyncResult {
 	return &SyncResult{periodicOperation: true, minResyncPeriod: period}
 }
 
+func (s *SyncResult) IsSucc() bool {
+	return s.err == nil && !s.operationFailed && !s.asyncOperation && !s.periodicOperation
+}
+
 func (s *SyncResult) IsError() bool {
 	return s.err != nil
 }

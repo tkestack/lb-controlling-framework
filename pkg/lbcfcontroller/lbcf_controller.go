@@ -120,6 +120,10 @@ func (c *Controller) run() {
 }
 
 func (c *Controller) enqueue(obj interface{}, queue workqueue.RateLimitingInterface) {
+	if _, ok := obj.(string); ok {
+		queue.Add(obj)
+		return
+	}
 	key, err := controller.KeyFunc(obj)
 	if err != nil {
 		klog.Errorf("enqueue failed: %v", err)
@@ -179,7 +183,7 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 func (c *Controller) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	for key := range c.backendGroupCtrl.getBackendGroupsForPod(pod) {
-		c.backendGroupQueue.Add(key)
+		c.enqueue(key, c.backendGroupQueue)
 	}
 }
 
@@ -195,7 +199,7 @@ func (c *Controller) updatePod(old, cur interface{}) {
 		groups := c.backendGroupCtrl.getBackendGroupsForPod(curPod)
 		groups = util.DetermineNeededBackendGroupUpdates(oldGroups, groups, statusChanged)
 		for key := range groups {
-			c.backendGroupQueue.Add(key)
+			c.enqueue(key, c.backendGroupQueue)
 		}
 	}
 }
@@ -275,7 +279,7 @@ func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 	}
 	c.enqueue(curObj, c.loadBalancerQueue)
 	for key := range c.backendGroupCtrl.getBackendGroupsForLoadBalancer(curObj) {
-		c.backendGroupQueue.Add(key)
+		c.enqueue(key, c.backendGroupQueue)
 	}
 }
 
