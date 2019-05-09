@@ -241,8 +241,8 @@ func (c *Controller) updateBackendGroup(old, cur interface{}) {
 }
 
 func (c *Controller) deleteBackendGroup(obj interface{}) {
-	if _, ok := obj.(*v1beta1.BackendGroup); !ok {
-		c.addBackendRecord(obj)
+	if _, ok := obj.(*v1beta1.BackendGroup); ok {
+		c.addBackendGroup(obj)
 		return
 	}
 	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -267,7 +267,7 @@ func (c *Controller) addLoadBalancer(obj interface{}) {
 }
 
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
-	oldObj := cur.(*v1beta1.LoadBalancer)
+	oldObj := old.(*v1beta1.LoadBalancer)
 	curObj := cur.(*v1beta1.LoadBalancer)
 
 	if oldObj.ResourceVersion == curObj.ResourceVersion {
@@ -303,7 +303,7 @@ func (c *Controller) addLoadBalancerDriver(obj interface{}) {
 
 func (c *Controller) updateLoadBalancerDriver(old, cur interface{}) {
 	oldDriver := old.(*v1beta1.LoadBalancerDriver)
-	curDriver := old.(*v1beta1.LoadBalancerDriver)
+	curDriver := cur.(*v1beta1.LoadBalancerDriver)
 	if oldDriver.ResourceVersion == curDriver.ResourceVersion {
 		return
 	}
@@ -325,7 +325,7 @@ func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {
 		klog.Errorf("Tombstone contained object that is not a LoadBalancerDriver: %#v", obj)
 		return
 	}
-	c.driverQueue.Add(driver)
+	c.addLoadBalancerDriver(driver)
 }
 
 func (c *Controller) addBackendRecord(obj interface{}) {
@@ -333,7 +333,7 @@ func (c *Controller) addBackendRecord(obj interface{}) {
 }
 
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
-	oldObj := cur.(*v1beta1.BackendRecord)
+	oldObj := old.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
 
 	if oldObj.ResourceVersion == curObj.ResourceVersion {
@@ -357,5 +357,5 @@ func (c *Controller) deleteBackendRecord(obj interface{}) {
 		klog.Errorf("Tombstone contained object that is not a BackendRecord: %#v", obj)
 		return
 	}
-	c.backendQueue.Add(backend)
+	c.addBackendRecord(backend)
 }
