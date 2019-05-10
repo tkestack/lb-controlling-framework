@@ -29,6 +29,7 @@ import (
 
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8slabel "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
@@ -143,6 +144,15 @@ func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 	if !found {
 		lbStatus.Conditions = append(lbStatus.Conditions, expectCondition)
 	}
+}
+
+func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus, conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {
+	for i := range status.Conditions {
+		if status.Conditions[i].Type == conditionType {
+			return &status.Conditions[i]
+		}
+	}
+	return nil
 }
 
 func AddBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition lbcfapi.BackendRecordCondition) {
@@ -422,6 +432,42 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAd
 	return ret
 }
 
+func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, podName string) *lbcfapi.BackendRecord {
+	valueTrue := true
+	return &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      MakeBackendName(lb.Name, group.Name, podName, group.Spec.Pods.Port),
+			Namespace: group.Namespace,
+			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", podName, ""),
+			Finalizers: []string{
+				lbcfapi.FinalizerDeregisterBackend,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         lbcfapi.ApiVersion,
+					BlockOwnerDeletion: &valueTrue,
+					Controller:         &valueTrue,
+					Kind:               "BackendGroup",
+					Name:               group.Name,
+					UID:                group.UID,
+				},
+			},
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:       lb.Name,
+			LBDriver:     lb.Spec.LBDriver,
+			LBInfo:       lb.Status.LBInfo,
+			LBAttributes: lb.Spec.Attributes,
+			PodBackendInfo: &lbcfapi.PodBackendRecord{
+				Name: podName,
+				Port: group.Spec.Pods.Port,
+			},
+			Parameters:   group.Spec.Parameters,
+			EnsurePolicy: group.Spec.EnsurePolicy,
+		},
+	}
+}
+
 func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendRecord) bool {
 	if !MapEqual(curObj.Spec.LBAttributes, expectObj.Spec.LBAttributes) {
 		return true
@@ -575,7 +621,7 @@ func PeriodicResult(period time.Duration) *SyncResult {
 }
 
 func (s *SyncResult) IsSucc() bool {
-	return s.err == nil && !s.operationFailed && !s.asyncOperation
+	return !s.IsError() && !s.IsFailed() && !s.IsRunning()
 }
 
 func (s *SyncResult) IsError() bool {
@@ -586,7 +632,7 @@ func (s *SyncResult) IsFailed() bool {
 	return s.operationFailed
 }
 
-func (s *SyncResult) IsAsync() bool {
+func (s *SyncResult) IsRunning() bool {
 	return s.asyncOperation
 }
 

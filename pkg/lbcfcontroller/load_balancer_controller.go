@@ -73,7 +73,7 @@ func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
 
 	if !util.LBCreated(lb) {
 		result, latest := c.createLoadBalancer(lb)
-		if result.IsError() || result.IsFailed() || result.IsAsync() {
+		if result.IsError() || result.IsFailed() || result.IsRunning() {
 			return result
 		}
 		lb = latest
@@ -236,7 +236,7 @@ func (c *LoadBalancerController) setOperationFailed(lb *lbcfapi.LoadBalancer, rs
 
 func (c *LoadBalancerController) setOperationRunning(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) (*util.SyncResult, *lbcfapi.LoadBalancer) {
 	cpy := lb.DeepCopy()
-	// running operation keeps Status field intact, but updates the Reason and Message field
+	// running operation only updates condition's Reason and Message field
 	status := lbcfapi.ConditionFalse
 	if curCondition := util.GetLBCondition(&lb.Status, cType); curCondition != nil {
 		status = curCondition.Status

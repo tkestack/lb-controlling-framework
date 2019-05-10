@@ -92,10 +92,10 @@ func TestLoadBalancerCreateRunning(t *testing.T) {
 		&fakeDriverLister{
 			get: driver,
 		},
-		&fakeAsyncInvoker{})
+		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsAsync() {
+	if !result.IsRunning() {
 		t.Fatalf("expect running, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
@@ -218,10 +218,10 @@ func TestLoadBalancerEnsureRunningWithPreviousEnsured(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeAsyncInvoker{})
+		}, &fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsAsync() {
+	if !result.IsRunning() {
 		t.Fatalf("expect async, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
@@ -429,10 +429,10 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeAsyncInvoker{})
+		}, &fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsAsync() {
+	if !result.IsRunning() {
 		t.Fatalf("expect async, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
@@ -557,7 +557,7 @@ func TestLoadBalancerSetOperationRunning(t *testing.T) {
 		MinRetryDelayInSeconds: 1029,
 	}
 	result, get := ctrl.setOperationRunning(lb, rsp, lbcfapi.LBEnsured)
-	if !result.IsAsync() {
+	if !result.IsRunning() {
 		t.Fatalf("expect async result, get %#v", result)
 	} else if get == nil {
 		t.Fatalf("expect latest Loadbalancer, get nil")

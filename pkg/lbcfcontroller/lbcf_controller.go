@@ -111,12 +111,10 @@ func (c *Controller) Start() {
 
 func (c *Controller) run() {
 	c.context.WaitForCacheSync()
-	for i := 0; i < 10; i++ {
-		go wait.Until(c.lbWorker, time.Second, wait.NeverStop)
-		go wait.Until(c.driverWorker, time.Second, wait.NeverStop)
-		go wait.Until(c.backendGroupWorker, time.Second, wait.NeverStop)
-		go wait.Until(c.backendWorker, time.Second, wait.NeverStop)
-	}
+	go wait.Until(c.lbWorker, time.Second, wait.NeverStop)
+	go wait.Until(c.driverWorker, time.Second, wait.NeverStop)
+	go wait.Until(c.backendGroupWorker, time.Second, wait.NeverStop)
+	go wait.Until(c.backendWorker, time.Second, wait.NeverStop)
 }
 
 func (c *Controller) enqueue(obj interface{}, queue workqueue.RateLimitingInterface) {
@@ -167,7 +165,7 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 		} else if result.IsFailed() {
 			klog.Infof("sync key %s, failed", key)
 			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
-		} else if result.IsAsync() {
+		} else if result.IsRunning() {
 			klog.Infof("sync key %s, async", key)
 			queue.Forget(key)
 			queue.AddIntervalRateLimited(key, result.GetRetryDelay())

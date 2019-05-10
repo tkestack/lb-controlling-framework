@@ -19,8 +19,6 @@ package lbcfcontroller
 import (
 	"fmt"
 
-	"k8s.io/klog"
-
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
@@ -32,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
 )
 
 func NewBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *BackendController {
@@ -71,31 +70,34 @@ func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
 		if !util.HasFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend) {
 			return util.SuccResult()
 		}
-		return c.deregisterBackend(backend)
+		result, _ := c.deregisterBackend(backend)
+		return result
 	}
 
 	if backend.Status.BackendAddr == "" {
-		result := c.generateBackendAddr(backend)
-		if result.IsError() || result.IsFailed() || result.IsAsync() {
+		result, latest := c.generateBackendAddr(backend)
+		if result.IsError() || result.IsFailed() || result.IsRunning() {
 			return result
 		}
+		backend = latest
 	}
 	if util.BackendNeedEnsure(backend) {
-		return c.ensureBackend(backend)
+		result, _ := c.ensureBackend(backend)
+		return result
 	}
 	return util.SuccResult()
 }
 
-func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {
+func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) (*util.SyncResult, *lbcfapi.BackendRecord) {
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err)), backend
 	}
 
 	if backend.Spec.PodBackendInfo != nil {
 		pod, err := c.podLister.Pods(backend.Namespace).Get(backend.Spec.PodBackendInfo.Name)
 		if err != nil {
-			return util.ErrorResult(err)
+			return util.ErrorResult(err), backend
 		}
 		req := &webhooks.GenerateBackendAddrRequest{
 			RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -109,7 +111,7 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		}
 		rsp, err := c.webhookInvoker.CallGenerateBackendAddr(driver, req)
 		if err != nil {
-			return util.ErrorResult(err)
+			return util.ErrorResult(err), backend
 		}
 		switch rsp.Status {
 		case webhooks.StatusSucc:
@@ -123,10 +125,9 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 			})
 			latest, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
 			if err != nil {
-				return util.ErrorResult(err)
+				return util.ErrorResult(err), backend
 			}
-			*backend = *latest
-			return util.SuccResult()
+			return util.SuccResult(), latest
 		case webhooks.StatusFail:
 			return c.setOperationFailed(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendAddrGenerated)
 		case webhooks.StatusRunning:
@@ -136,13 +137,13 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		}
 	}
 	// TODO: generateBackendAddr for service backend
-	return util.SuccResult()
+	return util.SuccResult(), backend
 }
 
-func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) (*util.SyncResult, *lbcfapi.BackendRecord) {
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err)), backend
 	}
 
 	req := &webhooks.BackendOperationRequest{
@@ -157,7 +158,7 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 	}
 	rsp, err := c.webhookInvoker.CallEnsureBackend(driver, req)
 	if err != nil {
-		return util.ErrorResult(err)
+		return util.ErrorResult(err), backend
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
@@ -165,14 +166,14 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		if len(rsp.InjectedInfo) > 0 {
 			cpy.Status.InjectedInfo = rsp.InjectedInfo
 		}
-		result := c.setOperationSucc(cpy, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
+		result, latest := c.setOperationSucc(cpy, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
 		if result.IsError() {
-			return result
+			return result, backend
 		}
 		if cpy.Spec.EnsurePolicy != nil && cpy.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
-			return util.PeriodicResult(util.GetDuration(cpy.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
+			return util.PeriodicResult(util.GetDuration(cpy.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod)), latest
 		}
-		return util.SuccResult()
+		return util.SuccResult(), latest
 	case webhooks.StatusFail:
 		return c.setOperationFailed(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
 	case webhooks.StatusRunning:
@@ -182,14 +183,14 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 	}
 }
 
-func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) (*util.SyncResult, *lbcfapi.BackendRecord) {
 	if backend.Status.BackendAddr == "" {
-		return util.SuccResult()
+		return util.SuccResult(), backend
 	}
 
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err)), backend
 	}
 	req := &webhooks.BackendOperationRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -203,7 +204,7 @@ func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	}
 	rsp, err := c.webhookInvoker.CallDeregisterBackend(driver, req)
 	if err != nil {
-		return util.ErrorResult(err)
+		return util.ErrorResult(err), backend
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
@@ -220,15 +221,18 @@ func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 			Status:             lbcfapi.ConditionTrue,
 			LastTransitionTime: v1.Now(),
 		})
-		latest, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+		statusUpdated, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
 		if err != nil {
-			return util.ErrorResult(err)
+			return util.ErrorResult(err), backend
 		}
-		latest.Finalizers = util.RemoveFinalizer(latest.Finalizers, lbcfapi.FinalizerDeregisterBackend)
-		if _, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).Update(latest); err != nil {
-			return util.ErrorResult(err)
+
+		cpy = statusUpdated.DeepCopy()
+		cpy.Finalizers = util.RemoveFinalizer(cpy.Finalizers, lbcfapi.FinalizerDeregisterBackend)
+		latest, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).Update(cpy)
+		if err != nil {
+			return util.ErrorResult(err), statusUpdated
 		}
-		return &util.SyncResult{}
+		return &util.SyncResult{}, latest
 	case webhooks.StatusFail:
 		return c.setOperationFailed(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendReadyToDelete)
 	case webhooks.StatusRunning:
@@ -238,7 +242,7 @@ func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	}
 }
 
-func (c *BackendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *BackendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) (*util.SyncResult, *lbcfapi.BackendRecord) {
 	cpy := backend.DeepCopy()
 	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
 		Type:               cType,
@@ -246,13 +250,14 @@ func (c *BackendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp
 		LastTransitionTime: v1.Now(),
 		Message:            rsp.Msg,
 	})
-	if _, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
+	latest, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+	if err != nil {
+		return util.ErrorResult(err), backend
 	}
-	return util.SuccResult()
+	return util.SuccResult(), latest
 }
 
-func (c *BackendController) setOperationFailed(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *BackendController) setOperationFailed(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) (*util.SyncResult, *lbcfapi.BackendRecord) {
 	cpy := backend.DeepCopy()
 	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
 		Type:               cType,
@@ -261,29 +266,36 @@ func (c *BackendController) setOperationFailed(backend *lbcfapi.BackendRecord, r
 		Reason:             lbcfapi.ReasonOperationFailed.String(),
 		Message:            rsp.Msg,
 	})
-	if _, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
+	latest, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+	if err != nil {
+		return util.ErrorResult(err), backend
 	}
-	return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+	return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)), latest
 }
 
-func (c *BackendController) setOperationRunning(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *BackendController) setOperationRunning(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) (*util.SyncResult, *lbcfapi.BackendRecord) {
 	cpy := backend.DeepCopy()
+	// running operation only updates condition's Reason and Message field
+	status := lbcfapi.ConditionFalse
+	if curCondition := util.GetBackendRecordCondition(&backend.Status, cType); curCondition != nil {
+		status = curCondition.Status
+	}
 	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
 		Type:               cType,
-		Status:             lbcfapi.ConditionFalse,
+		Status:             status,
 		LastTransitionTime: v1.Now(),
 		Reason:             lbcfapi.ReasonOperationInProgress.String(),
 		Message:            rsp.Msg,
 	})
-	if _, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
+	latest, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+	if err != nil {
+		return util.ErrorResult(err), backend
 	}
 	delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
-	return util.AsyncResult(delay)
+	return util.AsyncResult(delay), latest
 }
 
-func (c *BackendController) setOperationInvalidResponse(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *BackendController) setOperationInvalidResponse(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) (*util.SyncResult, *lbcfapi.BackendRecord) {
 	cpy := backend.DeepCopy()
 	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
 		Type:               cType,
@@ -292,8 +304,9 @@ func (c *BackendController) setOperationInvalidResponse(backend *lbcfapi.Backend
 		Reason:             lbcfapi.ReasonInvalidResponse.String(),
 		Message:            fmt.Sprintf("unknown status %q, msg: %s", rsp.Status, rsp.Msg),
 	})
-	if _, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy); err != nil {
-		return util.ErrorResult(err)
+	latest, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+	if err != nil {
+		return util.ErrorResult(err), backend
 	}
-	return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
+	return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status)), latest
 }

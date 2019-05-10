@@ -1431,7 +1431,7 @@ func TestSyncResult(t *testing.T) {
 		t.Fatalf("expect fail")
 	}
 
-	if !AsyncResult(5 * time.Second).IsAsync() {
+	if !AsyncResult(5 * time.Second).IsRunning() {
 		t.Fatalf("expect async")
 	}
 

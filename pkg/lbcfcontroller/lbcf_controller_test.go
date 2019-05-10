@@ -993,6 +993,7 @@ func (c *fakeSuccInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDr
 			Status: webhooks.StatusSucc,
 			Msg:    "fake succ",
 		},
+		BackendAddr: "fake.backend.addr.com:1234",
 	}, nil
 }
 
@@ -1113,9 +1114,9 @@ func deletingDriverLister() lbcflister.LoadBalancerDriverLister {
 	}
 }
 
-type fakeAsyncInvoker struct{}
+type fakeRunningInvoker struct{}
 
-func (c *fakeAsyncInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
+func (c *fakeRunningInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
 	return &webhooks.ValidateLoadBalancerResponse{
 		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
 			Succ: true,
@@ -1124,7 +1125,7 @@ func (c *fakeAsyncInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancer
 	}, nil
 }
 
-func (c *fakeAsyncInvoker) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
+func (c *fakeRunningInvoker) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
 	return &webhooks.CreateLoadBalancerResponse{
 		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
 			Status:                 webhooks.StatusRunning,
@@ -1134,7 +1135,7 @@ func (c *fakeAsyncInvoker) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDr
 	}, nil
 }
 
-func (c *fakeAsyncInvoker) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
+func (c *fakeRunningInvoker) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
 	return &webhooks.EnsureLoadBalancerResponse{
 		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
 			Status:                 webhooks.StatusRunning,
@@ -1144,7 +1145,7 @@ func (c *fakeAsyncInvoker) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDr
 	}, nil
 }
 
-func (c *fakeAsyncInvoker) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
+func (c *fakeRunningInvoker) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
 	return &webhooks.DeleteLoadBalancerResponse{
 		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
 			Status:                 webhooks.StatusRunning,
@@ -1154,7 +1155,7 @@ func (c *fakeAsyncInvoker) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDr
 	}, nil
 }
 
-func (c *fakeAsyncInvoker) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
+func (c *fakeRunningInvoker) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
 	return &webhooks.ValidateBackendResponse{
 		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
 			Succ: true,
@@ -1163,7 +1164,7 @@ func (c *fakeAsyncInvoker) CallValidateBackend(driver *lbcfapi.LoadBalancerDrive
 	}, nil
 }
 
-func (c *fakeAsyncInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
+func (c *fakeRunningInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
 	return &webhooks.GenerateBackendAddrResponse{
 		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
 			Status:                 webhooks.StatusRunning,
@@ -1173,7 +1174,7 @@ func (c *fakeAsyncInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerD
 	}, nil
 }
 
-func (c *fakeAsyncInvoker) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+func (c *fakeRunningInvoker) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
 	return &webhooks.BackendOperationResponse{
 		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
 			Status:                 webhooks.StatusRunning,
@@ -1183,7 +1184,7 @@ func (c *fakeAsyncInvoker) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver,
 	}, nil
 }
 
-func (c *fakeAsyncInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+func (c *fakeRunningInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
 	return &webhooks.BackendOperationResponse{
 		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
 			Status:                 webhooks.StatusRunning,

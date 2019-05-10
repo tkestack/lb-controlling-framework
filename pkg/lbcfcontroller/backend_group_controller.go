@@ -192,6 +192,7 @@ func (c *BackendGroupController) getBackendGroupsForLoadBalancer(lb *lbcfapi.Loa
 	return set
 }
 
+// TODO: move this to util?
 func (c *BackendGroupController) constructRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, podName string) *lbcfapi.BackendRecord {
 	valueTrue := true
 	return &lbcfapi.BackendRecord{
