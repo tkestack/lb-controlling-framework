@@ -34,6 +34,7 @@ func NewServer() *cobra.Command {
 
 		Run: func(cmd *cobra.Command, args []string) {
 			context := context.NewContext(cfg)
+			context.Start()
 			context.WaitForCacheSync()
 
 			admit.NewAdmitServer(context, cfg.ServerCrt, cfg.ServerKey).Start()

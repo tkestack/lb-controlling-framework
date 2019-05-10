@@ -69,6 +69,11 @@ type Context struct {
 	BRInformer       v1beta1.BackendRecordInformer
 }
 
+func (c *Context) Start() {
+	c.K8sFactory.Start(wait.NeverStop)
+	c.LbcfFactory.Start(wait.NeverStop)
+}
+
 func (c *Context) WaitForCacheSync() {
 	c.K8sFactory.WaitForCacheSync(wait.NeverStop)
 	c.LbcfFactory.WaitForCacheSync(wait.NeverStop)

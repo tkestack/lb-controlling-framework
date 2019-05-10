@@ -17,8 +17,11 @@
 package lbcfcontroller
 
 import (
+	"fmt"
+	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/controller"
 	"strings"
 	"testing"
@@ -721,6 +724,123 @@ func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendQueue.Done(key)
+}
+
+func TestLBCFControllerProcessNextItemSucc(t *testing.T) {
+	ctrl := &Controller{}
+	q := util.NewIntervalRateLimitingQueue(
+		workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
+			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		), "name", time.Second)
+	obj := newFakeDriver("", "driver")
+	ctrl.enqueue(obj, q)
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+		return util.SuccResult()
+	})
+	select {
+	case <-time.NewTimer(2 * time.Second).C:
+	case <-func() chan struct{} {
+		ch := make(chan struct{})
+		go func() {
+			q.Get()
+			close(ch)
+		}()
+		return ch
+	}():
+		t.Fatalf("expect get nothing")
+	}
+}
+
+func TestLBCFControllerProcessNextItemError(t *testing.T) {
+	ctrl := &Controller{}
+	q := util.NewIntervalRateLimitingQueue(
+		workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
+			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		), "name", time.Second)
+
+	ctrl.enqueue("key", q)
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+		return util.ErrorResult(fmt.Errorf("fake error"))
+	})
+	if get, done := q.Get(); done {
+		t.Fatalf("failed to get queue elements")
+	} else if key, ok := get.(string); !ok {
+		t.Fatalf("not a string")
+	} else if key != "key" {
+		t.Fatalf("expect key %q, get %q", "key", key)
+	}
+
+}
+
+func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
+	ctrl := &Controller{}
+	q := util.NewIntervalRateLimitingQueue(
+		workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
+			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		), "name", time.Second)
+
+	obj := newFakeDriver("", "driver")
+	key, _ := controller.KeyFunc(obj)
+
+	ctrl.enqueue(obj, q)
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+		return util.FailResult(500 * time.Millisecond)
+	})
+	if get, done := q.Get(); done {
+		t.Fatalf("failed to get queue elements")
+	} else if get != key {
+		t.Fatalf("expect key %q, get %q", key, get)
+	}
+}
+
+func TestLBCFControllerProcessNextItemRunning(t *testing.T) {
+	ctrl := &Controller{}
+	q := util.NewIntervalRateLimitingQueue(
+		workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
+			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		), "name", time.Second)
+	obj := newFakeDriver("", "driver")
+	key, _ := controller.KeyFunc(obj)
+
+	ctrl.enqueue(obj, q)
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+		return util.AsyncResult(500 * time.Millisecond)
+	})
+	if get, done := q.Get(); done {
+		t.Fatalf("failed to get queue elements")
+	} else if get != key {
+		t.Fatalf("expect key %q, get %q", key, get)
+	}
+}
+
+func TestLBCFControllerProcessNextItemPeriodic(t *testing.T) {
+	ctrl := &Controller{}
+	q := util.NewIntervalRateLimitingQueue(
+		workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
+			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		), "name", time.Second)
+	obj := newFakeDriver("", "driver")
+	key, _ := controller.KeyFunc(obj)
+
+	ctrl.enqueue(obj, q)
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+		return util.PeriodicResult(500 * time.Millisecond)
+	})
+	if get, done := q.Get(); done {
+		t.Fatalf("failed to get queue elements")
+	} else if get != key {
+		t.Fatalf("expect key %q, get %q", key, get)
+	}
 }
 
 func newFakeBackendRecord(namespace, name string) *lbcfapi.BackendRecord {

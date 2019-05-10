@@ -18,7 +18,7 @@ package util
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +27,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestPodAvailable(t *testing.T) {
@@ -778,7 +779,7 @@ func TestMapEqual(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if get := MapEqual(c.m1, c.m2); get != c.expect {
+		if get := reflect.DeepEqual(c.m1, c.m2); get != c.expect {
 			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
 		}
 	}
@@ -960,7 +961,7 @@ func TestMakeBackendLabels(t *testing.T) {
 		lbcfapi.LabelServiceName: svcName,
 		lbcfapi.LabelStaticAddr:  statidAddr,
 	}
-	if !MapEqual(get, expect) {
+	if !reflect.DeepEqual(get, expect) {
 		t.Fatalf("expect %v, get %v", expect, get)
 	}
 }

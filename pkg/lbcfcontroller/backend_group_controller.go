@@ -28,7 +28,6 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1 "k8s.io/client-go/listers/core/v1"
@@ -75,6 +74,7 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	}
 
 	if group.DeletionTimestamp != nil {
+		// BackendGroups will be deleted by K8S GC
 		return util.SuccResult()
 	}
 
@@ -109,7 +109,6 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 				if errors.IsNotFound(err) {
 					continue
 				} else if err != nil {
-					// TODO: log
 					continue
 				}
 				pods = append(pods, pod)
@@ -123,26 +122,38 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 
 		var expectedRecords []*lbcfapi.BackendRecord
 		for _, pod := range util.FilterPods(pods, util.PodAvailable) {
-			record := c.constructRecord(lb, group, pod.Name)
+			record := util.ConstructBackendRecord(lb, group, pod.Name)
 			expectedRecords = append(expectedRecords, record)
 		}
 		needCreate, needUpdate, needDelete := util.CompareBackendRecords(expectedRecords, existingRecords)
 		var errs util.ErrorList
 		if err := util.IterateBackends(needDelete, c.deleteBackendRecord); err != nil {
-			// TODO: log
 			errs = append(errs, err)
 		}
 		if err := util.IterateBackends(needUpdate, c.updateBackendRecord); err != nil {
-			// TODO: log
 			errs = append(errs, err)
 		}
 		if err := util.IterateBackends(needCreate, c.createBackendRecord); err != nil {
-			// TODO: log
 			errs = append(errs, err)
 		}
 		if len(errs) > 0 {
 			return util.ErrorResult(errs)
 		}
+
+		// update status
+		cpy := group.DeepCopy()
+		cpy.Status.Backends = int32(len(expectedRecords))
+		var registeredCnt int32
+		for _, r := range existingRecords {
+			if util.BackendRegistered(r) {
+				registeredCnt++
+			}
+		}
+		cpy.Status.RegisteredBackends = registeredCnt
+		if _, err := c.client.LbcfV1beta1().BackendGroups(group.Namespace).UpdateStatus(cpy); err != nil {
+			return util.ErrorResult(err)
+		}
+		return util.SuccResult()
 	}
 	return util.SuccResult()
 }
@@ -192,43 +203,6 @@ func (c *BackendGroupController) getBackendGroupsForLoadBalancer(lb *lbcfapi.Loa
 	return set
 }
 
-// TODO: move this to util?
-func (c *BackendGroupController) constructRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, podName string) *lbcfapi.BackendRecord {
-	valueTrue := true
-	return &lbcfapi.BackendRecord{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.MakeBackendName(lb.Name, group.Name, podName, group.Spec.Pods.Port),
-			Namespace: group.Namespace,
-			Labels:    util.MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", podName, ""),
-			Finalizers: []string{
-				lbcfapi.FinalizerDeregisterBackend,
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         lbcfapi.ApiVersion,
-					BlockOwnerDeletion: &valueTrue,
-					Controller:         &valueTrue,
-					Kind:               "BackendGroup",
-					Name:               group.Name,
-					UID:                group.UID,
-				},
-			},
-		},
-		Spec: lbcfapi.BackendRecordSpec{
-			LBName:       lb.Name,
-			LBDriver:     lb.Spec.LBDriver,
-			LBInfo:       lb.Status.LBInfo,
-			LBAttributes: lb.Spec.Attributes,
-			PodBackendInfo: &lbcfapi.PodBackendRecord{
-				Name: podName,
-				Port: group.Spec.Pods.Port,
-			},
-			Parameters:   group.Spec.Parameters,
-			EnsurePolicy: group.Spec.EnsurePolicy,
-		},
-	}
-}
-
 func (c *BackendGroupController) createBackendRecord(record *lbcfapi.BackendRecord) error {
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Create(record)
 	if err != nil {
@@ -263,7 +237,9 @@ func (c *BackendGroupController) deleteAllBackend(namespace, lbName, groupName s
 	}
 	var errList []error
 	for _, backend := range backends {
-		errList = append(errList, c.deleteBackendRecord(backend))
+		if err := c.deleteBackendRecord(backend); err != nil {
+			errList = append(errList, err)
+		}
 	}
 	if len(errList) > 0 {
 		var msg []string
@@ -281,15 +257,13 @@ func (c *BackendGroupController) listBackendRecords(namespace string, lbName str
 		lbcfapi.LabelGroupName: groupName,
 	}
 	selector := labels.SelectorFromSet(labels.Set(label))
-	list, err := c.client.LbcfV1beta1().BackendRecords(namespace).List(metav1.ListOptions{
-		LabelSelector: selector.String(),
-	})
+	list, err := c.brLister.BackendRecords(namespace).List(selector)
 	if err != nil {
 		return nil, err
 	}
 	var ret []*lbcfapi.BackendRecord
-	for i := range list.Items {
-		ret = append(ret, &list.Items[i])
+	for i := range list {
+		ret = append(ret, list[i])
 	}
 	return ret, nil
 }

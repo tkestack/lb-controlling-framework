@@ -249,30 +249,6 @@ func GetDuration(cfg *lbcfapi.Duration, defaultValue time.Duration) time.Duratio
 	return cfg.Duration
 }
 
-func MapEqual(a map[string]string, b map[string]string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if b[k] != v {
-			return false
-		}
-	}
-	return true
-}
-
-func sliceEqual(a []string, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func EnsurePolicyEqual(a *lbcfapi.EnsurePolicyConfig, b *lbcfapi.EnsurePolicyConfig) bool {
 	if a == b {
 		return true
@@ -305,12 +281,6 @@ func LoadBalancerNonStatusUpdated(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBa
 	if !reflect.DeepEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
 		return true
 	}
-	//if !MapEqual(old.Spec.Attributes, cur.Spec.Attributes) {
-	//	return true
-	//}
-	//if !EnsurePolicyEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
-	//	return true
-	//}
 	return false
 }
 
@@ -324,7 +294,7 @@ func BackendGroupNonStatusUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.Backen
 	if bgStaticUpdated(old, cur) {
 		return true
 	}
-	if !MapEqual(old.Spec.Parameters, cur.Spec.Parameters) {
+	if !reflect.DeepEqual(old.Spec.Parameters, cur.Spec.Parameters) {
 		return true
 	}
 	if !EnsurePolicyEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
@@ -339,53 +309,11 @@ func bgServiceUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool
 }
 
 func bgPodsUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
-	oldPods := old.Spec.Pods
-	curPods := cur.Spec.Pods
-
-	if oldPods == curPods {
-		return false
-	}
-	if oldPods == nil || curPods == nil {
-		return true
-	}
-	if oldPods.Port.PortNumber != curPods.Port.PortNumber {
-		return true
-	}
-	oldProto := "tcp"
-	if oldPods.Port.Protocol != nil {
-		oldProto = *oldPods.Port.Protocol
-	}
-	curProto := "tcp"
-	if curPods.Port.Protocol != nil {
-		curProto = *curPods.Port.Protocol
-	}
-	if oldProto != curProto {
-		return true
-	}
-	if oldPods.ByLabel != nil && curPods.ByLabel == nil {
-		return true
-	}
-	if curPods.ByLabel != nil && oldPods.ByLabel == nil {
-		return true
-	}
-	if oldPods.ByLabel != nil && curPods.ByLabel != nil {
-		if !MapEqual(oldPods.ByLabel.Selector, curPods.ByLabel.Selector) {
-			return true
-		}
-		if !sliceEqual(oldPods.ByLabel.Except, curPods.ByLabel.Except) {
-			return true
-		}
-		return false
-	}
-
-	if !sliceEqual(oldPods.ByName, curPods.ByName) {
-		return true
-	}
-	return false
+	return !reflect.DeepEqual(old.Spec.Pods, cur.Spec.Pods)
 }
 
 func bgStaticUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
-	if !sliceEqual(old.Spec.Static, cur.Spec.Static) {
+	if !reflect.DeepEqual(old.Spec.Static, cur.Spec.Static) {
 		return true
 	}
 	return false
@@ -469,10 +397,10 @@ func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGrou
 }
 
 func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendRecord) bool {
-	if !MapEqual(curObj.Spec.LBAttributes, expectObj.Spec.LBAttributes) {
+	if !reflect.DeepEqual(curObj.Spec.LBAttributes, expectObj.Spec.LBAttributes) {
 		return true
 	}
-	if !MapEqual(curObj.Spec.Parameters, expectObj.Spec.Parameters) {
+	if !reflect.DeepEqual(curObj.Spec.Parameters, expectObj.Spec.Parameters) {
 		return true
 	}
 	if !EnsurePolicyEqual(curObj.Spec.EnsurePolicy, expectObj.Spec.EnsurePolicy) {
@@ -568,23 +496,19 @@ func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.Back
 	return
 }
 
+func BackendRegistered(backend *lbcfapi.BackendRecord) bool {
+	cond := GetBackendRecordCondition(&backend.Status, lbcfapi.BackendRegistered)
+	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
+		return true
+	}
+	return false
+}
+
 func BackendNeedEnsure(backend *lbcfapi.BackendRecord) bool {
-	if !backendIsRegistered(backend) {
+	if !BackendRegistered(backend) {
 		return true
 	}
 	return backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
-}
-
-func backendIsRegistered(backend *lbcfapi.BackendRecord) bool {
-	for _, cond := range backend.Status.Conditions {
-		if cond.Type == lbcfapi.BackendRegistered {
-			if cond.Status == lbcfapi.ConditionTrue {
-				return true
-			}
-			return false
-		}
-	}
-	return false
 }
 
 type SyncFunc func(string) *SyncResult
