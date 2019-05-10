@@ -34,11 +34,12 @@ func NewServer() *cobra.Command {
 
 		Run: func(cmd *cobra.Command, args []string) {
 			context := context.NewContext(cfg)
-			context.Start()
-			context.WaitForCacheSync()
+			admitServer := admit.NewAdmitServer(context, cfg.ServerCrt, cfg.ServerKey)
+			lbcf := lbcfcontroller.NewController(context)
 
-			admit.NewAdmitServer(context, cfg.ServerCrt, cfg.ServerKey).Start()
-			lbcfcontroller.NewController(context).Start()
+			context.Start()
+			admitServer.Start()
+			lbcf.Start()
 
 			<-wait.NeverStop
 		},

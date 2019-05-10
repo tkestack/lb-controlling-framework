@@ -31,6 +31,7 @@ import (
 
 func NewAdmitServer(context *context.Context, crtFile string, keyFile string) *AdmitServer {
 	s := &AdmitServer{
+		context:      context,
 		admitWebhook: NewAdmitter(context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.BRInformer.Lister(), util.NewWebhookInvoker()),
 		crtFile:      crtFile,
 		keyFile:      keyFile,
@@ -39,6 +40,7 @@ func NewAdmitServer(context *context.Context, crtFile string, keyFile string) *A
 }
 
 type AdmitServer struct {
+	context      *context.Context
 	admitWebhook AdmitWebhook
 	crtFile      string
 	keyFile      string
@@ -65,6 +67,7 @@ func (s *AdmitServer) Start() {
 	restful.Add(ws)
 
 	go func() {
+		s.context.WaitForCacheSync()
 		klog.Fatal(http.ListenAndServeTLS(":443", s.crtFile, s.keyFile, nil))
 	}()
 }
