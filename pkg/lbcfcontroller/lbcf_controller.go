@@ -155,10 +155,11 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 	if quit {
 		return false
 	}
-	defer queue.Done(key)
 
 	go func() {
 		result := syncFunc(key.(string))
+		defer queue.Done(key)
+
 		if result.IsError() {
 			klog.Errorf("sync key %s, err: %v", key, result.GetError())
 			queue.AddRateLimited(key)

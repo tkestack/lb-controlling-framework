@@ -123,6 +123,18 @@ func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
 	return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
 }
 
+func LBReadyToDelete(lb *lbcfapi.LoadBalancer) bool {
+	cond := GetLBCondition(&lb.Status, lbcfapi.LBReadyToDelete)
+	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
+		return true
+	}
+	return false
+	//if !LBEnsured(lb) {
+	//	return true
+	//}
+	//return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
+}
+
 func GetLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
 	for i := range status.Conditions {
 		if status.Conditions[i].Type == conditionType {
@@ -144,6 +156,14 @@ func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 	if !found {
 		lbStatus.Conditions = append(lbStatus.Conditions, expectCondition)
 	}
+}
+
+func BackendRecordReadyToDelete(backend *lbcfapi.BackendRecord) bool {
+	cond := GetBackendRecordCondition(&backend.Status, lbcfapi.BackendReadyToDelete)
+	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
+		return true
+	}
+	return false
 }
 
 func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus, conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {

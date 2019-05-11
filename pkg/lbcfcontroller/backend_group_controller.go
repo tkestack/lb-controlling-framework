@@ -61,7 +61,6 @@ type BackendGroupController struct {
 }
 
 func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
-	klog.Infof("start syncBackendGroup %s", key)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)

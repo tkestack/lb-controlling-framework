@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
 )
 
 func NewDriverController(client lbcfclient.Interface, lister v1beta1.LoadBalancerDriverLister) *DriverController {
@@ -41,7 +40,6 @@ type DriverController struct {
 }
 
 func (c *DriverController) syncDriver(key string) *util.SyncResult {
-	klog.Infof("start syncDriver %s", key)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)
