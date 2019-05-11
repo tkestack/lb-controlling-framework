@@ -31,7 +31,7 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 )
 
-func TestBackendGenerateAddrAndEnsure(t *testing.T) {
+func TestBackendGenerateAddr(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
@@ -60,10 +60,6 @@ func TestBackendGenerateAddrAndEnsure(t *testing.T) {
 	addrCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated)
 	if addrCondition.Status != lbcfapi.ConditionTrue {
 		t.Fatalf("expect condition.status=true, get %s", addrCondition.Status)
-	}
-	ensureCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered)
-	if ensureCondition.Status != lbcfapi.ConditionTrue {
-		t.Fatalf("expect condition.status=true, get %s", ensureCondition.Status)
 	}
 }
 
@@ -393,8 +389,8 @@ func TestBackendDeregister(t *testing.T) {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if len(get.Finalizers) != 0 {
-		t.Fatalf("expect empty finalizers, get %#v", get.Finalizers)
+	if len(get.Finalizers) != 1 {
+		t.Fatalf("expect finalizer %v, get %#v", lbcfapi.FinalizerDeregisterBackend, get.Finalizers)
 	}
 	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); get.Status != lbcfapi.ConditionFalse {
 		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
@@ -444,6 +440,48 @@ func TestBackendDeregisterSkipped(t *testing.T) {
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsSucc() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	}
+}
+
+func TestBackendRemoveFinalizer(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+	backend.DeletionTimestamp = &ts
+	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
+	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+		Policy: lbcfapi.PolicyIfNotSucc,
+	}
+	backend.Status.BackendAddr = "fake.addr.com:1234"
+	readyToDelete := lbcfapi.BackendRecordCondition{
+		Type:               lbcfapi.BackendReadyToDelete,
+		Status:             lbcfapi.ConditionTrue,
+		LastTransitionTime: ts,
+	}
+	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{readyToDelete}
+
+	fakeClient := fake.NewSimpleClientset(backend)
+	ctrl := NewBackendController(
+		fakeClient,
+		&fakeBackendLister{
+			get: backend,
+		},
+		&fakeDriverLister{
+			get: newFakeDriver("", "driver"),
+		},
+		&fakePodLister{
+			get: newFakePod("", "pod=0", nil, true, false),
+		},
+		&fakeFailInvoker{})
+	key, _ := controller.KeyFunc(backend)
+	resp := ctrl.syncBackendRecord(key)
+	if !resp.IsSucc() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	}
+	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+	if len(get.Finalizers) != 0 {
+		t.Fatalf("expect empty finalizer, get %#v", get.Finalizers)
 	}
 }
 
@@ -580,7 +618,7 @@ func TestBackendSetInvalidOperation(t *testing.T) {
 		Status: "invalidStatus",
 		Msg:    "fake message",
 	}
-	result, _ := ctrl.setOperationInvalidResponse(backend, resp, lbcfapi.BackendAddrGenerated)
+	result := ctrl.setOperationInvalidResponse(backend, resp, lbcfapi.BackendAddrGenerated)
 	if !result.IsError() {
 		t.Fatalf("expect err result, get %#v", result)
 	}

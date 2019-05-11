@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"fmt"
+
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
@@ -65,13 +66,7 @@ func (c *LoadBalancerController) syncLB(key string) *util.SyncResult {
 			return util.SuccResult()
 		}
 		if util.LBReadyToDelete(lb) {
-			lb = lb.DeepCopy()
-			lb.Finalizers = util.RemoveFinalizer(lb.Finalizers, lbcfapi.FinalizerDeleteLB)
-			lb, err = c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Update(lb)
-			if err != nil {
-				return util.ErrorResult(err)
-			}
-			return util.SuccResult()
+			return c.removeFinalizer(lb)
 		}
 		return c.deleteLoadBalancer(lb)
 	}
@@ -211,6 +206,16 @@ func (c *LoadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	default:
 		return c.setOperationInvalidResponse(lb, rsp.ResponseForFailRetryHooks, lbcfapi.LBReadyToDelete)
 	}
+}
+
+func (c *LoadBalancerController) removeFinalizer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
+	lb = lb.DeepCopy()
+	lb.Finalizers = util.RemoveFinalizer(lb.Finalizers, lbcfapi.FinalizerDeleteLB)
+	lb, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Update(lb)
+	if err != nil {
+		return util.ErrorResult(err)
+	}
+	return util.SuccResult()
 }
 
 func (c *LoadBalancerController) setOperationFailed(lb *lbcfapi.LoadBalancer, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.LoadBalancerConditionType) *util.SyncResult {

@@ -69,13 +69,7 @@ func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
 			return util.SuccResult()
 		}
 		if util.BackendRecordReadyToDelete(backend) {
-			backend = backend.DeepCopy()
-			backend.Finalizers = util.RemoveFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend)
-			_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).Update(backend)
-			if err != nil {
-				return util.ErrorResult(err)
-			}
-			return util.SuccResult()
+			return c.removeFinalizer(backend)
 		}
 		return c.deregisterBackend(backend)
 	}
@@ -234,6 +228,16 @@ func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	default:
 		return c.setOperationInvalidResponse(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendReadyToDelete)
 	}
+}
+
+func (c *BackendController) removeFinalizer(backend *lbcfapi.BackendRecord) *util.SyncResult {
+	backend = backend.DeepCopy()
+	backend.Finalizers = util.RemoveFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend)
+	_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).Update(backend)
+	if err != nil {
+		return util.ErrorResult(err)
+	}
+	return util.SuccResult()
 }
 
 func (c *BackendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
