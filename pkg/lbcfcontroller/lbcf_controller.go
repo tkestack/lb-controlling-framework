@@ -25,6 +25,7 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -339,10 +340,16 @@ func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := old.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
 
-	if oldObj.ResourceVersion == curObj.ResourceVersion {
-		return
+	specChanged := oldObj.ResourceVersion != curObj.ResourceVersion
+	if specChanged {
+		c.enqueue(curObj, c.backendQueue)
 	}
-	c.enqueue(curObj, c.backendQueue)
+	statusChanged := util.BackendRegistered(oldObj) != util.BackendRegistered(curObj)
+	if statusChanged {
+		if controllerRef := metav1.GetControllerOf(curObj); controllerRef != nil {
+			c.enqueue(util.NamespacedNameKeyFunc(curObj.Namespace, controllerRef.Name), c.backendGroupQueue)
+		}
+	}
 }
 
 func (c *Controller) deleteBackendRecord(obj interface{}) {

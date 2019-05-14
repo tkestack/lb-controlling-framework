@@ -688,6 +688,49 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendQueue.Done(key)
+
+	if c.backendGroupQueue.Len() != 0 {
+		t.Fatalf("expect empty backendGroup queue, get %v", c.backendGroupQueue.Len())
+	}
+}
+
+func TestLBCFControllerUpdateBackendRecordStatus(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+	oldRecord := util.ConstructBackendRecord(lb, group, "pod-0")
+	curRecord := util.ConstructBackendRecord(lb, group, "pod-0")
+	curRecord.Status.BackendAddr = "fake.addr.com:80"
+	curRecord.Status.Conditions = []lbcfapi.BackendRecordCondition{
+		{
+			Type:   lbcfapi.BackendAddrGenerated,
+			Status: lbcfapi.ConditionTrue,
+		},
+		{
+			Type:   lbcfapi.BackendRegistered,
+			Status: lbcfapi.ConditionTrue,
+		},
+	}
+
+	backendCtrl := NewBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
+	c.updateBackendRecord(oldRecord, curRecord)
+
+	if c.backendQueue.Len() != 0 {
+		t.Fatalf("expect empty backend queue, get %d", c.backendQueue.Len())
+	}
+
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("expect backendgroup queue 1, get %d", c.backendGroupQueue.Len())
+	}
+	key, done := c.backendGroupQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(group); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(key)
 }
 
 func TestLBCFControllerDeleteBackendRecord(t *testing.T) {

@@ -28,10 +28,12 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -140,17 +142,19 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 		}
 
 		// update status
-		cpy := group.DeepCopy()
-		cpy.Status.Backends = int32(len(expectedRecords))
-		var registeredCnt int32
+		var expectRegistered int32
 		for _, r := range existingRecords {
 			if util.BackendRegistered(r) {
-				registeredCnt++
+				expectRegistered++
 			}
 		}
-		cpy.Status.RegisteredBackends = registeredCnt
-		if _, err := c.client.LbcfV1beta1().BackendGroups(group.Namespace).UpdateStatus(cpy); err != nil {
-			return util.ErrorResult(err)
+		if group.Status.Backends != int32(len(expectedRecords)) || expectRegistered != group.Status.RegisteredBackends {
+			group = group.DeepCopy()
+			group.Status.Backends = int32(len(expectedRecords))
+			group.Status.RegisteredBackends = expectRegistered
+			if err := c.updateStatus(group, &group.Status); err != nil {
+				return util.ErrorResult(err)
+			}
 		}
 		return util.SuccResult()
 	}
@@ -265,4 +269,20 @@ func (c *BackendGroupController) listBackendRecords(namespace string, lbName str
 		ret = append(ret, list[i])
 	}
 	return ret, nil
+}
+
+func (c *BackendGroupController) updateStatus(group *lbcfapi.BackendGroup, status *lbcfapi.BackendGroupStatus) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		group.Status = *status
+		_, updateErr := c.client.LbcfV1beta1().BackendGroups(group.Namespace).UpdateStatus(group)
+		if updateErr == nil {
+			return nil
+		}
+		if updated, err := c.client.LbcfV1beta1().BackendGroups(group.Namespace).Get(group.Name, metav1.GetOptions{}); err == nil {
+			group = updated
+		} else {
+			klog.Errorf("error getting updated BackendGroup %s/%s: %v", group.Namespace, group.Name, err)
+		}
+		return updateErr
+	})
 }
