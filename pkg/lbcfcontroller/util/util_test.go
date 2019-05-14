@@ -785,120 +785,6 @@ func TestMapEqual(t *testing.T) {
 	}
 }
 
-func TestResyncPolicyEqual(t *testing.T) {
-	type tc struct {
-		name   string
-		a      *lbcfapi.EnsurePolicyConfig
-		b      *lbcfapi.EnsurePolicyConfig
-		expect bool
-	}
-
-	cases := []tc{
-		{
-			name:   "nil-equal",
-			a:      nil,
-			b:      nil,
-			expect: true,
-		},
-		{
-			name: "IfNotSucc-equal",
-			a: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyIfNotSucc,
-			},
-			b: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyIfNotSucc,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: time.Second,
-				},
-			},
-			expect: true,
-		},
-		{
-			name: "always-equal",
-			a: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: 5 * time.Second,
-				},
-			},
-			b: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: 5 * time.Second,
-				},
-			},
-			expect: true,
-		},
-		{
-			name: "always-equal2",
-			a: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-			},
-			b: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-			},
-			expect: true,
-		},
-		{
-			name: "always-period-not-equal",
-			a: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-			},
-			b: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: DefaultEnsurePeriod,
-				},
-			},
-			expect: false,
-		}, {
-			name: "always-period-not-equal2",
-			a: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: 2 * DefaultEnsurePeriod,
-				},
-			},
-			b: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: DefaultEnsurePeriod,
-				},
-			},
-			expect: false,
-		},
-		{
-			name: "policy-not-equal",
-			a: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyIfNotSucc,
-			},
-			b: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: DefaultEnsurePeriod,
-				},
-			},
-			expect: false,
-		}, {
-			name: "nil-not-equal",
-			a:    nil,
-			b: &lbcfapi.EnsurePolicyConfig{
-				Policy: lbcfapi.PolicyAlways,
-				MinPeriod: &lbcfapi.Duration{
-					Duration: DefaultEnsurePeriod,
-				},
-			},
-			expect: false,
-		},
-	}
-
-	for _, c := range cases {
-		if get := EnsurePolicyEqual(c.a, c.b); get != c.expect {
-			t.Fatalf("case %s, expect %v, get %v", c.name, c.expect, get)
-		}
-	}
-}
-
 func TestMakeBackendName(t *testing.T) {
 	lbName := "lb"
 	groupName := "group"
@@ -1575,7 +1461,7 @@ func TestLoadBalancerNonStatusUpdated(t *testing.T) {
 			expect: true,
 		},
 		{
-			name: "need-ensurePolicy-updated",
+			name: "no-need-ensurePolicy-updated",
 			old: &lbcfapi.LoadBalancer{
 				Spec: lbcfapi.LoadBalancerSpec{},
 			},
@@ -1586,7 +1472,6 @@ func TestLoadBalancerNonStatusUpdated(t *testing.T) {
 					},
 				},
 			},
-			expect: true,
 		},
 		{
 			name: "no-need-only-status-updated",
@@ -1789,7 +1674,7 @@ func TestBackendGroupNonStatusUpdated(t *testing.T) {
 			expect: true,
 		},
 		{
-			name: "need-ensurePolicy-changed",
+			name: "no-need-ensurePolicy-changed",
 			old: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{},
 			},
@@ -1800,7 +1685,6 @@ func TestBackendGroupNonStatusUpdated(t *testing.T) {
 					},
 				},
 			},
-			expect: true,
 		},
 		{
 			name: "no-need-only-status-changed",

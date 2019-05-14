@@ -129,10 +129,6 @@ func LBReadyToDelete(lb *lbcfapi.LoadBalancer) bool {
 		return true
 	}
 	return false
-	//if !LBEnsured(lb) {
-	//	return true
-	//}
-	//return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
 }
 
 func GetLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
@@ -269,36 +265,8 @@ func GetDuration(cfg *lbcfapi.Duration, defaultValue time.Duration) time.Duratio
 	return cfg.Duration
 }
 
-func EnsurePolicyEqual(a *lbcfapi.EnsurePolicyConfig, b *lbcfapi.EnsurePolicyConfig) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	if a.Policy != b.Policy {
-		return false
-	}
-	if a.Policy == lbcfapi.PolicyAlways {
-		if a.MinPeriod == b.MinPeriod {
-			return true
-		}
-		if a.MinPeriod == nil || b.MinPeriod == nil {
-			return false
-		}
-		if a.MinPeriod.Duration.Nanoseconds() != b.MinPeriod.Duration.Nanoseconds() {
-			return false
-		}
-		return true
-	}
-	return true
-}
-
 func LoadBalancerNonStatusUpdated(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBalancer) bool {
 	if !reflect.DeepEqual(old.Spec.Attributes, cur.Spec.Attributes) {
-		return true
-	}
-	if !reflect.DeepEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
 		return true
 	}
 	return false
@@ -315,9 +283,6 @@ func BackendGroupNonStatusUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.Backen
 		return true
 	}
 	if !reflect.DeepEqual(old.Spec.Parameters, cur.Spec.Parameters) {
-		return true
-	}
-	if !EnsurePolicyEqual(old.Spec.EnsurePolicy, cur.Spec.EnsurePolicy) {
 		return true
 	}
 	return false
@@ -423,7 +388,7 @@ func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendR
 	if !reflect.DeepEqual(curObj.Spec.Parameters, expectObj.Spec.Parameters) {
 		return true
 	}
-	if !EnsurePolicyEqual(curObj.Spec.EnsurePolicy, expectObj.Spec.EnsurePolicy) {
+	if !reflect.DeepEqual(curObj.Spec.EnsurePolicy, expectObj.Spec.EnsurePolicy) {
 		return true
 	}
 	return false
@@ -505,7 +470,9 @@ func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.Back
 			continue
 		}
 		if needUpdateRecord(cur, v) {
-			needUpdate = append(needUpdate, v)
+			update := cur.DeepCopy()
+			update.Spec = v.Spec
+			needUpdate = append(needUpdate, update)
 		}
 	}
 	for k, v := range haveRecords {

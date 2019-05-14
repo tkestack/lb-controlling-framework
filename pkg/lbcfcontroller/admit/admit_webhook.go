@@ -181,7 +181,6 @@ func (a *Admitter) ValidateLoadBalancerDelete(*admission.AdmissionReview) *admis
 }
 
 func (a *Admitter) ValidateDriverCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
-	klog.Infof("start ValidateDriverCreate")
 	d := &lbcfapi.LoadBalancerDriver{}
 	if err := json.Unmarshal(ar.Request.Object.Raw, d); err != nil {
 		klog.Errorf(err.Error())
