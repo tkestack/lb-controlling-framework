@@ -315,10 +315,11 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 	}
 
 	req := &webhooks.ValidateBackendRequest{
-		BackendType: string(util.GetBackendType(curObj)),
-		LBInfo:      lb.Status.LBInfo,
-		Operation:   webhooks.OperationUpdate,
-		Parameters:  curObj.Spec.Parameters,
+		BackendType:   string(util.GetBackendType(curObj)),
+		LBInfo:        lb.Status.LBInfo,
+		Operation:     webhooks.OperationUpdate,
+		Parameters:    curObj.Spec.Parameters,
+		OldParameters: oldObj.Spec.Parameters,
 	}
 	rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
 	if err != nil {
