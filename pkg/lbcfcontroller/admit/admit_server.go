@@ -50,18 +50,18 @@ func (s *AdmitServer) Start() {
 	ws := new(restful.WebService)
 	ws.Path("/")
 
-	ws.Route(ws.POST("mutateLoadBalancer").To(s.MutateAdmitLoadBalancer).
+	ws.Route(ws.POST("mutate-load-balancer").To(s.MutateAdmitLoadBalancer).
 		Consumes(restful.MIME_JSON))
-	ws.Route(ws.POST("mutateLoadBalancerDriver").To(s.MutateAdmitLoadBalancerDriver).
+	ws.Route(ws.POST("mutate-load-balancerDriver").To(s.MutateAdmitLoadBalancerDriver).
 		Consumes(restful.MIME_JSON))
-	ws.Route(ws.POST("mutateBackendGroup").To(s.MutateAdmitBackendGroup).
+	ws.Route(ws.POST("mutate-backend-broup").To(s.MutateAdmitBackendGroup).
 		Consumes(restful.MIME_JSON))
 
-	ws.Route(ws.POST("validateLoadBalancer").To(s.ValidateAdmitLoadBalancer).
+	ws.Route(ws.POST("validate-load-balancer").To(s.ValidateAdmitLoadBalancer).
 		Consumes(restful.MIME_JSON))
-	ws.Route(ws.POST("validateLoadBalancerDriver").To(s.ValidateAdmitLoadBalancerDriver).
+	ws.Route(ws.POST("validate-load-balancer-driver").To(s.ValidateAdmitLoadBalancerDriver).
 		Consumes(restful.MIME_JSON))
-	ws.Route(ws.POST("validateBackendGroup").To(s.ValidateAdmitBackendGroup).
+	ws.Route(ws.POST("validate-backend-group").To(s.ValidateAdmitBackendGroup).
 		Consumes(restful.MIME_JSON))
 
 	restful.Add(ws)
