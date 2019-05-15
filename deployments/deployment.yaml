@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lbcf-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      lbcf.tke.cloud.tencent.com/component: lbcf-controller
+  template:
+    metadata:
+      labels:
+        lbcf.tke.cloud.tencent.com/component: lbcf-controller
+    spec:
+      priorityClassName: "system-node-critical"
+      serviceAccountName: lbcf-controller
+      containers:
+        - name: controller
+          image: ccr.ccs.tencentyun.com/lbcf/lbcf-controller:0.1.0
+          ports:
+            - containerPort: 443
+              name: admit-server
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: server-tls
+              mountPath: /etc/lbcf
+      volumes:
+        - name: server-tls
+          secret:
+            secretName: lbcf-controller
+
+

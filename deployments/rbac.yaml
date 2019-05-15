@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lbcf-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lbcf-controller
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+    verbs:
+      - '*'
+  - apiGroups:
+      - lbcf.tke.cloud.tencent.com
+    resources:
+      - '*'
+    verbs:
+      - '*'
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: lbcf-controller
+subjects:
+  - kind: ServiceAccount
+    name: lbcf-controller
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: lbcf-controller
+  apiGroup: rbac.authorization.k8s.io
+

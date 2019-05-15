@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+  name: lbcf-controller
+  namespace: kube-system
+spec:
+  ports:
+    - name: admit-server
+      port: 443
+      targetPort: 443
+  selector:
+    lbcf.tke.cloud.tencent.com/component: lbcf-controller
+  sessionAffinity: None
+  type: ClusterIP

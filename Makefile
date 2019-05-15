@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 BINARY = lbcf-controller
 OUTPUT_PATH ?= output/$(BINARY)
+LBCF_IMAGE = ccr.ccs.tencentyun.com/lbcf/lbcf-controller:0.1.0
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 mkfile_dir := $(dir $(mkfile_path))
@@ -28,3 +29,10 @@ build-example:
 	golang:1.12 \
 	go build -o output/example-driver git.tencent.com/tke/lb-controlling-framework/cmd/drivers/example
 
+.PHONY: image
+image:
+	make docker-build && \
+	cd $(mkfile_dir) && \
+	cp build/docker/Dockerfile output/ && \
+	docker build -t $(LBCF_IMAGE) output/ && \
+	docker save $(LBCF_IMAGE) -o output/lbcf-controller-image.tar
