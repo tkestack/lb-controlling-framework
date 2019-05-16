@@ -155,6 +155,9 @@ func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 }
 
 func BackendRecordReadyToDelete(backend *lbcfapi.BackendRecord) bool {
+	if backend.Status.BackendAddr == "" {
+		return true
+	}
 	cond := GetBackendRecordCondition(&backend.Status, lbcfapi.BackendReadyToDelete)
 	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
 		return true

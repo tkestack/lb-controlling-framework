@@ -344,6 +344,9 @@ func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	if specChanged {
 		c.enqueue(curObj, c.backendQueue)
 	}
+	if !reflect.DeepEqual(oldObj.DeletionTimestamp, curObj.DeletionTimestamp) {
+		c.enqueue(curObj, c.backendQueue)
+	}
 	statusChanged := util.BackendRegistered(oldObj) != util.BackendRegistered(curObj)
 	if statusChanged {
 		if controllerRef := metav1.GetControllerOf(curObj); controllerRef != nil {
