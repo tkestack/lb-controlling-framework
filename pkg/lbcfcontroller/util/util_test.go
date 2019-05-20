@@ -555,7 +555,7 @@ func TestIsDriverDraining(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if get := IsDriverDraining(c.driver.Labels); get != c.expect {
+		if get := IsDriverDraining(c.driver); get != c.expect {
 			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
 		}
 	}

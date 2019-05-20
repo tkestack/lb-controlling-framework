@@ -151,7 +151,7 @@ func (c *Controller) backendWorker() {
 	}
 }
 
-func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, syncFunc util.SyncFunc) bool {
+func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
 	key, quit := queue.Get()
 	if quit {
 		return false

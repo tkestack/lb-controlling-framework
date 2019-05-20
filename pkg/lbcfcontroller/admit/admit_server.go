@@ -29,8 +29,9 @@ import (
 	"k8s.io/klog"
 )
 
-func NewAdmitServer(context *context.Context, crtFile string, keyFile string) *AdmitServer {
-	s := &AdmitServer{
+// NewAdmitServer creates a new Server
+func NewAdmitServer(context *context.Context, crtFile string, keyFile string) *Server {
+	s := &Server{
 		context:      context,
 		admitWebhook: NewAdmitter(context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.BRInformer.Lister(), util.NewWebhookInvoker()),
 		crtFile:      crtFile,
@@ -39,14 +40,16 @@ func NewAdmitServer(context *context.Context, crtFile string, keyFile string) *A
 	return s
 }
 
-type AdmitServer struct {
+// Server is the server that provides Kubernetes Admission Webhooks
+type Server struct {
 	context      *context.Context
-	admitWebhook AdmitWebhook
+	admitWebhook Webhook
 	crtFile      string
 	keyFile      string
 }
 
-func (s *AdmitServer) Start() {
+// Start starts the server in a new goroutine
+func (s *Server) Start() {
 	ws := new(restful.WebService)
 	ws.Path("/")
 
@@ -72,27 +75,33 @@ func (s *AdmitServer) Start() {
 	}()
 }
 
-func (s *AdmitServer) ValidateAdmitLoadBalancer(req *restful.Request, rsp *restful.Response) {
+// ValidateAdmitLoadBalancer implements ValidatingWebHook for LoadBalancer
+func (s *Server) ValidateAdmitLoadBalancer(req *restful.Request, rsp *restful.Response) {
 	serveValidate(req, rsp, s.admitWebhook.ValidateLoadBalancerCreate, s.admitWebhook.ValidateLoadBalancerUpdate, s.admitWebhook.ValidateLoadBalancerDelete)
 }
 
-func (s *AdmitServer) ValidateAdmitLoadBalancerDriver(req *restful.Request, rsp *restful.Response) {
+// ValidateAdmitLoadBalancerDriver implements ValidatingWebHook for LoadBalancerDriver
+func (s *Server) ValidateAdmitLoadBalancerDriver(req *restful.Request, rsp *restful.Response) {
 	serveValidate(req, rsp, s.admitWebhook.ValidateDriverCreate, s.admitWebhook.ValidateDriverUpdate, s.admitWebhook.ValidateDriverDelete)
 }
 
-func (s *AdmitServer) ValidateAdmitBackendGroup(req *restful.Request, rsp *restful.Response) {
+// ValidateAdmitBackendGroup implements ValidatingWebHook for BackendGroup
+func (s *Server) ValidateAdmitBackendGroup(req *restful.Request, rsp *restful.Response) {
 	serveValidate(req, rsp, s.admitWebhook.ValidateBackendGroupCreate, s.admitWebhook.ValidateBackendGroupUpdate, s.admitWebhook.ValidateBackendGroupDelete)
 }
 
-func (s *AdmitServer) MutateAdmitLoadBalancer(req *restful.Request, rsp *restful.Response) {
+// MutateAdmitLoadBalancer implements MutatingWebHook for LoadBalancer
+func (s *Server) MutateAdmitLoadBalancer(req *restful.Request, rsp *restful.Response) {
 	serveMutate(req, rsp, s.admitWebhook.MutateLB)
 }
 
-func (s *AdmitServer) MutateAdmitLoadBalancerDriver(req *restful.Request, rsp *restful.Response) {
+// MutateAdmitLoadBalancerDriver implements MutatingWebHook for LoadBalancerDriver
+func (s *Server) MutateAdmitLoadBalancerDriver(req *restful.Request, rsp *restful.Response) {
 	serveMutate(req, rsp, s.admitWebhook.MutateDriver)
 }
 
-func (s *AdmitServer) MutateAdmitBackendGroup(req *restful.Request, rsp *restful.Response) {
+// MutateAdmitBackendGroup implements MutatingWebHook for BackendGroup
+func (s *Server) MutateAdmitBackendGroup(req *restful.Request, rsp *restful.Response) {
 	serveMutate(req, rsp, s.admitWebhook.MutateBackendGroup)
 }
 

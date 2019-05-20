@@ -30,11 +30,13 @@ import (
 	"k8s.io/klog"
 )
 
-type AdmitWebhook interface {
+// Webhook is an abstract interface for testability
+type Webhook interface {
 	ValidateAdmitWebhook
 	MutateAdmitWebhook
 }
 
+// ValidateAdmitWebhook is an abstract interface for testability
 type ValidateAdmitWebhook interface {
 	ValidateLoadBalancerCreate(*admission.AdmissionReview) *admission.AdmissionResponse
 	ValidateLoadBalancerUpdate(*admission.AdmissionReview) *admission.AdmissionResponse
@@ -49,13 +51,15 @@ type ValidateAdmitWebhook interface {
 	ValidateBackendGroupDelete(*admission.AdmissionReview) *admission.AdmissionResponse
 }
 
+// MutateAdmitWebhook is an abstract interface for testability
 type MutateAdmitWebhook interface {
 	MutateLB(*admission.AdmissionReview) *admission.AdmissionResponse
 	MutateDriver(*admission.AdmissionReview) *admission.AdmissionResponse
 	MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse
 }
 
-func NewAdmitter(lbLister lbcflister.LoadBalancerLister, driverLister lbcflister.LoadBalancerDriverLister, backendLister lbcflister.BackendRecordLister, invoker util.WebhookInvoker) AdmitWebhook {
+// NewAdmitter creates a new instance Webhook
+func NewAdmitter(lbLister lbcflister.LoadBalancerLister, driverLister lbcflister.LoadBalancerDriverLister, backendLister lbcflister.BackendRecordLister, invoker util.WebhookInvoker) Webhook {
 	return &Admitter{
 		lbLister:       lbLister,
 		driverLister:   driverLister,
@@ -64,6 +68,7 @@ func NewAdmitter(lbLister lbcflister.LoadBalancerLister, driverLister lbcflister
 	}
 }
 
+// Admitter is an implementation of Webhook
 type Admitter struct {
 	lbLister      lbcflister.LoadBalancerLister
 	driverLister  lbcflister.LoadBalancerDriverLister
@@ -72,6 +77,7 @@ type Admitter struct {
 	webhookInvoker util.WebhookInvoker
 }
 
+// MutateLB implements MutatingWebHook for LoadBalancer
 func (a *Admitter) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	obj := &lbcfapi.LoadBalancer{}
 	err := json.Unmarshal(ar.Request.Object.Raw, obj)
@@ -86,14 +92,17 @@ func (a *Admitter) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionR
 	return reviewResponse
 }
 
+// MutateDriver implements MutatingWebHook for LoadBalancerDriver
 func (a *Admitter) MutateDriver(*admission.AdmissionReview) *admission.AdmissionResponse {
 	return toAdmissionResponse(nil)
 }
 
+// MutateBackendGroup implements MutatingWebHook for BackendGroup
 func (a *Admitter) MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse {
 	return toAdmissionResponse(nil)
 }
 
+// ValidateLoadBalancerCreate implements ValidatingWebHook for LoadBalancer creating
 func (a *Admitter) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	lb := &lbcfapi.LoadBalancer{}
 	if err := json.Unmarshal(ar.Request.Object.Raw, lb); err != nil {
@@ -110,7 +119,7 @@ func (a *Admitter) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *ad
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
 	}
-	if util.IsDriverDraining(driver.Labels) {
+	if util.IsDriverDraining(driver) {
 		return toAdmissionResponse(fmt.Errorf("driver %q is draining, all LoadBalancer creating operation for that dirver is denied", lb.Spec.LBDriver))
 	} else if driver.DeletionTimestamp != nil {
 		return toAdmissionResponse(fmt.Errorf("driver %q is deleting, all LoadBalancer creating operation for that dirver is denied", lb.Spec.LBDriver))
@@ -130,6 +139,7 @@ func (a *Admitter) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *ad
 	return toAdmissionResponse(nil)
 }
 
+// ValidateLoadBalancerUpdate implements ValidatingWebHook for LoadBalancer updating
 func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	curObj := &lbcfapi.LoadBalancer{}
 	oldObj := &lbcfapi.LoadBalancer{}
@@ -176,10 +186,12 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 	return toAdmissionResponse(nil)
 }
 
+// ValidateLoadBalancerDelete implements ValidatingWebHook for LoadBalancer deleting
 func (a *Admitter) ValidateLoadBalancerDelete(*admission.AdmissionReview) *admission.AdmissionResponse {
 	return toAdmissionResponse(nil)
 }
 
+// ValidateDriverCreate implements ValidatingWebHook for LoadBalancerDriver creating
 func (a *Admitter) ValidateDriverCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	d := &lbcfapi.LoadBalancerDriver{}
 	if err := json.Unmarshal(ar.Request.Object.Raw, d); err != nil {
@@ -195,6 +207,7 @@ func (a *Admitter) ValidateDriverCreate(ar *admission.AdmissionReview) *admissio
 	return toAdmissionResponse(nil)
 }
 
+// ValidateDriverUpdate implements ValidatingWebHook for LoadBalancerDriver updating
 func (a *Admitter) ValidateDriverUpdate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	curObj := &lbcfapi.LoadBalancerDriver{}
 	oldObj := &lbcfapi.LoadBalancerDriver{}
@@ -216,12 +229,13 @@ func (a *Admitter) ValidateDriverUpdate(ar *admission.AdmissionReview) *admissio
 	return toAdmissionResponse(nil)
 }
 
+// ValidateDriverDelete implements ValidatingWebHook for LoadBalancerDriver deleting
 func (a *Admitter) ValidateDriverDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	driver, err := a.driverLister.LoadBalancerDrivers(ar.Request.Namespace).Get(ar.Request.Name)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("retrieve LoadBalancerDriver %s/%s failed: %v", ar.Request.Namespace, ar.Request.Name, err))
 	}
-	if !util.IsDriverDraining(driver.Labels) {
+	if !util.IsDriverDraining(driver) {
 		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete", lbcfapi.DriverDrainingLabel))
 	}
 
@@ -241,6 +255,7 @@ func (a *Admitter) ValidateDriverDelete(ar *admission.AdmissionReview) *admissio
 	return toAdmissionResponse(nil)
 }
 
+// ValidateBackendGroupCreate implements ValidatingWebHook for BackendGroup creating
 func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	bg := &lbcfapi.BackendGroup{}
 	if err := json.Unmarshal(ar.Request.Object.Raw, bg); err != nil {
@@ -279,6 +294,7 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 	return toAdmissionResponse(nil)
 }
 
+// ValidateBackendGroupUpdate implements ValidatingWebHook for BackendGroup updating
 func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	curObj := &lbcfapi.BackendGroup{}
 	oldObj := &lbcfapi.BackendGroup{}
@@ -330,6 +346,7 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 	return toAdmissionResponse(nil)
 }
 
+// ValidateBackendGroupDelete implements ValidatingWebHook for BackendGroup deleting
 func (a *Admitter) ValidateBackendGroupDelete(*admission.AdmissionReview) *admission.AdmissionResponse {
 	return toAdmissionResponse(nil)
 }

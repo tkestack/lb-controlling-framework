@@ -38,10 +38,14 @@ import (
 )
 
 const (
+	// DefaultRetryInterval is the default minimum delay for retries
 	DefaultRetryInterval = 10 * time.Second
-	DefaultEnsurePeriod  = 1 * time.Minute
+
+	// DefaultEnsurePeriod is the default minimum interval for ensureLoadBalancer and ensureBackendRecord
+	DefaultEnsurePeriod = 1 * time.Minute
 )
 
+// DefaultControllerRateLimiter creates a RateLimiter with DefaultRetryInterval as it's base delay
 func DefaultControllerRateLimiter() workqueue.RateLimiter {
 	return workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(DefaultRetryInterval, 10*time.Minute),
@@ -50,12 +54,16 @@ func DefaultControllerRateLimiter() workqueue.RateLimiter {
 	)
 }
 
+// IntervalRateLimitingInterface limits rate with rate limiter and user specified minimum interval
 type IntervalRateLimitingInterface interface {
 	workqueue.RateLimitingInterface
 
+	// AddIntervalRateLimited adds object in at least minInterval
 	AddIntervalRateLimited(item interface{}, minInterval time.Duration)
 }
 
+// NewIntervalRateLimitingQueue creates a new instance of IntervalRateLimitingInterface,
+// defaultDelay is used as default minimum interval for retries
 func NewIntervalRateLimitingQueue(rateLimiter workqueue.RateLimiter, name string, defaultDelay time.Duration) IntervalRateLimitingInterface {
 	return &IntervalRateLimitingQueue{
 		defaultRetryDelay: defaultDelay,
@@ -64,6 +72,7 @@ func NewIntervalRateLimitingQueue(rateLimiter workqueue.RateLimiter, name string
 	}
 }
 
+// IntervalRateLimitingQueue is an implementation of IntervalRateLimitingInterface
 type IntervalRateLimitingQueue struct {
 	defaultRetryDelay time.Duration
 
@@ -72,6 +81,7 @@ type IntervalRateLimitingQueue struct {
 	rateLimiter workqueue.RateLimiter
 }
 
+// AddIntervalRateLimited adds item in at least minInterval
 func (q *IntervalRateLimitingQueue) AddIntervalRateLimited(item interface{}, minInterval time.Duration) {
 	if minInterval.Nanoseconds() == 0 {
 		minInterval = q.defaultRetryDelay
@@ -83,23 +93,28 @@ func (q *IntervalRateLimitingQueue) AddIntervalRateLimited(item interface{}, min
 	q.DelayingInterface.AddAfter(item, delay)
 }
 
-// AddRateLimited AddAfter's the item based on the time when the rate limiter says its ok
+// AddRateLimited AddAfters the item based on the time when the rate limiter says its ok
 func (q *IntervalRateLimitingQueue) AddRateLimited(item interface{}) {
 	q.DelayingInterface.AddAfter(item, q.rateLimiter.When(item))
 }
 
+// NumRequeues returns back how many failures the item has had
 func (q *IntervalRateLimitingQueue) NumRequeues(item interface{}) int {
 	return q.rateLimiter.NumRequeues(item)
 }
 
+// Forget indicates that an item is finished being retried.  Doesn't matter whether its for perm failing
+// or for success, we'll stop tracking it
 func (q *IntervalRateLimitingQueue) Forget(item interface{}) {
 	q.rateLimiter.Forget(item)
 }
 
+// PodAvailable indicates the given pod is ready to bind to load balancers
 func PodAvailable(obj *v1.Pod) bool {
 	return obj.Status.PodIP != "" && obj.DeletionTimestamp == nil && pod.IsPodReady(obj)
 }
 
+// LBCreated indicates the given LoadBalancer is successfully created by webhook createLoadBalancer
 func LBCreated(lb *lbcfapi.LoadBalancer) bool {
 	condition := GetLBCondition(&lb.Status, lbcfapi.LBCreated)
 	if condition == nil {
@@ -108,6 +123,7 @@ func LBCreated(lb *lbcfapi.LoadBalancer) bool {
 	return condition.Status == lbcfapi.ConditionTrue
 }
 
+// LBEnsured indicates the given LoadBalancer is successfully ensured by webhook ensureLoadBalancer
 func LBEnsured(lb *lbcfapi.LoadBalancer) bool {
 	condition := GetLBCondition(&lb.Status, lbcfapi.LBEnsured)
 	if condition == nil {
@@ -116,6 +132,7 @@ func LBEnsured(lb *lbcfapi.LoadBalancer) bool {
 	return condition.Status == lbcfapi.ConditionTrue
 }
 
+// LBNeedEnsure indicates webhook ensureLoadBalancer should be called on the given LoadBalancer
 func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
 	if !LBEnsured(lb) {
 		return true
@@ -123,6 +140,8 @@ func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
 	return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
 }
 
+// LBReadyToDelete indicates webhook deleteLoadBalancer has been successfully called,
+// and the given LoadBalancer is ok to be deleted from k8s
 func LBReadyToDelete(lb *lbcfapi.LoadBalancer) bool {
 	cond := GetLBCondition(&lb.Status, lbcfapi.LBReadyToDelete)
 	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
@@ -131,6 +150,7 @@ func LBReadyToDelete(lb *lbcfapi.LoadBalancer) bool {
 	return false
 }
 
+// GetLBCondition is an helper function to get specific LoadBalancer condition
 func GetLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
 	for i := range status.Conditions {
 		if status.Conditions[i].Type == conditionType {
@@ -140,6 +160,8 @@ func GetLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.Lo
 	return nil
 }
 
+// AddLBCondition is an helper function to add specific LoadBalancer condition into LoadBalancer.status.
+// If a condition with same type exists, the existing one will be overwritten, otherwise, a new condition will be inserted.
 func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfapi.LoadBalancerCondition) {
 	found := false
 	for i := range lbStatus.Conditions {
@@ -154,6 +176,8 @@ func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 	}
 }
 
+// BackendRecordReadyToDelete indicates webhook deregisterBackend has been successfully called,
+// and the given BackendRecord is ok to be deleted from k8s
 func BackendRecordReadyToDelete(backend *lbcfapi.BackendRecord) bool {
 	if backend.DeletionTimestamp != nil && backend.Status.BackendAddr == "" {
 		return true
@@ -165,6 +189,7 @@ func BackendRecordReadyToDelete(backend *lbcfapi.BackendRecord) bool {
 	return false
 }
 
+// GetBackendRecordCondition is an helper function to get specific BackendRecord condition
 func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus, conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {
 	for i := range status.Conditions {
 		if status.Conditions[i].Type == conditionType {
@@ -174,6 +199,8 @@ func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus, conditionTyp
 	return nil
 }
 
+// AddBackendCondition is an helper function to add specific BackendRecord condition into BackendRecord.status.
+// If a condition with same type exists, the existing one will be overwritten, otherwise, a new condition will be inserted.
 func AddBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition lbcfapi.BackendRecordCondition) {
 	found := false
 	for i := range beStatus.Conditions {
@@ -188,15 +215,24 @@ func AddBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition 
 	}
 }
 
+// BackendType indicates the elements that form a BackendGroup
 type BackendType string
 
 const (
+	// TypeService indicates the BackendGroup consists of services
 	TypeService BackendType = "Service"
-	TypePod     BackendType = "Pod"
-	TypeStatic  BackendType = "Static"
+
+	// TypePod indicates the BackendGroup consists of pods
+	TypePod BackendType = "Pod"
+
+	// TypeStatic indicates the BackendGroup consists of static addresses
+	TypeStatic BackendType = "Static"
+
+	// TypeUnknown indicates the BackendGroup consists of unknown backends
 	TypeUnknown BackendType = "Unknown"
 )
 
+// GetBackendType returns the BackendType of bg
 func GetBackendType(bg *lbcfapi.BackendGroup) BackendType {
 	if bg.Spec.Pods != nil {
 		return TypePod
@@ -208,6 +244,8 @@ func GetBackendType(bg *lbcfapi.BackendGroup) BackendType {
 	return TypeUnknown
 }
 
+// GetDriverNamespace returns the namespace where the driver is created.
+// It returns "kube-system" if driverName starts with "lbcf-", otherwise the defaultNamespace is returned
 func GetDriverNamespace(driverName string, defaultNamespace string) string {
 	if strings.HasPrefix(driverName, lbcfapi.SystemDriverPrefix) {
 		return "kube-system"
@@ -215,13 +253,16 @@ func GetDriverNamespace(driverName string, defaultNamespace string) string {
 	return defaultNamespace
 }
 
-func IsDriverDraining(labels map[string]string) bool {
-	if v, ok := labels[lbcfapi.DriverDrainingLabel]; !ok || strings.ToUpper(v) != "TRUE" {
+// IsDriverDraining indicates whether driver is draining
+func IsDriverDraining(driver *lbcfapi.LoadBalancerDriver) bool {
+	if v, ok := driver.Labels[lbcfapi.DriverDrainingLabel]; !ok || strings.ToUpper(v) != "TRUE" {
 		return false
 	}
 	return true
 }
 
+// CalculateRetryInterval converts userValueInSeconds to time.Duration,
+// it returns DefaultRetryInterval if userValueInSeconds is not specified
 func CalculateRetryInterval(userValueInSeconds int32) time.Duration {
 	if userValueInSeconds <= 0 {
 		return DefaultRetryInterval
@@ -234,6 +275,7 @@ func CalculateRetryInterval(userValueInSeconds int32) time.Duration {
 	return dur
 }
 
+// HasFinalizer is an helper function to look for expect in all
 func HasFinalizer(all []string, expect string) bool {
 	for i := range all {
 		if all[i] == expect {
@@ -243,6 +285,7 @@ func HasFinalizer(all []string, expect string) bool {
 	return false
 }
 
+// RemoveFinalizer removes toDelete from all and returns a new slice
 func RemoveFinalizer(all []string, toDelete string) []string {
 	var ret []string
 	for i := range all {
@@ -253,14 +296,15 @@ func RemoveFinalizer(all []string, toDelete string) []string {
 	return ret
 }
 
+// NamespacedNameKeyFunc generates a name that can be handled by cache.DeletionHandlingMetaNamespaceKeyFunc
 func NamespacedNameKeyFunc(namespace, name string) string {
 	if len(namespace) > 0 {
 		return namespace + "/" + name
-
 	}
 	return name
 }
 
+// GetDuration converts cfg to time.Duration, defaultValue is returned if cfg is nil
 func GetDuration(cfg *lbcfapi.Duration, defaultValue time.Duration) time.Duration {
 	if cfg == nil {
 		return defaultValue
@@ -268,6 +312,7 @@ func GetDuration(cfg *lbcfapi.Duration, defaultValue time.Duration) time.Duratio
 	return cfg.Duration
 }
 
+// LoadBalancerNonStatusUpdated returns true if non-status fields are modified
 func LoadBalancerNonStatusUpdated(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBalancer) bool {
 	if !reflect.DeepEqual(old.Spec.Attributes, cur.Spec.Attributes) {
 		return true
@@ -275,6 +320,7 @@ func LoadBalancerNonStatusUpdated(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBa
 	return false
 }
 
+// BackendGroupNonStatusUpdated returns true if non-status fields are modified
 func BackendGroupNonStatusUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
 	if bgServiceUpdated(old, cur) {
 		return true
@@ -307,8 +353,10 @@ func bgStaticUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool 
 	return false
 }
 
+// ErrorList is an helper that collects errors
 type ErrorList []error
 
+// Error returns formats all errors into one error
 func (e ErrorList) Error() string {
 	var msg []string
 	for i, err := range e {
@@ -317,10 +365,7 @@ func (e ErrorList) Error() string {
 	return strings.Join(msg, "\n")
 }
 
-const (
-	DefaultWebhookTimeout = 10 * time.Second
-)
-
+// MakeBackendName generates a name for BackendRecord
 func MakeBackendName(lbName, groupName, podName string, port lbcfapi.PortSelector) string {
 	protocol := "TCP"
 	if port.Protocol != nil {
@@ -331,6 +376,7 @@ func MakeBackendName(lbName, groupName, podName string, port lbcfapi.PortSelecto
 	return fmt.Sprintf("%x", h)
 }
 
+// MakeBackendLabels generates labels for BackendRecord
 func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAddr string) map[string]string {
 	ret := make(map[string]string)
 	ret[lbcfapi.LabelDriverName] = driverName
@@ -348,6 +394,7 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAd
 	return ret
 }
 
+// ConstructBackendRecord constructs a new BackendRecord
 func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, podName string) *lbcfapi.BackendRecord {
 	valueTrue := true
 	return &lbcfapi.BackendRecord{
@@ -397,6 +444,7 @@ func needUpdateRecord(curObj *lbcfapi.BackendRecord, expectObj *lbcfapi.BackendR
 	return false
 }
 
+// IterateBackends runs handler on every BackendRecord in all and returns error if any error occurs
 func IterateBackends(all []*lbcfapi.BackendRecord, handler func(*lbcfapi.BackendRecord) error) error {
 	var errList []error
 	for _, record := range all {
@@ -410,6 +458,7 @@ func IterateBackends(all []*lbcfapi.BackendRecord, handler func(*lbcfapi.Backend
 	return nil
 }
 
+// FilterPods runs filter on every Pod in all and collects the Pod if filter returns true
 func FilterPods(all []*v1.Pod, filter func(pod *v1.Pod) bool) []*v1.Pod {
 	var ret []*v1.Pod
 	for _, pod := range all {
@@ -420,6 +469,7 @@ func FilterPods(all []*v1.Pod, filter func(pod *v1.Pod) bool) []*v1.Pod {
 	return ret
 }
 
+// FilterBackendGroup runs filter on every BackendGroup in all and collects the BackendGroup if filter returns true
 func FilterBackendGroup(all []*lbcfapi.BackendGroup, filter func(*lbcfapi.BackendGroup) bool) []*lbcfapi.BackendGroup {
 	var ret []*lbcfapi.BackendGroup
 	for _, group := range all {
@@ -430,6 +480,7 @@ func FilterBackendGroup(all []*lbcfapi.BackendGroup, filter func(*lbcfapi.Backen
 	return ret
 }
 
+// IsPodMatchBackendGroup returns true if pod is included in group
 func IsPodMatchBackendGroup(group *lbcfapi.BackendGroup, pod *v1.Pod) bool {
 	if group.Namespace != pod.Namespace {
 		return false
@@ -450,6 +501,7 @@ func IsPodMatchBackendGroup(group *lbcfapi.BackendGroup, pod *v1.Pod) bool {
 	return included.Has(pod.Name)
 }
 
+// IsLBMatchBackendGroup returns true if group is connected to lb
 func IsLBMatchBackendGroup(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) bool {
 	if group.Namespace == lb.Namespace && group.Spec.LBName == lb.Name {
 		return true
@@ -457,6 +509,15 @@ func IsLBMatchBackendGroup(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer
 	return false
 }
 
+// CompareBackendRecords compares expect with have and returns actions should be taken to meet the expect.
+//
+// The actions are return in 3 BackendRecord slices:
+//
+// needCreate: BackendsRecords in this slice doesn't exist in K8S and should be created
+//
+// needUpdate: BackendsReocrds in this slice already exist in K8S and should be update to k8s
+//
+// needDelete: BackendsRecords in this slice should be deleted from k8s
 func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.BackendRecord) (needCreate, needUpdate, needDelete []*lbcfapi.BackendRecord) {
 	expectedRecords := make(map[string]*lbcfapi.BackendRecord)
 	for _, e := range expect {
@@ -486,6 +547,7 @@ func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.Back
 	return
 }
 
+// BackendRegistered returns true if backend has been successfully registered
 func BackendRegistered(backend *lbcfapi.BackendRecord) bool {
 	cond := GetBackendRecordCondition(&backend.Status, lbcfapi.BackendRegistered)
 	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
@@ -494,6 +556,7 @@ func BackendRegistered(backend *lbcfapi.BackendRecord) bool {
 	return false
 }
 
+// BackendNeedEnsure returns true if webhook ensureBackend should be called on backend
 func BackendNeedEnsure(backend *lbcfapi.BackendRecord) bool {
 	if !BackendRegistered(backend) {
 		return true
@@ -501,8 +564,7 @@ func BackendNeedEnsure(backend *lbcfapi.BackendRecord) bool {
 	return backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
 }
 
-type SyncFunc func(string) *SyncResult
-
+// SyncResult stores result for sync method of controllers
 type SyncResult struct {
 	err error
 
@@ -514,54 +576,67 @@ type SyncResult struct {
 	minReEnsurePeriod time.Duration
 }
 
+// SuccResult returns a new SyncResult that call IsSucc() on it will return true
 func SuccResult() *SyncResult {
 	return &SyncResult{}
 }
 
+// ErrorResult returns a new SyncResult that call IsError() on it will return true
 func ErrorResult(err error) *SyncResult {
 	return &SyncResult{err: err}
 }
 
+// FailResult returns a new SyncResult that call IsFailed() on it will return true
 func FailResult(delay time.Duration) *SyncResult {
 	return &SyncResult{operationFailed: true, minRetryDelay: delay}
 }
 
+// AsyncResult returns a new SyncResult that call IsPeriodic() on it will return true
 func AsyncResult(period time.Duration) *SyncResult {
 	return &SyncResult{asyncOperation: true, minReEnsurePeriod: period}
 }
 
+// PeriodicResult returns a new SyncResult that call IsPeriodic() on it will return true
 func PeriodicResult(period time.Duration) *SyncResult {
 	return &SyncResult{periodicOperation: true, minReEnsurePeriod: period}
 }
 
+// IsSucc indicates the operation is successfully finished
 func (s *SyncResult) IsSucc() bool {
 	return !s.IsError() && !s.IsFailed() && !s.IsRunning()
 }
 
+// IsError indicates an error occurred during operation
 func (s *SyncResult) IsError() bool {
 	return s.err != nil
 }
 
+// IsFailed indicates no error occured during operation, but the operation failed
 func (s *SyncResult) IsFailed() bool {
 	return s.operationFailed
 }
 
+// IsRunning indicates the operation is still in progress
 func (s *SyncResult) IsRunning() bool {
 	return s.asyncOperation
 }
 
+// IsPeriodic indicates the operation successfully finished and should be called periodically
 func (s *SyncResult) IsPeriodic() bool {
 	return s.periodicOperation
 }
 
+// GetError returns the error stored in SyncResult
 func (s *SyncResult) GetError() error {
 	return s.err
 }
 
+// GetRetryDelay returns in how long time the operation should be retried
 func (s *SyncResult) GetRetryDelay() time.Duration {
 	return s.minRetryDelay
 }
 
+// GetReEnsurePeriodic returns in how long time the operation should be taken again
 func (s *SyncResult) GetReEnsurePeriodic() time.Duration {
 	return s.minReEnsurePeriod
 }
@@ -569,6 +644,7 @@ func (s *SyncResult) GetReEnsurePeriodic() time.Duration {
 var firstFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers","value":["{{ .Finalizer }}"]}]`
 var additionalFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers/-","value":"{{ .Finalizer }}"}]`
 
+// MakeFinalizerPatch returns a patch that is used in MutatingAdmissionWebhook to add a finalizer into ObjectMeta.Finalizers
 func MakeFinalizerPatch(isFirst bool, finalizer string) []byte {
 	tmpStr := firstFirnalizerPatchTemplate
 	if !isFirst {
@@ -589,7 +665,7 @@ func MakeFinalizerPatch(isFirst bool, finalizer string) []byte {
 	return buf.Bytes()
 }
 
-// copied from kubernetes/pkg/controller/endpoint/endpoints_controller.go:258
+// DetermineNeededBackendGroupUpdates compares oldGroups with groups, and returns BackendGroups that should be
 func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatusChanged bool) sets.String {
 	if podStatusChanged {
 		groups = groups.Union(oldGroups)

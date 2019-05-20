@@ -32,18 +32,20 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
+// ValidateLoadBalancerDriver validates LoadBalancerDriver
 func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
 	allErrs = append(allErrs, validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
-	allErrs = append(allErrs, validateDriverUrl(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
+	allErrs = append(allErrs, validateDriverURL(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
 	if raw.Spec.Webhooks != nil {
 		allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec"))...)
 	}
 	return allErrs
 }
 
+// ValidateLoadBalancer validates LoadBalancer
 func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if raw.Spec.LBDriver == "" {
@@ -55,6 +57,7 @@ func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
 	return allErrs
 }
 
+// ValidateBackendGroup validates BackendGroup
 func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if raw.Spec.EnsurePolicy != nil {
@@ -64,6 +67,7 @@ func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 	return allErrs
 }
 
+// DriverUpdatedFieldsAllowed returns false if the updating to fields is not allowed
 func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.LoadBalancerDriver) bool {
 	if old.Spec.Url != cur.Spec.Url {
 		return false
@@ -74,6 +78,7 @@ func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.Lo
 	return true
 }
 
+// LBUpdatedFieldsAllowed returns false if the updating to fields is not allowed
 func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer) bool {
 	if cur.Spec.LBDriver != old.Spec.LBDriver {
 		return false
@@ -84,6 +89,7 @@ func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer
 	return true
 }
 
+// BackendGroupUpdateFieldsAllowed returns false if the updating to fields is not allowed
 func BackendGroupUpdateFieldsAllowed(cur *lbcfapi.BackendGroup, old *lbcfapi.BackendGroup) bool {
 	if cur.Spec.LBName != old.Spec.LBName {
 		return false
@@ -129,12 +135,11 @@ func validateDriverType(raw string, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if raw != string(lbcfapi.WebhookDriver) {
 		allErrs = append(allErrs, field.Invalid(path, raw, fmt.Sprintf("driverType must be %v", lbcfapi.WebhookDriver)))
-
 	}
 	return allErrs
 }
 
-func validateDriverUrl(raw string, path *field.Path) field.ErrorList {
+func validateDriverURL(raw string, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if _, err := url.Parse(raw); err != nil {
 		allErrs = append(allErrs, field.Invalid(path, raw, err.Error()))

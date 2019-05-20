@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+// NewBackendController creates a new BackendController
 func NewBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *BackendController {
 	return &BackendController{
 		client:         client,
@@ -42,6 +43,8 @@ func NewBackendController(client lbcfclient.Interface, brLister v1beta1.BackendR
 	}
 }
 
+// BackendController controls the invocation of following webhooks:
+// generateBackendAddr, ensureBackend, deregisterBackend
 type BackendController struct {
 	client lbcfclient.Interface
 
