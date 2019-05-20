@@ -271,12 +271,7 @@ func (c *Controller) addLoadBalancer(obj interface{}) {
 }
 
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
-	oldObj := old.(*v1beta1.LoadBalancer)
 	curObj := cur.(*v1beta1.LoadBalancer)
-
-	if oldObj.ResourceVersion == curObj.ResourceVersion {
-		return
-	}
 	c.enqueue(curObj, c.loadBalancerQueue)
 	for key := range c.backendGroupCtrl.getBackendGroupsForLoadBalancer(curObj) {
 		c.enqueue(key, c.backendGroupQueue)
@@ -340,15 +335,9 @@ func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := old.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
 
-	specChanged := oldObj.ResourceVersion != curObj.ResourceVersion
-	if specChanged {
-		c.enqueue(curObj, c.backendQueue)
-	}
-	if !reflect.DeepEqual(oldObj.DeletionTimestamp, curObj.DeletionTimestamp) {
-		c.enqueue(curObj, c.backendQueue)
-	}
-	statusChanged := util.BackendRegistered(oldObj) != util.BackendRegistered(curObj)
-	if statusChanged {
+	c.enqueue(curObj, c.backendQueue)
+
+	if util.BackendRegistered(oldObj) != util.BackendRegistered(curObj) {
 		if controllerRef := metav1.GetControllerOf(curObj); controllerRef != nil {
 			c.enqueue(util.NamespacedNameKeyFunc(curObj.Namespace, controllerRef.Name), c.backendGroupQueue)
 		}

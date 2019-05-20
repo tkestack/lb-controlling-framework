@@ -473,11 +473,21 @@ func TestLBCFControllerUpdateLoadBalancer(t *testing.T) {
 	c.backendGroupQueue.Done(groupKey)
 }
 
-func TestLBCFControllerUpdateLoadBalancer_ResourceVersionNotChange(t *testing.T) {
+func TestLBCFControllerUpdateLoadBalancer_StatusChanged(t *testing.T) {
 	oldLB1 := newFakeLoadBalancer("", "lb-1", nil, nil)
 	curLB1 := newFakeLoadBalancer("", "lb-1", nil, nil)
-	bg := newFakeBackendGroupOfPods("", "bg", "lb-1", 80, "tcp", nil, nil, nil)
+	ts := metav1.Now()
+	curLB1.DeletionTimestamp = &ts
+	curLB1.Status = lbcfapi.LoadBalancerStatus{
+		Conditions: []lbcfapi.LoadBalancerCondition{
+			{
+				Type:   lbcfapi.LBReadyToDelete,
+				Status: lbcfapi.ConditionTrue,
+			},
+		},
+	}
 
+	bg := newFakeBackendGroupOfPods("", "bg", "lb-1", 80, "tcp", nil, nil, nil)
 	lbCtrl := NewLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeSuccInvoker{})
 	bgCtrl := NewBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{
 		list: []*lbcfapi.BackendGroup{bg},
@@ -485,10 +495,10 @@ func TestLBCFControllerUpdateLoadBalancer_ResourceVersionNotChange(t *testing.T)
 	c := newFakeLBCFController(nil, lbCtrl, nil, bgCtrl)
 
 	c.updateLoadBalancer(oldLB1, curLB1)
-	if c.loadBalancerQueue.Len() != 0 {
-		t.Fatalf("queue length should be 0, get %d", c.loadBalancerQueue.Len())
-	} else if c.backendGroupQueue.Len() != 0 {
-		t.Fatalf("queue length should be 0, get %d", c.backendGroupQueue.Len())
+	if c.loadBalancerQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.loadBalancerQueue.Len())
+	} else if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
 	}
 }
 
@@ -670,12 +680,6 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
 
 	c.updateBackendRecord(oldRecord, curRecord)
-	if c.backendQueue.Len() != 0 {
-		t.Fatalf("queue length should be o, get %d", c.backendQueue.Len())
-	}
-
-	curRecord.ResourceVersion = "2"
-	c.updateBackendRecord(oldRecord, curRecord)
 	if c.backendQueue.Len() != 1 {
 		t.Fatalf("queue length should be 1, get %d", c.backendQueue.Len())
 	}
@@ -715,7 +719,7 @@ func TestLBCFControllerUpdateBackendRecordStatus(t *testing.T) {
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
 	c.updateBackendRecord(oldRecord, curRecord)
 
-	if c.backendQueue.Len() != 0 {
+	if c.backendQueue.Len() != 1 {
 		t.Fatalf("expect empty backend queue, get %d", c.backendQueue.Len())
 	}
 
