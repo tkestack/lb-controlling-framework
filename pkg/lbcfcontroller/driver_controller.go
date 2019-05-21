@@ -27,19 +27,19 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func NewDriverController(client lbcfclient.Interface, lister v1beta1.LoadBalancerDriverLister) *DriverController {
-	return &DriverController{
+func newDriverController(client lbcfclient.Interface, lister v1beta1.LoadBalancerDriverLister) *driverController {
+	return &driverController{
 		lbcfClient: client,
 		lister:     lister,
 	}
 }
 
-type DriverController struct {
+type driverController struct {
 	lbcfClient lbcfclient.Interface
 	lister     v1beta1.LoadBalancerDriverLister
 }
 
-func (c *DriverController) syncDriver(key string) *util.SyncResult {
+func (c *driverController) syncDriver(key string) *util.SyncResult {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)

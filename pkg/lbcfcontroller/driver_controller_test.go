@@ -30,7 +30,7 @@ func TestDriverControllerSyncDriverCreate(t *testing.T) {
 	driver := newFakeDriver("kube-system", fmt.Sprintf("%s%s", lbcfapi.SystemDriverPrefix, "driver"))
 
 	key, _ := controller.KeyFunc(driver)
-	ctrl := NewDriverController(fake.NewSimpleClientset(driver), &fakeDriverLister{
+	ctrl := newDriverController(fake.NewSimpleClientset(driver), &fakeDriverLister{
 		get: driver,
 	})
 	result := ctrl.syncDriver(key)
@@ -51,7 +51,7 @@ func TestDriverControllerSyncDriverAccepted(t *testing.T) {
 		},
 	}
 	key, _ := controller.KeyFunc(driver)
-	ctrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
+	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
 		get: driver,
 	})
 	result := ctrl.syncDriver(key)
@@ -65,7 +65,7 @@ func TestDriverControllerSyncDriverNotFound(t *testing.T) {
 	driver := newFakeDriver("kube-system", fmt.Sprintf("%s%s", lbcfapi.SystemDriverPrefix, "driver"))
 
 	key, _ := controller.KeyFunc(driver)
-	ctrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
+	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
 	result := ctrl.syncDriver(key)
 	if !result.IsSucc() {
 		t.Fatalf("expect succ result, get %v", result)
@@ -78,7 +78,7 @@ func TestDriverControllerSyncDriverDeleting(t *testing.T) {
 	driver.DeletionTimestamp = &ts
 
 	key, _ := controller.KeyFunc(driver)
-	ctrl := NewDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
+	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
 		get: driver,
 	})
 	result := ctrl.syncDriver(key)

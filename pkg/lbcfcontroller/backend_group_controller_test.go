@@ -35,7 +35,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", pod1.Labels, nil, nil)
 	fakeClient := fake.NewSimpleClientset(group)
-	ctrl := NewBackendGroupController(
+	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
 			get:  lb,
@@ -89,7 +89,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 	pod2 := newFakePod("", "pod-2", nil, true, false)
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-1"})
 	fakeClient := fake.NewSimpleClientset(group)
-	ctrl := NewBackendGroupController(
+	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
 			get:  lb,
@@ -139,7 +139,7 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	oldBackend1 := util.ConstructBackendRecord(lb, oldGroup, pod1.Name)
 	oldBackend2 := util.ConstructBackendRecord(lb, oldGroup, pod2.Name)
 	fakeClient := fake.NewSimpleClientset(curGroup, oldBackend1, oldBackend2)
-	ctrl := NewBackendGroupController(
+	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
 			get:  lb,
@@ -205,7 +205,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 	oldBackend2 := util.ConstructBackendRecord(oldLB, group, pod2.Name)
 	fakeClient := fake.NewSimpleClientset(group, oldBackend1, oldBackend2)
 
-	ctrl := NewBackendGroupController(
+	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
 			get:  curLB,
@@ -270,7 +270,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	existingBackend2 := util.ConstructBackendRecord(lb, group, pod2.Name)
 
 	fakeClient := fake.NewSimpleClientset(group, existingBackend1, existingBackend2)
-	ctrl := NewBackendGroupController(
+	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
 			get:  lb,
@@ -320,7 +320,7 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 	existingBackend1 := util.ConstructBackendRecord(lb, group, pod1.Name)
 	existingBackend2 := util.ConstructBackendRecord(lb, group, pod2.Name)
 	fakeClient := fake.NewSimpleClientset(group, existingBackend1, existingBackend2)
-	ctrl := NewBackendGroupController(
+	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
 			get:  lb,

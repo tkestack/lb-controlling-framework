@@ -38,8 +38,8 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 )
 
-func NewBackendGroupController(client lbcfclient.Interface, lbLister lbcflister.LoadBalancerLister, bgLister lbcflister.BackendGroupLister, brLister lbcflister.BackendRecordLister, podLister corev1.PodLister) *BackendGroupController {
-	return &BackendGroupController{
+func newBackendGroupController(client lbcfclient.Interface, lbLister lbcflister.LoadBalancerLister, bgLister lbcflister.BackendGroupLister, brLister lbcflister.BackendRecordLister, podLister corev1.PodLister) *backendGroupController {
+	return &backendGroupController{
 		client:              client,
 		lbLister:            lbLister,
 		bgLister:            bgLister,
@@ -50,7 +50,7 @@ func NewBackendGroupController(client lbcfclient.Interface, lbLister lbcflister.
 	}
 }
 
-type BackendGroupController struct {
+type backendGroupController struct {
 	client lbcfclient.Interface
 
 	lbLister  lbcflister.LoadBalancerLister
@@ -62,7 +62,7 @@ type BackendGroupController struct {
 	relatedPod          *sync.Map
 }
 
-func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
+func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)
@@ -161,7 +161,7 @@ func (c *BackendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	return util.SuccResult()
 }
 
-func (c *BackendGroupController) getBackendGroupsForPod(pod *v1.Pod) sets.String {
+func (c *backendGroupController) getBackendGroupsForPod(pod *v1.Pod) sets.String {
 	set := sets.NewString()
 	groupList, err := c.bgLister.BackendGroups(pod.Namespace).List(labels.Everything())
 	if err != nil {
@@ -186,7 +186,7 @@ func (c *BackendGroupController) getBackendGroupsForPod(pod *v1.Pod) sets.String
 	return set
 }
 
-func (c *BackendGroupController) getBackendGroupsForLoadBalancer(lb *lbcfapi.LoadBalancer) sets.String {
+func (c *backendGroupController) getBackendGroupsForLoadBalancer(lb *lbcfapi.LoadBalancer) sets.String {
 	set := sets.NewString()
 	groupList, err := c.bgLister.BackendGroups(lb.Namespace).List(labels.Everything())
 	if err != nil {
@@ -206,7 +206,7 @@ func (c *BackendGroupController) getBackendGroupsForLoadBalancer(lb *lbcfapi.Loa
 	return set
 }
 
-func (c *BackendGroupController) createBackendRecord(record *lbcfapi.BackendRecord) error {
+func (c *backendGroupController) createBackendRecord(record *lbcfapi.BackendRecord) error {
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Create(record)
 	if err != nil {
 		return fmt.Errorf("create BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
@@ -214,7 +214,7 @@ func (c *BackendGroupController) createBackendRecord(record *lbcfapi.BackendReco
 	return nil
 }
 
-func (c *BackendGroupController) updateBackendRecord(record *lbcfapi.BackendRecord) error {
+func (c *backendGroupController) updateBackendRecord(record *lbcfapi.BackendRecord) error {
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Update(record)
 	if err != nil {
 		return fmt.Errorf("update BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
@@ -222,7 +222,7 @@ func (c *BackendGroupController) updateBackendRecord(record *lbcfapi.BackendReco
 	return nil
 }
 
-func (c *BackendGroupController) deleteBackendRecord(record *lbcfapi.BackendRecord) error {
+func (c *backendGroupController) deleteBackendRecord(record *lbcfapi.BackendRecord) error {
 	if record.DeletionTimestamp != nil {
 		return nil
 	}
@@ -233,7 +233,7 @@ func (c *BackendGroupController) deleteBackendRecord(record *lbcfapi.BackendReco
 	return nil
 }
 
-func (c *BackendGroupController) deleteAllBackend(namespace, lbName, groupName string) *util.SyncResult {
+func (c *backendGroupController) deleteAllBackend(namespace, lbName, groupName string) *util.SyncResult {
 	backends, err := c.listBackendRecords(namespace, lbName, groupName)
 	if err != nil {
 		return util.ErrorResult(err)
@@ -254,7 +254,7 @@ func (c *BackendGroupController) deleteAllBackend(namespace, lbName, groupName s
 	return util.SuccResult()
 }
 
-func (c *BackendGroupController) listBackendRecords(namespace string, lbName string, groupName string) ([]*lbcfapi.BackendRecord, error) {
+func (c *backendGroupController) listBackendRecords(namespace string, lbName string, groupName string) ([]*lbcfapi.BackendRecord, error) {
 	label := map[string]string{
 		lbcfapi.LabelLBName:    lbName,
 		lbcfapi.LabelGroupName: groupName,
@@ -271,7 +271,7 @@ func (c *BackendGroupController) listBackendRecords(namespace string, lbName str
 	return ret, nil
 }
 
-func (c *BackendGroupController) updateStatus(group *lbcfapi.BackendGroup, status *lbcfapi.BackendGroupStatus) error {
+func (c *backendGroupController) updateStatus(group *lbcfapi.BackendGroup, status *lbcfapi.BackendGroupStatus) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		group.Status = *status
 		_, updateErr := c.client.LbcfV1beta1().BackendGroups(group.Namespace).UpdateStatus(group)

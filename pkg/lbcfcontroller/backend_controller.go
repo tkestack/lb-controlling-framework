@@ -32,9 +32,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// NewBackendController creates a new BackendController
-func NewBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *BackendController {
-	return &BackendController{
+func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *backendController {
+	return &backendController{
 		client:         client,
 		brLister:       brLister,
 		driverLister:   driverLister,
@@ -43,9 +42,7 @@ func NewBackendController(client lbcfclient.Interface, brLister v1beta1.BackendR
 	}
 }
 
-// BackendController controls the invocation of following webhooks:
-// generateBackendAddr, ensureBackend, deregisterBackend
-type BackendController struct {
+type backendController struct {
 	client lbcfclient.Interface
 
 	brLister     v1beta1.BackendRecordLister
@@ -55,7 +52,7 @@ type BackendController struct {
 	webhookInvoker util.WebhookInvoker
 }
 
-func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
+func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return util.ErrorResult(err)
@@ -86,7 +83,7 @@ func (c *BackendController) syncBackendRecord(key string) *util.SyncResult {
 	return util.SuccResult()
 }
 
-func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {
+func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
@@ -138,7 +135,7 @@ func (c *BackendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 	return util.SuccResult()
 }
 
-func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
@@ -181,7 +178,7 @@ func (c *BackendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 	}
 }
 
-func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
 	if backend.Status.BackendAddr == "" {
 		return util.SuccResult()
 	}
@@ -233,7 +230,7 @@ func (c *BackendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	}
 }
 
-func (c *BackendController) removeFinalizer(backend *lbcfapi.BackendRecord) *util.SyncResult {
+func (c *backendController) removeFinalizer(backend *lbcfapi.BackendRecord) *util.SyncResult {
 	backend = backend.DeepCopy()
 	backend.Finalizers = util.RemoveFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend)
 	_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).Update(backend)
@@ -243,7 +240,7 @@ func (c *BackendController) removeFinalizer(backend *lbcfapi.BackendRecord) *uti
 	return util.SuccResult()
 }
 
-func (c *BackendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *backendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
 	cpy := backend.DeepCopy()
 	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
 		Type:               cType,
@@ -258,7 +255,7 @@ func (c *BackendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp
 	return util.SuccResult()
 }
 
-func (c *BackendController) setOperationFailed(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *backendController) setOperationFailed(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
 	cpy := backend.DeepCopy()
 	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
 		Type:               cType,
@@ -274,7 +271,7 @@ func (c *BackendController) setOperationFailed(backend *lbcfapi.BackendRecord, r
 	return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 }
 
-func (c *BackendController) setOperationRunning(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *backendController) setOperationRunning(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
 	cpy := backend.DeepCopy()
 	// running operation only updates condition's Reason and Message field
 	status := lbcfapi.ConditionFalse
@@ -296,7 +293,7 @@ func (c *BackendController) setOperationRunning(backend *lbcfapi.BackendRecord, 
 	return util.AsyncResult(delay)
 }
 
-func (c *BackendController) setOperationInvalidResponse(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
+func (c *backendController) setOperationInvalidResponse(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
 	cpy := backend.DeepCopy()
 	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
 		Type:               cType,

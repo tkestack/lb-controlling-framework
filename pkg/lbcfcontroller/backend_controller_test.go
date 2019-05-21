@@ -36,7 +36,7 @@ func TestBackendGenerateAddr(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -68,7 +68,7 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -108,7 +108,7 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -156,7 +156,7 @@ func TestBackendEnsure(t *testing.T) {
 	}
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -201,7 +201,7 @@ func TestBackendEnsureFailed(t *testing.T) {
 	}
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -258,7 +258,7 @@ func TestBackendEnsureRunning(t *testing.T) {
 	}
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -314,7 +314,7 @@ func TestBackendEnsureNoRerun(t *testing.T) {
 	}
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -371,7 +371,7 @@ func TestBackendDeregister(t *testing.T) {
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
 
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -424,7 +424,7 @@ func TestBackendDeregisterSkipped(t *testing.T) {
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
 
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -462,7 +462,7 @@ func TestBackendRemoveFinalizer(t *testing.T) {
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{readyToDelete}
 
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -509,7 +509,7 @@ func TestBackendFailed(t *testing.T) {
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
 
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -566,7 +566,7 @@ func TestBackendRunning(t *testing.T) {
 	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
 
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -602,7 +602,7 @@ func TestBackendRunning(t *testing.T) {
 func TestBackendSetInvalidOperation(t *testing.T) {
 	backend := newFakeBackendRecord("", "backend")
 	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
 			get: backend,
@@ -637,7 +637,7 @@ func TestBackendNotFoundBackend(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	fakeClient := fake.NewSimpleClientset()
-	ctrl := NewBackendController(
+	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{},
 		&fakeDriverLister{

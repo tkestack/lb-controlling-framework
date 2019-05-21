@@ -33,7 +33,7 @@ func TestLoadBalancerCreate(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -57,7 +57,7 @@ func TestLoadBalancerCreateFail(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -82,7 +82,7 @@ func TestLoadBalancerCreateRunning(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -119,7 +119,7 @@ func TestLoadBalancerEnsure(t *testing.T) {
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -165,7 +165,7 @@ func TestLoadBalancerEnsureFail(t *testing.T) {
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -209,7 +209,7 @@ func TestLoadBalancerEnsureRunningWithPreviousEnsured(t *testing.T) {
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -255,7 +255,7 @@ func TestLoadBalancerReEnsure(t *testing.T) {
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -298,7 +298,7 @@ func TestLoadBalancerNoReEnsure(t *testing.T) {
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -331,7 +331,7 @@ func TestLoadBalancerDelete(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -362,7 +362,7 @@ func TestLoadBalancerDeleteWithNoFinalizer(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -387,7 +387,7 @@ func TestLoadBalancerDeleteFailed(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -420,7 +420,7 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -460,7 +460,7 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 //	}
 //	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 //	fakeClient := fake.NewSimpleClientset(lb)
-//	ctrl := NewLoadBalancerController(
+//	ctrl := newLoadBalancerController(
 //		fakeClient,
 //		&fakeLBLister{
 //			get: lb,
@@ -508,7 +508,7 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 //	}
 //	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 //	fakeClient := fake.NewSimpleClientset()
-//	ctrl := NewLoadBalancerController(
+//	ctrl := newLoadBalancerController(
 //		fakeClient,
 //		&fakeLBLister{
 //			get: lb,
@@ -541,7 +541,7 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 //	}
 //	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 //	fakeClient := fake.NewSimpleClientset(lb)
-//	ctrl := NewLoadBalancerController(
+//	ctrl := newLoadBalancerController(
 //		fakeClient,
 //		&fakeLBLister{
 //			get: lb,
@@ -589,7 +589,7 @@ func TestLoadBalancerSetOperationInvalidOperation(t *testing.T) {
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,
@@ -637,7 +637,7 @@ func TestLoadBalancerRemoveFinalizer(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := NewLoadBalancerController(
+	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
 			get: lb,

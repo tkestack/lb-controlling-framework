@@ -33,6 +33,7 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 )
 
+// NewController creates a new LBCF-controller
 func NewController(
 	context *context.Context) *Controller {
 	c := &Controller{
@@ -43,10 +44,10 @@ func NewController(
 		backendQueue:      util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backend-queue", context.Cfg.MinRetryDelay),
 	}
 
-	c.driverCtrl = NewDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
-	c.lbCtrl = NewLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), context.LBDriverInformer.Lister(), util.NewWebhookInvoker())
-	c.backendCtrl = NewBackendController(c.context.LbcfClient, c.context.BRInformer.Lister(), context.LBDriverInformer.Lister(), c.context.PodInformer.Lister(), util.NewWebhookInvoker())
-	c.backendGroupCtrl = NewBackendGroupController(c.context.LbcfClient, c.context.LBInformer.Lister(), c.context.BGInformer.Lister(), c.context.BRInformer.Lister(), c.context.PodInformer.Lister())
+	c.driverCtrl = newDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
+	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), context.LBDriverInformer.Lister(), util.NewWebhookInvoker())
+	c.backendCtrl = newBackendController(c.context.LbcfClient, c.context.BRInformer.Lister(), context.LBDriverInformer.Lister(), c.context.PodInformer.Lister(), util.NewWebhookInvoker())
+	c.backendGroupCtrl = newBackendGroupController(c.context.LbcfClient, c.context.LBInformer.Lister(), c.context.BGInformer.Lister(), c.context.BRInformer.Lister(), c.context.PodInformer.Lister())
 
 	// enqueue backendgroup
 	c.context.PodInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
@@ -92,13 +93,14 @@ func NewController(
 	return c
 }
 
+// Controller implements LBCF-controller
 type Controller struct {
 	context *context.Context
 
-	driverCtrl       *DriverController
-	lbCtrl           *LoadBalancerController
-	backendCtrl      *BackendController
-	backendGroupCtrl *BackendGroupController
+	driverCtrl       *driverController
+	lbCtrl           *loadBalancerController
+	backendCtrl      *backendController
+	backendGroupCtrl *backendGroupController
 
 	driverQueue       util.IntervalRateLimitingInterface
 	loadBalancerQueue util.IntervalRateLimitingInterface
@@ -106,6 +108,7 @@ type Controller struct {
 	backendQueue      util.IntervalRateLimitingInterface
 }
 
+// Start starts controller in a new goroutine
 func (c *Controller) Start() {
 	go c.run()
 }
