@@ -174,7 +174,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
 			return util.ErrorResult(err)
 		}
-		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccEnsureBackend", "")
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccEnsureBackend", "Successfully ensured backend")
 		if backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
 			return util.PeriodicResult(util.GetDuration(backend.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
