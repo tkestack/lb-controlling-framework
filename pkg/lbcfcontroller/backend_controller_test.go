@@ -17,10 +17,8 @@
 package lbcfcontroller
 
 import (
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +34,7 @@ func TestBackendGenerateAddr(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -47,6 +46,7 @@ func TestBackendGenerateAddr(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
@@ -57,9 +57,12 @@ func TestBackendGenerateAddr(t *testing.T) {
 	if get.Status.BackendAddr == "" {
 		t.Fatalf("expect addr not empty")
 	}
-	addrCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated)
-	if addrCondition.Status != lbcfapi.ConditionTrue {
-		t.Fatalf("expect condition.status=true, get %s", addrCondition.Status)
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "SuccGenerateAddr" {
+		t.Fatalf("expect reason SuccGenerateAddr, get %s", reason)
 	}
 }
 
@@ -68,6 +71,7 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -79,6 +83,7 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
@@ -89,13 +94,12 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 	if get.Status.BackendAddr != "" {
 		t.Fatalf("expect empty addr, get %v", get.Status.BackendAddr)
 	}
-	addrCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated)
-	if addrCondition.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("expect condition.status=false, get %s", addrCondition.Status)
-	} else if addrCondition.Reason != string(lbcfapi.ReasonOperationFailed) {
-		t.Fatalf("expect condition.reason=%v, get %s", lbcfapi.ReasonOperationFailed, addrCondition.Status)
-	} else if addrCondition.Message == "" {
-		t.Fatalf("expect condition.message not empty")
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "FailedGenerateAddr" {
+		t.Fatalf("expect reason FailedGenerateAddr, get %s", reason)
 	}
 	ensureCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered)
 	if ensureCondition != nil {
@@ -108,6 +112,7 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -119,6 +124,7 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
@@ -129,13 +135,53 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 	if get.Status.BackendAddr != "" {
 		t.Fatalf("expect empty addr, get %v", get.Status.BackendAddr)
 	}
-	addrCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated)
-	if addrCondition.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("expect condition.status=false, get %s", addrCondition.Status)
-	} else if addrCondition.Reason != string(lbcfapi.ReasonOperationInProgress) {
-		t.Fatalf("expect condition.reason=%v, get %s", lbcfapi.ReasonOperationInProgress, addrCondition.Status)
-	} else if addrCondition.Message == "" {
-		t.Fatalf("expect condition.message not empty")
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "CalledGenerateAddr" {
+		t.Fatalf("expect reason CalledGenerateAddr, get %s", reason)
+	}
+	ensureCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered)
+	if ensureCondition != nil {
+		t.Fatalf("expect nil condition, get %#v", ensureCondition)
+	}
+}
+
+func TestBackendGenerateAddrInvalidResponse(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
+	ctrl := newBackendController(
+		fakeClient,
+		&fakeBackendLister{
+			get: backend,
+		},
+		&fakeDriverLister{
+			get: newFakeDriver("", "driver"),
+		},
+		&fakePodLister{
+			get: newFakePod("", "pod=0", nil, true, false),
+		},
+		&fakeEventRecorder{store: store},
+		&fakeInvalidInvoker{})
+	key, _ := controller.KeyFunc(backend)
+	resp := ctrl.syncBackendRecord(key)
+	if !resp.IsError() {
+		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetError())
+	}
+	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+	if get.Status.BackendAddr != "" {
+		t.Fatalf("expect empty addr, get %v", get.Status.BackendAddr)
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "InvalidGenerateAddr" {
+		t.Fatalf("expect reason InvalidGenerateAddr, get %s", reason)
 	}
 	ensureCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered)
 	if ensureCondition != nil {
@@ -146,16 +192,11 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 func TestBackendEnsure(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	//ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -167,21 +208,21 @@ func TestBackendEnsure(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsSucc() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
 	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "SuccEnsureBackend" {
+		t.Fatalf("expect reason SuccEnsureBackend, get %s", reason)
+	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if get.Status.BackendAddr == "" {
-		t.Fatalf("expect addr not empty")
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated); get == nil {
-		t.Fatalf("missing condition")
-	} else if !reflect.DeepEqual(*get, addrCondition) {
-		t.Fatalf("expect condition %#v, get %#v", addrCondition, *get)
-	}
 	ensureCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered)
 	if ensureCondition.Status != lbcfapi.ConditionTrue {
 		t.Fatalf("expect condition.status=true, get %s", ensureCondition.Status)
@@ -191,16 +232,11 @@ func TestBackendEnsure(t *testing.T) {
 func TestBackendEnsureFailed(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	//ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
 	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -212,21 +248,21 @@ func TestBackendEnsureFailed(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetError())
 	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "FailedEnsureBackend" {
+		t.Fatalf("expect reason FailedEnsureBackend, get %s", reason)
+	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if get.Status.BackendAddr == "" {
-		t.Fatalf("expect addr not empty")
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated); get == nil {
-		t.Fatalf("missing condition")
-	} else if !reflect.DeepEqual(*get, addrCondition) {
-		t.Fatalf("expect condition %#v, get %#v", addrCondition, *get)
-	}
 	ensureCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered)
 	if ensureCondition.Status != lbcfapi.ConditionFalse {
 		t.Fatalf("expect condition.status=false, get %s", ensureCondition.Status)
@@ -246,18 +282,14 @@ func TestBackendEnsureRunning(t *testing.T) {
 		Policy: lbcfapi.PolicyAlways,
 	}
 	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
 	ensureCondition := lbcfapi.BackendRecordCondition{
 		Type:               lbcfapi.BackendRegistered,
 		Status:             lbcfapi.ConditionTrue,
 		LastTransitionTime: ts,
 	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{ensureCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -269,21 +301,21 @@ func TestBackendEnsureRunning(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
 		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
 	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "CalledEnsureBackend" {
+		t.Fatalf("expect reason CalledEnsureBackend, get %s", reason)
+	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if get.Status.BackendAddr == "" {
-		t.Fatalf("expect addr not empty")
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated); get == nil {
-		t.Fatalf("missing condition")
-	} else if !reflect.DeepEqual(*get, addrCondition) {
-		t.Fatalf("expect condition %#v, get %#v", addrCondition, *get)
-	}
 	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); get.Status != ensureCondition.Status {
 		t.Fatalf("expect condition.status %v, get %v", ensureCondition.Status, get.Status)
 	} else if get.Reason != string(lbcfapi.ReasonOperationInProgress) {
@@ -302,18 +334,14 @@ func TestBackendEnsureNoRerun(t *testing.T) {
 		Policy: lbcfapi.PolicyIfNotSucc,
 	}
 	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
 	ensureCondition := lbcfapi.BackendRecordCondition{
 		Type:               lbcfapi.BackendRegistered,
 		Status:             lbcfapi.ConditionTrue,
 		LastTransitionTime: ts,
 	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{ensureCondition}
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -325,25 +353,57 @@ func TestBackendEnsureNoRerun(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsSucc() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
 	}
+	if len(store) != 0 {
+		t.Fatalf("expect 0 event, get %d", len(store))
+	}
+
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if get.Status.BackendAddr == "" {
-		t.Fatalf("expect addr not empty")
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendAddrGenerated); get == nil {
-		t.Fatalf("missing condition")
-	} else if !reflect.DeepEqual(*get, addrCondition) {
-		t.Fatalf("expect condition %#v, get %#v", addrCondition, *get)
-	}
 	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); get == nil {
 		t.Fatalf("missing condition")
 	} else if !reflect.DeepEqual(*get, ensureCondition) {
 		t.Fatalf("expect condition %#v, get %#v", ensureCondition, *get)
+	}
+}
+
+func TestBackendEnsureInvalidResponse(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+	//ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+	backend.Status.BackendAddr = "fake.addr.com:1234"
+	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
+	ctrl := newBackendController(
+		fakeClient,
+		&fakeBackendLister{
+			get: backend,
+		},
+		&fakeDriverLister{
+			get: newFakeDriver("", "driver"),
+		},
+		&fakePodLister{
+			get: newFakePod("", "pod=0", nil, true, false),
+		},
+		&fakeEventRecorder{store: store},
+		&fakeInvalidInvoker{})
+	key, _ := controller.KeyFunc(backend)
+	resp := ctrl.syncBackendRecord(key)
+	if !resp.IsError() {
+		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetError())
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "InvalidEnsureBackend" {
+		t.Fatalf("expect reason InvalidEnsureBackend, get %s", reason)
 	}
 }
 
@@ -358,19 +418,15 @@ func TestBackendDeregister(t *testing.T) {
 		Policy: lbcfapi.PolicyIfNotSucc,
 	}
 	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
 	ensureCondition := lbcfapi.BackendRecordCondition{
 		Type:               lbcfapi.BackendRegistered,
 		Status:             lbcfapi.ConditionTrue,
 		LastTransitionTime: ts,
 	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{ensureCondition}
 
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -382,98 +438,8 @@ func TestBackendDeregister(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(backend)
-	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
-	}
-	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if len(get.Finalizers) != 1 {
-		t.Fatalf("expect finalizer %v, get %#v", lbcfapi.FinalizerDeregisterBackend, get.Finalizers)
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); get.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendReadyToDelete); get.Status != lbcfapi.ConditionTrue {
-		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionTrue, get.Status)
-	}
-}
-
-func TestBackendDeregisterSkipped(t *testing.T) {
-	lb := newFakeLoadBalancer("", "lb", nil, nil)
-	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
-	backend.DeletionTimestamp = &ts
-	backend.Finalizers = []string{}
-	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
-		Policy: lbcfapi.PolicyIfNotSucc,
-	}
-	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
-	ensureCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendRegistered,
-		Status:             lbcfapi.ConditionFalse,
-		LastTransitionTime: ts,
-	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
-
-	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := newBackendController(
-		fakeClient,
-		&fakeBackendLister{
-			get: backend,
-		},
-		&fakeDriverLister{
-			get: newFakeDriver("", "driver"),
-		},
-		&fakePodLister{
-			get: newFakePod("", "pod=0", nil, true, false),
-		},
-		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(backend)
-	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
-	}
-}
-
-func TestBackendRemoveFinalizer(t *testing.T) {
-	lb := newFakeLoadBalancer("", "lb", nil, nil)
-	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
-	backend.DeletionTimestamp = &ts
-	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
-	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
-		Policy: lbcfapi.PolicyIfNotSucc,
-	}
-	backend.Status.BackendAddr = "fake.addr.com:1234"
-	readyToDelete := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendReadyToDelete,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{readyToDelete}
-
-	fakeClient := fake.NewSimpleClientset(backend)
-	ctrl := newBackendController(
-		fakeClient,
-		&fakeBackendLister{
-			get: backend,
-		},
-		&fakeDriverLister{
-			get: newFakeDriver("", "driver"),
-		},
-		&fakePodLister{
-			get: newFakePod("", "pod=0", nil, true, false),
-		},
-		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsSucc() {
@@ -485,7 +451,7 @@ func TestBackendRemoveFinalizer(t *testing.T) {
 	}
 }
 
-func TestBackendFailed(t *testing.T) {
+func TestBackendDeregisterFailed(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
@@ -496,19 +462,15 @@ func TestBackendFailed(t *testing.T) {
 		Policy: lbcfapi.PolicyIfNotSucc,
 	}
 	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
 	ensureCondition := lbcfapi.BackendRecordCondition{
 		Type:               lbcfapi.BackendRegistered,
 		Status:             lbcfapi.ConditionTrue,
 		LastTransitionTime: ts,
 	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{ensureCondition}
 
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -520,6 +482,7 @@ func TestBackendFailed(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
@@ -528,21 +491,18 @@ func TestBackendFailed(t *testing.T) {
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if len(get.Finalizers) != 1 {
-		t.Fatalf("expect finalizer %v, get %#v", lbcfapi.FinalizerDeregisterBackend, get.Finalizers)
+		t.Fatalf("get %#v", get.Finalizers)
 	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); !reflect.DeepEqual(*get, ensureCondition) {
-		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendReadyToDelete); get.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
-	} else if get.Reason != lbcfapi.ReasonOperationFailed.String() {
-		t.Fatalf("expect reason %v, get %v", lbcfapi.ReasonOperationFailed, get.Reason)
-	} else if get.Message == "" {
-		t.Fatalf("expect message")
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "FailedDeregister" {
+		t.Fatalf("expect reason FailedDeregister, get %s", reason)
 	}
 }
 
-func TestBackendRunning(t *testing.T) {
+func TestBackendDeregisterRunning(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
@@ -553,19 +513,15 @@ func TestBackendRunning(t *testing.T) {
 		Policy: lbcfapi.PolicyIfNotSucc,
 	}
 	backend.Status.BackendAddr = "fake.addr.com:1234"
-	addrCondition := lbcfapi.BackendRecordCondition{
-		Type:               lbcfapi.BackendAddrGenerated,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: ts,
-	}
 	ensureCondition := lbcfapi.BackendRecordCondition{
 		Type:               lbcfapi.BackendRegistered,
 		Status:             lbcfapi.ConditionTrue,
 		LastTransitionTime: ts,
 	}
-	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{ensureCondition}
 
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -577,6 +533,7 @@ func TestBackendRunning(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
@@ -585,23 +542,37 @@ func TestBackendRunning(t *testing.T) {
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if len(get.Finalizers) != 1 {
-		t.Fatalf("expect finalizer %v, get %#v", lbcfapi.FinalizerDeregisterBackend, get.Finalizers)
+		t.Fatalf("get %#v", get.Finalizers)
 	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); !reflect.DeepEqual(*get, ensureCondition) {
-		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
-	}
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendReadyToDelete); get.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
-	} else if get.Reason != lbcfapi.ReasonOperationInProgress.String() {
-		t.Fatalf("expect reason %v, get %v", lbcfapi.ReasonOperationInProgress, get.Reason)
-	} else if get.Message == "" {
-		t.Fatalf("expect message")
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "CalledDeregister" {
+		t.Fatalf("expect reason CalledDeregister, get %s", reason)
 	}
 }
 
-func TestBackendSetInvalidOperation(t *testing.T) {
-	backend := newFakeBackendRecord("", "backend")
+func TestBackendDeregisterInvalidResponse(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+	backend.DeletionTimestamp = &ts
+	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
+	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+		Policy: lbcfapi.PolicyIfNotSucc,
+	}
+	backend.Status.BackendAddr = "fake.addr.com:1234"
+	ensureCondition := lbcfapi.BackendRecordCondition{
+		Type:               lbcfapi.BackendRegistered,
+		Status:             lbcfapi.ConditionTrue,
+		LastTransitionTime: ts,
+	}
+	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{ensureCondition}
+
 	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
 	ctrl := newBackendController(
 		fakeClient,
 		&fakeBackendLister{
@@ -613,43 +584,276 @@ func TestBackendSetInvalidOperation(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
-		&fakeRunningInvoker{})
-	resp := webhooks.ResponseForFailRetryHooks{
-		Status: "invalidStatus",
-		Msg:    "fake message",
+		&fakeEventRecorder{store: store},
+		&fakeInvalidInvoker{})
+	key, _ := controller.KeyFunc(backend)
+	resp := ctrl.syncBackendRecord(key)
+	if !resp.IsError() {
+		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetError())
 	}
-	result := ctrl.setOperationInvalidResponse(backend, resp, lbcfapi.BackendAddrGenerated)
-	if !result.IsError() {
-		t.Fatalf("expect err result, get %#v", result)
+	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+	if len(get.Finalizers) != 1 {
+		t.Fatalf("get %#v", get.Finalizers)
 	}
-	obj, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if get := util.GetBackendRecordCondition(&obj.Status, lbcfapi.BackendAddrGenerated); get == nil {
-		t.Fatalf("missing condition")
-	} else if get.Reason != lbcfapi.ReasonInvalidResponse.String() {
-		t.Fatalf("expect reason %v, get %v", lbcfapi.ReasonInvalidResponse, get.Reason)
-	} else if index := strings.Index(get.Message, "unknown status"); index == -1 {
-		t.Fatalf("wrong message, get %v", get.Message)
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "InvalidDeregister" {
+		t.Fatalf("expect reason InvalidDeregister, get %s", reason)
 	}
 }
 
-func TestBackendNotFoundBackend(t *testing.T) {
-	lb := newFakeLoadBalancer("", "lb", nil, nil)
-	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
-	fakeClient := fake.NewSimpleClientset()
-	ctrl := newBackendController(
-		fakeClient,
-		&fakeBackendLister{},
-		&fakeDriverLister{
-			get: newFakeDriver("", "driver"),
-		},
-		&fakePodLister{
-			get: newFakePod("", "pod=0", nil, true, false),
-		},
-		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(backend)
-	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
-	}
-}
+//func TestBackendDeregisterSkipped(t *testing.T) {
+//	lb := newFakeLoadBalancer("", "lb", nil, nil)
+//	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+//	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+//	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+//	backend.DeletionTimestamp = &ts
+//	backend.Finalizers = []string{}
+//	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+//		Policy: lbcfapi.PolicyIfNotSucc,
+//	}
+//	backend.Status.BackendAddr = "fake.addr.com:1234"
+//	addrCondition := lbcfapi.BackendRecordCondition{
+//		Type:               lbcfapi.BackendAddrGenerated,
+//		Status:             lbcfapi.ConditionTrue,
+//		LastTransitionTime: ts,
+//	}
+//	ensureCondition := lbcfapi.BackendRecordCondition{
+//		Type:               lbcfapi.BackendRegistered,
+//		Status:             lbcfapi.ConditionFalse,
+//		LastTransitionTime: ts,
+//	}
+//	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+//
+//	fakeClient := fake.NewSimpleClientset(backend)
+//	ctrl := newBackendController(
+//		fakeClient,
+//		&fakeBackendLister{
+//			get: backend,
+//		},
+//		&fakeDriverLister{
+//			get: newFakeDriver("", "driver"),
+//		},
+//		&fakePodLister{
+//			get: newFakePod("", "pod=0", nil, true, false),
+//		},
+//		&fakeFailInvoker{})
+//	key, _ := controller.KeyFunc(backend)
+//	resp := ctrl.syncBackendRecord(key)
+//	if !resp.IsSucc() {
+//		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+//	}
+//}
+
+//func TestBackendRemoveFinalizer(t *testing.T) {
+//	lb := newFakeLoadBalancer("", "lb", nil, nil)
+//	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+//	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+//	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+//	backend.DeletionTimestamp = &ts
+//	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
+//	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+//		Policy: lbcfapi.PolicyIfNotSucc,
+//	}
+//	backend.Status.BackendAddr = "fake.addr.com:1234"
+//	readyToDelete := lbcfapi.BackendRecordCondition{
+//		Type:               lbcfapi.BackendReadyToDelete,
+//		Status:             lbcfapi.ConditionTrue,
+//		LastTransitionTime: ts,
+//	}
+//	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{readyToDelete}
+//
+//	fakeClient := fake.NewSimpleClientset(backend)
+//	ctrl := newBackendController(
+//		fakeClient,
+//		&fakeBackendLister{
+//			get: backend,
+//		},
+//		&fakeDriverLister{
+//			get: newFakeDriver("", "driver"),
+//		},
+//		&fakePodLister{
+//			get: newFakePod("", "pod=0", nil, true, false),
+//		},
+//		&fakeFailInvoker{})
+//	key, _ := controller.KeyFunc(backend)
+//	resp := ctrl.syncBackendRecord(key)
+//	if !resp.IsSucc() {
+//		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+//	}
+//	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+//	if len(get.Finalizers) != 0 {
+//		t.Fatalf("expect empty finalizer, get %#v", get.Finalizers)
+//	}
+//}
+
+//func TestBackendFailed(t *testing.T) {
+//	lb := newFakeLoadBalancer("", "lb", nil, nil)
+//	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+//	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+//	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+//	backend.DeletionTimestamp = &ts
+//	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
+//	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+//		Policy: lbcfapi.PolicyIfNotSucc,
+//	}
+//	backend.Status.BackendAddr = "fake.addr.com:1234"
+//	addrCondition := lbcfapi.BackendRecordCondition{
+//		Type:               lbcfapi.BackendAddrGenerated,
+//		Status:             lbcfapi.ConditionTrue,
+//		LastTransitionTime: ts,
+//	}
+//	ensureCondition := lbcfapi.BackendRecordCondition{
+//		Type:               lbcfapi.BackendRegistered,
+//		Status:             lbcfapi.ConditionTrue,
+//		LastTransitionTime: ts,
+//	}
+//	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+//
+//	fakeClient := fake.NewSimpleClientset(backend)
+//	ctrl := newBackendController(
+//		fakeClient,
+//		&fakeBackendLister{
+//			get: backend,
+//		},
+//		&fakeDriverLister{
+//			get: newFakeDriver("", "driver"),
+//		},
+//		&fakePodLister{
+//			get: newFakePod("", "pod=0", nil, true, false),
+//		},
+//		&fakeFailInvoker{})
+//	key, _ := controller.KeyFunc(backend)
+//	resp := ctrl.syncBackendRecord(key)
+//	if !resp.IsFailed() {
+//		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetError())
+//	}
+//	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+//	if len(get.Finalizers) != 1 {
+//		t.Fatalf("expect finalizer %v, get %#v", lbcfapi.FinalizerDeregisterBackend, get.Finalizers)
+//	}
+//	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); !reflect.DeepEqual(*get, ensureCondition) {
+//		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
+//	}
+//	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendReadyToDelete); get.Status != lbcfapi.ConditionFalse {
+//		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
+//	} else if get.Reason != lbcfapi.ReasonOperationFailed.String() {
+//		t.Fatalf("expect reason %v, get %v", lbcfapi.ReasonOperationFailed, get.Reason)
+//	} else if get.Message == "" {
+//		t.Fatalf("expect message")
+//	}
+//}
+
+//func TestBackendRunning(t *testing.T) {
+//	lb := newFakeLoadBalancer("", "lb", nil, nil)
+//	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+//	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+//	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+//	backend.DeletionTimestamp = &ts
+//	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
+//	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+//		Policy: lbcfapi.PolicyIfNotSucc,
+//	}
+//	backend.Status.BackendAddr = "fake.addr.com:1234"
+//	addrCondition := lbcfapi.BackendRecordCondition{
+//		Type:               lbcfapi.BackendAddrGenerated,
+//		Status:             lbcfapi.ConditionTrue,
+//		LastTransitionTime: ts,
+//	}
+//	ensureCondition := lbcfapi.BackendRecordCondition{
+//		Type:               lbcfapi.BackendRegistered,
+//		Status:             lbcfapi.ConditionTrue,
+//		LastTransitionTime: ts,
+//	}
+//	backend.Status.Conditions = []lbcfapi.BackendRecordCondition{addrCondition, ensureCondition}
+//
+//	fakeClient := fake.NewSimpleClientset(backend)
+//	ctrl := newBackendController(
+//		fakeClient,
+//		&fakeBackendLister{
+//			get: backend,
+//		},
+//		&fakeDriverLister{
+//			get: newFakeDriver("", "driver"),
+//		},
+//		&fakePodLister{
+//			get: newFakePod("", "pod=0", nil, true, false),
+//		},
+//		&fakeRunningInvoker{})
+//	key, _ := controller.KeyFunc(backend)
+//	resp := ctrl.syncBackendRecord(key)
+//	if !resp.IsRunning() {
+//		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+//	}
+//	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+//	if len(get.Finalizers) != 1 {
+//		t.Fatalf("expect finalizer %v, get %#v", lbcfapi.FinalizerDeregisterBackend, get.Finalizers)
+//	}
+//	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); !reflect.DeepEqual(*get, ensureCondition) {
+//		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
+//	}
+//	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendReadyToDelete); get.Status != lbcfapi.ConditionFalse {
+//		t.Fatalf("expect condition.status %v, get %v", lbcfapi.ConditionFalse, get.Status)
+//	} else if get.Reason != lbcfapi.ReasonOperationInProgress.String() {
+//		t.Fatalf("expect reason %v, get %v", lbcfapi.ReasonOperationInProgress, get.Reason)
+//	} else if get.Message == "" {
+//		t.Fatalf("expect message")
+//	}
+//}
+
+//func TestBackendSetInvalidOperation(t *testing.T) {
+//	backend := newFakeBackendRecord("", "backend")
+//	fakeClient := fake.NewSimpleClientset(backend)
+//	ctrl := newBackendController(
+//		fakeClient,
+//		&fakeBackendLister{
+//			get: backend,
+//		},
+//		&fakeDriverLister{
+//			get: newFakeDriver("", "driver"),
+//		},
+//		&fakePodLister{
+//			get: newFakePod("", "pod=0", nil, true, false),
+//		},
+//		&fakeRunningInvoker{})
+//	resp := webhooks.ResponseForFailRetryHooks{
+//		Status: "invalidStatus",
+//		Msg:    "fake message",
+//	}
+//	result := ctrl.setOperationInvalidResponse(backend, resp, lbcfapi.BackendAddrGenerated)
+//	if !result.IsError() {
+//		t.Fatalf("expect err result, get %#v", result)
+//	}
+//	obj, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+//	if get := util.GetBackendRecordCondition(&obj.Status, lbcfapi.BackendAddrGenerated); get == nil {
+//		t.Fatalf("missing condition")
+//	} else if get.Reason != lbcfapi.ReasonInvalidResponse.String() {
+//		t.Fatalf("expect reason %v, get %v", lbcfapi.ReasonInvalidResponse, get.Reason)
+//	} else if index := strings.Index(get.Message, "unknown status"); index == -1 {
+//		t.Fatalf("wrong message, get %v", get.Message)
+//	}
+//}
+
+//func TestBackendNotFoundBackend(t *testing.T) {
+//	lb := newFakeLoadBalancer("", "lb", nil, nil)
+//	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+//	backend := util.ConstructBackendRecord(lb, bg, "pod-0")
+//	fakeClient := fake.NewSimpleClientset()
+//	ctrl := newBackendController(
+//		fakeClient,
+//		&fakeBackendLister{},
+//		&fakeDriverLister{
+//			get: newFakeDriver("", "driver"),
+//		},
+//		&fakePodLister{
+//			get: newFakePod("", "pod=0", nil, true, false),
+//		},
+//		&fakeFailInvoker{})
+//	key, _ := controller.KeyFunc(backend)
+//	resp := ctrl.syncBackendRecord(key)
+//	if !resp.IsSucc() {
+//		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+//	}
+//}

@@ -390,9 +390,7 @@ type BackendRecordStatus struct {
 type BackendRecordConditionType string
 
 const (
-	BackendAddrGenerated BackendRecordConditionType = "AddrGenerated"
-	BackendRegistered    BackendRecordConditionType = "Registered"
-	BackendReadyToDelete BackendRecordConditionType = "ReadyToDelete"
+	BackendRegistered BackendRecordConditionType = "Registered"
 )
 
 type BackendRecordCondition struct {

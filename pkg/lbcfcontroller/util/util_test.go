@@ -305,7 +305,7 @@ func TestAddBackendCondition(t *testing.T) {
 			name:   "add-condition-to-empty",
 			status: &lbcfapi.BackendRecordStatus{},
 			condition: lbcfapi.BackendRecordCondition{
-				Type:    lbcfapi.BackendAddrGenerated,
+				Type:    lbcfapi.BackendRegistered,
 				Status:  lbcfapi.ConditionTrue,
 				Reason:  lbcfapi.ReasonOperationInProgress.String(),
 				Message: "ensured",
@@ -313,41 +313,10 @@ func TestAddBackendCondition(t *testing.T) {
 			expect: &lbcfapi.BackendRecordStatus{
 				Conditions: []lbcfapi.BackendRecordCondition{
 					{
-						Type:    lbcfapi.BackendAddrGenerated,
-						Status:  lbcfapi.ConditionTrue,
-						Reason:  lbcfapi.ReasonOperationInProgress.String(),
-						Message: "ensured",
-					},
-				},
-			},
-		},
-		{
-			name: "add-condition",
-			status: &lbcfapi.BackendRecordStatus{
-				Conditions: []lbcfapi.BackendRecordCondition{
-					{
-						Type:   lbcfapi.BackendAddrGenerated,
-						Status: lbcfapi.ConditionTrue,
-					},
-				},
-			},
-			condition: lbcfapi.BackendRecordCondition{
-				Type:    lbcfapi.BackendRegistered,
-				Status:  lbcfapi.ConditionTrue,
-				Reason:  lbcfapi.ReasonOperationInProgress.String(),
-				Message: "message",
-			},
-			expect: &lbcfapi.BackendRecordStatus{
-				Conditions: []lbcfapi.BackendRecordCondition{
-					{
 						Type:    lbcfapi.BackendRegistered,
 						Status:  lbcfapi.ConditionTrue,
 						Reason:  lbcfapi.ReasonOperationInProgress.String(),
-						Message: "message",
-					},
-					{
-						Type:   lbcfapi.BackendAddrGenerated,
-						Status: lbcfapi.ConditionTrue,
+						Message: "ensured",
 					},
 				},
 			},
@@ -1808,76 +1777,5 @@ func TestFilterBackendGroup(t *testing.T) {
 	}
 	if !get.Equal(expect) {
 		t.Fatalf("expect: %v, get %v", expect.List(), get.List())
-	}
-}
-
-func TestBackendRecordReadyToDelete(t *testing.T) {
-	type testCase struct {
-		name    string
-		backend *lbcfapi.BackendRecord
-		expect  bool
-	}
-	ts := metav1.Now()
-	cases := []testCase{
-		{
-			name: "true-no-addr-deleting",
-			backend: &lbcfapi.BackendRecord{
-				ObjectMeta: metav1.ObjectMeta{
-					DeletionTimestamp: &ts,
-				},
-				Status: lbcfapi.BackendRecordStatus{
-					BackendAddr: "",
-				},
-			},
-			expect: true,
-		},
-		{
-			name: "true-has-addr-status-ready",
-			backend: &lbcfapi.BackendRecord{
-				ObjectMeta: metav1.ObjectMeta{
-					DeletionTimestamp: &ts,
-				},
-				Status: lbcfapi.BackendRecordStatus{
-					BackendAddr: "1.1.1.1",
-					Conditions: []lbcfapi.BackendRecordCondition{
-						{
-							Type:   lbcfapi.BackendReadyToDelete,
-							Status: lbcfapi.ConditionTrue,
-						},
-					},
-				},
-			},
-			expect: true,
-		},
-		{
-			name: "false-no-addr-nil-deletion-timestamp",
-			backend: &lbcfapi.BackendRecord{
-				ObjectMeta: metav1.ObjectMeta{
-					DeletionTimestamp: nil,
-				},
-				Status: lbcfapi.BackendRecordStatus{
-					BackendAddr: "",
-				},
-			},
-			expect: false,
-		},
-		{
-			name: "false-has-addr-has-deletion-no-ready",
-			backend: &lbcfapi.BackendRecord{
-				ObjectMeta: metav1.ObjectMeta{
-					DeletionTimestamp: &ts,
-				},
-				Status: lbcfapi.BackendRecordStatus{
-					BackendAddr: "1.1.1.1",
-				},
-			},
-			expect: false,
-		},
-	}
-
-	for _, c := range cases {
-		if get := BackendRecordReadyToDelete(c.backend); get != c.expect {
-			t.Errorf("case %s: expect %v, get %v", c.name, c.expect, get)
-		}
 	}
 }

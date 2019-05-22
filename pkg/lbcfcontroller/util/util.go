@@ -176,19 +176,6 @@ func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 	}
 }
 
-// BackendRecordReadyToDelete indicates webhook deregisterBackend has been successfully called,
-// and the given BackendRecord is ok to be deleted from k8s
-func BackendRecordReadyToDelete(backend *lbcfapi.BackendRecord) bool {
-	if backend.DeletionTimestamp != nil && backend.Status.BackendAddr == "" {
-		return true
-	}
-	cond := GetBackendRecordCondition(&backend.Status, lbcfapi.BackendReadyToDelete)
-	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
-		return true
-	}
-	return false
-}
-
 // GetBackendRecordCondition is an helper function to get specific BackendRecord condition
 func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus, conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {
 	for i := range status.Conditions {

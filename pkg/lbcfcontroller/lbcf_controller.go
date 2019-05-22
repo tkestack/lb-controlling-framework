@@ -46,7 +46,7 @@ func NewController(
 
 	c.driverCtrl = newDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
 	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), context.LBDriverInformer.Lister(), util.NewWebhookInvoker())
-	c.backendCtrl = newBackendController(c.context.LbcfClient, c.context.BRInformer.Lister(), context.LBDriverInformer.Lister(), c.context.PodInformer.Lister(), util.NewWebhookInvoker())
+	c.backendCtrl = newBackendController(c.context.LbcfClient, c.context.BRInformer.Lister(), context.LBDriverInformer.Lister(), c.context.PodInformer.Lister(), c.context.EventRecorder, util.NewWebhookInvoker())
 	c.backendGroupCtrl = newBackendGroupController(c.context.LbcfClient, c.context.LBInformer.Lister(), c.context.BGInformer.Lister(), c.context.BRInformer.Lister(), c.context.PodInformer.Lister())
 
 	// enqueue backendgroup
@@ -337,6 +337,10 @@ func (c *Controller) addBackendRecord(obj interface{}) {
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := old.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
+
+	if oldObj.ResourceVersion == curObj.ResourceVersion && oldObj.Status.BackendAddr == curObj.Status.BackendAddr {
+		return
+	}
 
 	c.enqueue(curObj, c.backendQueue)
 

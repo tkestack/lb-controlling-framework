@@ -25,19 +25,22 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
+	apicore "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 )
 
-func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, invoker util.WebhookInvoker) *backendController {
+func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *backendController {
 	return &backendController{
 		client:         client,
 		brLister:       brLister,
 		driverLister:   driverLister,
 		podLister:      podLister,
+		eventRecorder:  recorder,
 		webhookInvoker: invoker,
 	}
 }
@@ -48,6 +51,8 @@ type backendController struct {
 	brLister     v1beta1.BackendRecordLister
 	driverLister v1beta1.LoadBalancerDriverLister
 	podLister    corev1.PodLister
+
+	eventRecorder record.EventRecorder
 
 	webhookInvoker util.WebhookInvoker
 }
@@ -67,9 +72,6 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 	if backend.DeletionTimestamp != nil {
 		if !util.HasFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend) {
 			return util.SuccResult()
-		}
-		if util.BackendRecordReadyToDelete(backend) {
-			return c.removeFinalizer(backend)
 		}
 		return c.deregisterBackend(backend)
 	}
@@ -112,23 +114,23 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		case webhooks.StatusSucc:
 			cpy := backend.DeepCopy()
 			cpy.Status.BackendAddr = rsp.BackendAddr
-			util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
-				Type:               lbcfapi.BackendAddrGenerated,
-				Status:             lbcfapi.ConditionTrue,
-				LastTransitionTime: v1.Now(),
-				Message:            rsp.Msg,
-			})
 			_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
 			if err != nil {
+				c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "update status failed: %v", err)
 				return util.ErrorResult(err)
 			}
+			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccGenerateAddr", "addr: %s", rsp.BackendAddr)
 			return util.SuccResult()
 		case webhooks.StatusFail:
-			return c.setOperationFailed(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendAddrGenerated)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "msg: %s", rsp.Msg)
+			return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 		case webhooks.StatusRunning:
-			return c.setOperationRunning(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendAddrGenerated)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "CalledGenerateAddr", "msg: %s", rsp.Msg)
+			delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
+			return util.AsyncResult(delay)
 		default:
-			return c.setOperationInvalidResponse(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendAddrGenerated)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "status: %s, msg: %s", rsp.Status, rsp.Msg)
+			return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 		}
 	}
 	// TODO: generateBackendAddr for service backend
@@ -157,30 +159,73 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
-		cpy := backend.DeepCopy()
+		backend = backend.DeepCopy()
 		if len(rsp.InjectedInfo) > 0 {
-			cpy.Status.InjectedInfo = rsp.InjectedInfo
+			backend.Status.InjectedInfo = rsp.InjectedInfo
 		}
-		result := c.setOperationSucc(cpy, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
-		if result.IsError() {
-			return result
+		util.AddBackendCondition(&backend.Status, lbcfapi.BackendRecordCondition{
+			Type:               lbcfapi.BackendRegistered,
+			Status:             lbcfapi.ConditionTrue,
+			LastTransitionTime: v1.Now(),
+			Message:            rsp.Msg,
+		})
+		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
+		if err != nil {
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
+			return util.ErrorResult(err)
 		}
-		if cpy.Spec.EnsurePolicy != nil && cpy.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
-			return util.PeriodicResult(util.GetDuration(cpy.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccEnsureBackend", "")
+		if backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
+			return util.PeriodicResult(util.GetDuration(backend.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
 		return util.SuccResult()
 	case webhooks.StatusFail:
-		return c.setOperationFailed(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
+		backend = backend.DeepCopy()
+		util.AddBackendCondition(&backend.Status, lbcfapi.BackendRecordCondition{
+			Type:               lbcfapi.BackendRegistered,
+			Status:             lbcfapi.ConditionFalse,
+			LastTransitionTime: v1.Now(),
+			Reason:             lbcfapi.ReasonOperationFailed.String(),
+			Message:            rsp.Msg,
+		})
+		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
+		if err != nil {
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
+			return util.ErrorResult(err)
+		}
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "msg: %s", rsp.Msg)
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		return c.setOperationRunning(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
+		backend = backend.DeepCopy()
+		// running operation doesn't update condition's status field
+		status := lbcfapi.ConditionFalse
+		if curCondition := util.GetBackendRecordCondition(&backend.Status, lbcfapi.BackendRegistered); curCondition != nil {
+			status = curCondition.Status
+		}
+		util.AddBackendCondition(&backend.Status, lbcfapi.BackendRecordCondition{
+			Type:               lbcfapi.BackendRegistered,
+			Status:             status,
+			LastTransitionTime: v1.Now(),
+			Reason:             lbcfapi.ReasonOperationInProgress.String(),
+			Message:            rsp.Msg,
+		})
+		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
+		if err != nil {
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
+			return util.ErrorResult(err)
+		}
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "CalledEnsureBackend", "msg: %s", rsp.Msg)
+		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
+		return util.AsyncResult(delay)
 	default:
-		return c.setOperationInvalidResponse(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendRegistered)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidEnsureBackend", "status: %s, msg: %s", rsp.Status, rsp.Msg)
+		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
 
 func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
 	if backend.Status.BackendAddr == "" {
-		return util.SuccResult()
+		return c.removeFinalizer(backend)
 	}
 
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
@@ -203,30 +248,17 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	}
 	switch rsp.Status {
 	case webhooks.StatusSucc:
-		cpy := backend.DeepCopy()
-		cpy.Status.BackendAddr = ""
-		util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
-			Type:               lbcfapi.BackendRegistered,
-			Status:             lbcfapi.ConditionFalse,
-			LastTransitionTime: v1.Now(),
-			Reason:             "Deregistered",
-		})
-		util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
-			Type:               lbcfapi.BackendReadyToDelete,
-			Status:             lbcfapi.ConditionTrue,
-			LastTransitionTime: v1.Now(),
-		})
-		_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
-		if err != nil {
-			return util.ErrorResult(err)
-		}
-		return util.SuccResult()
+		return c.removeFinalizer(backend)
 	case webhooks.StatusFail:
-		return c.setOperationFailed(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendReadyToDelete)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedDeregister", "msg: %s", rsp.Msg)
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		return c.setOperationRunning(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendReadyToDelete)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "CalledDeregister", "msg: %s", rsp.Msg)
+		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
+		return util.AsyncResult(delay)
 	default:
-		return c.setOperationInvalidResponse(backend, rsp.ResponseForFailRetryHooks, lbcfapi.BackendReadyToDelete)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidDeregister", "status: %s, msg: %s", rsp.Status, rsp.Msg)
+		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
 
@@ -238,73 +270,4 @@ func (c *backendController) removeFinalizer(backend *lbcfapi.BackendRecord) *uti
 		return util.ErrorResult(err)
 	}
 	return util.SuccResult()
-}
-
-func (c *backendController) setOperationSucc(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
-	cpy := backend.DeepCopy()
-	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
-		Type:               cType,
-		Status:             lbcfapi.ConditionTrue,
-		LastTransitionTime: v1.Now(),
-		Message:            rsp.Msg,
-	})
-	_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
-	if err != nil {
-		return util.ErrorResult(err)
-	}
-	return util.SuccResult()
-}
-
-func (c *backendController) setOperationFailed(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
-	cpy := backend.DeepCopy()
-	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
-		Type:               cType,
-		Status:             lbcfapi.ConditionFalse,
-		LastTransitionTime: v1.Now(),
-		Reason:             lbcfapi.ReasonOperationFailed.String(),
-		Message:            rsp.Msg,
-	})
-	_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
-	if err != nil {
-		return util.ErrorResult(err)
-	}
-	return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
-}
-
-func (c *backendController) setOperationRunning(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
-	cpy := backend.DeepCopy()
-	// running operation only updates condition's Reason and Message field
-	status := lbcfapi.ConditionFalse
-	if curCondition := util.GetBackendRecordCondition(&backend.Status, cType); curCondition != nil {
-		status = curCondition.Status
-	}
-	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
-		Type:               cType,
-		Status:             status,
-		LastTransitionTime: v1.Now(),
-		Reason:             lbcfapi.ReasonOperationInProgress.String(),
-		Message:            rsp.Msg,
-	})
-	_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
-	if err != nil {
-		return util.ErrorResult(err)
-	}
-	delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
-	return util.AsyncResult(delay)
-}
-
-func (c *backendController) setOperationInvalidResponse(backend *lbcfapi.BackendRecord, rsp webhooks.ResponseForFailRetryHooks, cType lbcfapi.BackendRecordConditionType) *util.SyncResult {
-	cpy := backend.DeepCopy()
-	util.AddBackendCondition(&cpy.Status, lbcfapi.BackendRecordCondition{
-		Type:               cType,
-		Status:             lbcfapi.ConditionFalse,
-		LastTransitionTime: v1.Now(),
-		Reason:             lbcfapi.ReasonInvalidResponse.String(),
-		Message:            fmt.Sprintf("unknown status %q, msg: %s", rsp.Status, rsp.Msg),
-	})
-	_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
-	if err != nil {
-		return util.ErrorResult(err)
-	}
-	return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 }

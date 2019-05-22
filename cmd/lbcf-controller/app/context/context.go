@@ -18,16 +18,22 @@ package context
 
 import (
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
+	lbcfv1beta "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	lbcfclientset "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
+
+	apicorev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 )
 
@@ -49,6 +55,15 @@ func NewContext(cfg *config.Config) *Context {
 	c.LBDriverInformer = c.LbcfFactory.Lbcf().V1beta1().LoadBalancerDrivers()
 	c.BGInformer = c.LbcfFactory.Lbcf().V1beta1().BackendGroups()
 	c.BRInformer = c.LbcfFactory.Lbcf().V1beta1().BackendRecords()
+
+	c.EventBroadCaster = record.NewBroadcaster()
+	scheme := runtime.NewScheme()
+	if err := lbcfv1beta.SchemeBuilder.AddToScheme(scheme); err != nil {
+		klog.Fatal(err.Error())
+	}
+	c.EventRecorder = c.EventBroadCaster.NewRecorder(scheme, apicorev1.EventSource{
+		Component: "lbcf-controller",
+	})
 	return c
 }
 
@@ -67,11 +82,15 @@ type Context struct {
 	LBDriverInformer v1beta1.LoadBalancerDriverInformer
 	BGInformer       v1beta1.BackendGroupInformer
 	BRInformer       v1beta1.BackendRecordInformer
+
+	EventBroadCaster record.EventBroadcaster
+	EventRecorder    record.EventRecorder
 }
 
 func (c *Context) Start() {
 	c.K8sFactory.Start(wait.NeverStop)
 	c.LbcfFactory.Start(wait.NeverStop)
+	c.EventBroadCaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: c.K8sClient.CoreV1().Events("")})
 }
 
 func (c *Context) WaitForCacheSync() {

@@ -19,6 +19,8 @@ package lbcfcontroller
 import (
 	"fmt"
 	"golang.org/x/time/rate"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -655,7 +657,7 @@ func TestLBCFControllerDeleteDriver(t *testing.T) {
 
 func TestLBCFControllerAddBackendRecord(t *testing.T) {
 	record := newFakeBackendRecord("", "record")
-	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
 
 	c.addBackendRecord(record)
@@ -674,31 +676,94 @@ func TestLBCFControllerAddBackendRecord(t *testing.T) {
 }
 
 func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
-	oldRecord := newFakeBackendRecord("", "record")
-	curRecord := newFakeBackendRecord("", "record")
-	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
-	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
-
-	c.updateBackendRecord(oldRecord, curRecord)
-	if c.backendQueue.Len() != 1 {
-		t.Fatalf("queue length should be 1, get %d", c.backendQueue.Len())
+	type testCase struct {
+		name        string
+		old         *lbcfapi.BackendRecord
+		cur         *lbcfapi.BackendRecord
+		ctrl        *Controller
+		expectQueue int
 	}
-	key, done := c.backendQueue.Get()
-	if key == nil || done {
-		t.Error("failed to enqueue BackendGroup")
-	} else if key, ok := key.(string); !ok {
-		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(curRecord); expectedKey != key {
-		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
+	cases := []testCase{
+		{
+			name:        "same-resource-version-0",
+			old:         newFakeBackendRecord("", "record"),
+			cur:         newFakeBackendRecord("", "record"),
+			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
+			expectQueue: 0,
+		},
+		{
+			name: "same-resource-version-set-backendaddr-1",
+			old:  newFakeBackendRecord("", "record"),
+			cur: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				return record
+			}(),
+			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
+			expectQueue: 1,
+		},
+		{
+			name: "different-resource-version-1",
+			old: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				return record
+			}(),
+			cur: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.ResourceVersion = "2"
+				record.Status.BackendAddr = "anotheraddr.com"
+				return record
+			}(),
+			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
+			expectQueue: 1,
+		},
+		{
+			name: "same-resource-version-update-status-0",
+			old: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				return record
+			}(),
+			cur: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:   lbcfapi.BackendRegistered,
+						Status: lbcfapi.ConditionFalse,
+					},
+				}
+				return record
+			}(),
+			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
+			expectQueue: 0,
+		},
 	}
-	c.backendQueue.Done(key)
-
-	if c.backendGroupQueue.Len() != 0 {
-		t.Fatalf("expect empty backendGroup queue, get %v", c.backendGroupQueue.Len())
+	for _, c := range cases {
+		c.ctrl.updateBackendRecord(c.old, c.cur)
+		if c.ctrl.backendQueue.Len() != c.expectQueue {
+			t.Errorf("expect len %d, get %d", c.expectQueue, c.ctrl.backendQueue.Len())
+		}
+		if c.expectQueue > 0 {
+			key, done := c.ctrl.backendQueue.Get()
+			if key == nil || done {
+				t.Error("failed to enqueue BackendGroup")
+			} else if key, ok := key.(string); !ok {
+				t.Error("key is not a string")
+			} else if expectedKey, _ := controller.KeyFunc(c.cur); expectedKey != key {
+				t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+			}
+			c.ctrl.backendQueue.Done(key)
+			if c.ctrl.backendGroupQueue.Len() != 0 {
+				t.Fatalf("expect empty backendGroup queue, get %v", c.ctrl.backendGroupQueue.Len())
+			}
+		}
 	}
 }
 
-func TestLBCFControllerUpdateBackendRecordStatus(t *testing.T) {
+func TestLBCFControllerUpdateBackendRecordRegisterStatusChanged(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	oldRecord := util.ConstructBackendRecord(lb, group, "pod-0")
@@ -706,16 +771,12 @@ func TestLBCFControllerUpdateBackendRecordStatus(t *testing.T) {
 	curRecord.Status.BackendAddr = "fake.addr.com:80"
 	curRecord.Status.Conditions = []lbcfapi.BackendRecordCondition{
 		{
-			Type:   lbcfapi.BackendAddrGenerated,
-			Status: lbcfapi.ConditionTrue,
-		},
-		{
 			Type:   lbcfapi.BackendRegistered,
 			Status: lbcfapi.ConditionTrue,
 		},
 	}
 
-	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
 	c.updateBackendRecord(oldRecord, curRecord)
 
@@ -739,7 +800,7 @@ func TestLBCFControllerUpdateBackendRecordStatus(t *testing.T) {
 
 func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 	record := newFakeBackendRecord("", "record")
-	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSuccInvoker{})
+	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
 	tomestoneKey, _ := controller.KeyFunc(record)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: record}
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
@@ -1358,4 +1419,108 @@ func (c *fakeRunningInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerD
 			MinRetryDelayInSeconds: 60,
 		},
 	}, nil
+}
+
+type fakeInvalidInvoker struct{}
+
+func (c *fakeInvalidInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
+	return &webhooks.ValidateLoadBalancerResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: false,
+			Msg:  "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
+	return &webhooks.CreateLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 "invalid status",
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
+	return &webhooks.EnsureLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 "invalid status",
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
+	return &webhooks.DeleteLoadBalancerResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 "invalid status",
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
+	return &webhooks.ValidateBackendResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: false,
+			Msg:  "fake succ",
+		},
+	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
+	return &webhooks.GenerateBackendAddrResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 "invalid status",
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 "invalid status",
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	return &webhooks.BackendOperationResponse{
+		ResponseForFailRetryHooks: webhooks.ResponseForFailRetryHooks{
+			Status:                 "invalid status",
+			Msg:                    "fake running",
+			MinRetryDelayInSeconds: 60,
+		},
+	}, nil
+}
+
+type fakeEventRecorder struct {
+	store map[string]string
+}
+
+func (r *fakeEventRecorder) Event(object runtime.Object, eventtype, reason, message string) {
+	//gvk := object.GetObjectKind().GroupVersionKind()
+	access, _ := meta.Accessor(object)
+	name := access.GetName()
+	if r.store == nil {
+		r.store = make(map[string]string)
+	}
+	r.store[name] = reason
+}
+
+func (r *fakeEventRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
+	r.Event(object, eventtype, reason, fmt.Sprintf(messageFmt, args...))
+}
+
+func (r *fakeEventRecorder) PastEventf(object runtime.Object, timestamp metav1.Time, eventtype, reason, messageFmt string, args ...interface{}) {
+}
+
+func (r *fakeEventRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
 }
