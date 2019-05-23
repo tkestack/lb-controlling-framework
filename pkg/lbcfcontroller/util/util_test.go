@@ -199,7 +199,7 @@ func TestAddLBCondition(t *testing.T) {
 			name:   "add-condition-to-empty",
 			status: &lbcfapi.LoadBalancerStatus{},
 			condition: lbcfapi.LoadBalancerCondition{
-				Type:    lbcfapi.LBEnsured,
+				Type:    lbcfapi.LBAttributesSynced,
 				Status:  lbcfapi.ConditionTrue,
 				Reason:  lbcfapi.ReasonOperationInProgress.String(),
 				Message: "ensured",
@@ -207,7 +207,7 @@ func TestAddLBCondition(t *testing.T) {
 			expect: &lbcfapi.LoadBalancerStatus{
 				Conditions: []lbcfapi.LoadBalancerCondition{
 					{
-						Type:    lbcfapi.LBEnsured,
+						Type:    lbcfapi.LBAttributesSynced,
 						Status:  lbcfapi.ConditionTrue,
 						Reason:  lbcfapi.ReasonOperationInProgress.String(),
 						Message: "ensured",
@@ -226,7 +226,7 @@ func TestAddLBCondition(t *testing.T) {
 				},
 			},
 			condition: lbcfapi.LoadBalancerCondition{
-				Type:    lbcfapi.LBEnsured,
+				Type:    lbcfapi.LBAttributesSynced,
 				Status:  lbcfapi.ConditionTrue,
 				Reason:  lbcfapi.ReasonOperationInProgress.String(),
 				Message: "ensured",
@@ -234,7 +234,7 @@ func TestAddLBCondition(t *testing.T) {
 			expect: &lbcfapi.LoadBalancerStatus{
 				Conditions: []lbcfapi.LoadBalancerCondition{
 					{
-						Type:    lbcfapi.LBEnsured,
+						Type:    lbcfapi.LBAttributesSynced,
 						Status:  lbcfapi.ConditionTrue,
 						Reason:  lbcfapi.ReasonOperationInProgress.String(),
 						Message: "ensured",
@@ -251,7 +251,7 @@ func TestAddLBCondition(t *testing.T) {
 			status: &lbcfapi.LoadBalancerStatus{
 				Conditions: []lbcfapi.LoadBalancerCondition{
 					{
-						Type:    lbcfapi.LBEnsured,
+						Type:    lbcfapi.LBAttributesSynced,
 						Status:  lbcfapi.ConditionFalse,
 						Reason:  lbcfapi.ReasonOperationInProgress.String(),
 						Message: "should-be-overwrite",
@@ -259,14 +259,14 @@ func TestAddLBCondition(t *testing.T) {
 				},
 			},
 			condition: lbcfapi.LoadBalancerCondition{
-				Type:    lbcfapi.LBEnsured,
+				Type:    lbcfapi.LBAttributesSynced,
 				Status:  lbcfapi.ConditionTrue,
 				Message: "overwrite",
 			},
 			expect: &lbcfapi.LoadBalancerStatus{
 				Conditions: []lbcfapi.LoadBalancerCondition{
 					{
-						Type:    lbcfapi.LBEnsured,
+						Type:    lbcfapi.LBAttributesSynced,
 						Status:  lbcfapi.ConditionTrue,
 						Message: "overwrite",
 					},
@@ -1340,7 +1340,7 @@ func TestLBNeedEnsure(t *testing.T) {
 				Status: lbcfapi.LoadBalancerStatus{
 					Conditions: []lbcfapi.LoadBalancerCondition{
 						{
-							Type:   lbcfapi.LBEnsured,
+							Type:   lbcfapi.LBAttributesSynced,
 							Status: lbcfapi.ConditionFalse,
 						},
 					},
@@ -1359,7 +1359,7 @@ func TestLBNeedEnsure(t *testing.T) {
 				Status: lbcfapi.LoadBalancerStatus{
 					Conditions: []lbcfapi.LoadBalancerCondition{
 						{
-							Type:   lbcfapi.LBEnsured,
+							Type:   lbcfapi.LBAttributesSynced,
 							Status: lbcfapi.ConditionTrue,
 						},
 					},
@@ -1378,7 +1378,7 @@ func TestLBNeedEnsure(t *testing.T) {
 				Status: lbcfapi.LoadBalancerStatus{
 					Conditions: []lbcfapi.LoadBalancerCondition{
 						{
-							Type:   lbcfapi.LBEnsured,
+							Type:   lbcfapi.LBAttributesSynced,
 							Status: lbcfapi.ConditionTrue,
 						},
 					},
@@ -1392,7 +1392,7 @@ func TestLBNeedEnsure(t *testing.T) {
 				Status: lbcfapi.LoadBalancerStatus{
 					Conditions: []lbcfapi.LoadBalancerCondition{
 						{
-							Type:   lbcfapi.LBEnsured,
+							Type:   lbcfapi.LBAttributesSynced,
 							Status: lbcfapi.ConditionTrue,
 						},
 					},

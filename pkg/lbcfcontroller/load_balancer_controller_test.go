@@ -20,10 +20,8 @@ import (
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/controller"
-	"strings"
 	"testing"
 	"time"
 )
@@ -33,30 +31,7 @@ func TestLoadBalancerCreate(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := newLoadBalancerController(
-		fakeClient,
-		&fakeLBLister{
-			get: lb,
-		},
-		&fakeDriverLister{
-			get: driver,
-		}, &fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(lb)
-	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
-		t.Fatalf("expect succ, get %+v", result)
-	}
-	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
-	if !util.LBCreated(get) {
-		t.Errorf("expect LoadBalancer created, get status: %#v", get.Status)
-	}
-}
-
-func TestLoadBalancerCreateFail(t *testing.T) {
-	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-	lb.Spec.LBDriver = "test-driver"
-	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -65,68 +40,8 @@ func TestLoadBalancerCreateFail(t *testing.T) {
 		&fakeDriverLister{
 			get: driver,
 		},
-		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(lb)
-	result := ctrl.syncLB(key)
-	if !result.IsFailed() {
-		t.Fatalf("expect failed, get %+v", result)
-	}
-	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
-	if util.LBCreated(get) {
-		t.Errorf("expect LoadBalancer created=false, get status: %#v", get.Status)
-	}
-}
-
-func TestLoadBalancerCreateRunning(t *testing.T) {
-	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-	lb.Spec.LBDriver = "test-driver"
-	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := newLoadBalancerController(
-		fakeClient,
-		&fakeLBLister{
-			get: lb,
-		},
-		&fakeDriverLister{
-			get: driver,
-		},
-		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(lb)
-	result := ctrl.syncLB(key)
-	if !result.IsRunning() {
-		t.Fatalf("expect running, get %+v", result)
-	}
-	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
-	if util.LBCreated(get) {
-		t.Errorf("expect LoadBalancer created=false, get status: %#v", get.Status)
-	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBCreated)
-	if getCondition.Reason != string(lbcfapi.ReasonOperationInProgress) {
-		t.Fatalf("expect condition.reason=%s, get %v", lbcfapi.ReasonOperationInProgress, getCondition.Reason)
-	}
-}
-
-func TestLoadBalancerEnsure(t *testing.T) {
-	createdAt := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-	lb.Spec.LBDriver = "test-driver"
-	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
-		{
-			Type:               lbcfapi.LBCreated,
-			Status:             lbcfapi.ConditionTrue,
-			LastTransitionTime: createdAt,
-		},
-	}
-	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := newLoadBalancerController(
-		fakeClient,
-		&fakeLBLister{
-			get: lb,
-		},
-		&fakeDriverLister{
-			get: driver,
-		}, &fakeSuccInvoker{})
+		&fakeEventRecorder{store: store},
+		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsSucc() {
@@ -138,9 +53,167 @@ func TestLoadBalancerEnsure(t *testing.T) {
 	} else if !util.LBEnsured(get) {
 		t.Errorf("expect LoadBalancer ensured, get status: %#v", get.Status)
 	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBCreated)
-	if getCondition.LastTransitionTime != createdAt {
-		t.Fatalf("create timestamp changed, this field should not be modified")
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "SuccCreateLoadBalancer" {
+		t.Fatalf("expect reason SuccCreateLoadBalancer, get %s", reason)
+	}
+}
+
+func TestLoadBalancerCreateFail(t *testing.T) {
+	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
+	lb.Spec.LBDriver = "test-driver"
+	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
+	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
+	ctrl := newLoadBalancerController(
+		fakeClient,
+		&fakeLBLister{
+			get: lb,
+		},
+		&fakeDriverLister{
+			get: driver,
+		},
+		&fakeEventRecorder{store: store},
+		&fakeFailInvoker{})
+	key, _ := controller.KeyFunc(lb)
+	result := ctrl.syncLB(key)
+	if !result.IsFailed() {
+		t.Fatalf("expect failed, get %+v", result)
+	}
+	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
+	if util.LBCreated(get) {
+		t.Errorf("expect LoadBalancer created=false, get status: %#v", get.Status)
+	}
+
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "FailedCreateLoadBalancer" {
+		t.Fatalf("expect reason FailedCreateLoadBalancer, get %s", reason)
+	}
+}
+
+func TestLoadBalancerCreateRunning(t *testing.T) {
+	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
+	lb.Spec.LBDriver = "test-driver"
+	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
+	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
+	ctrl := newLoadBalancerController(
+		fakeClient,
+		&fakeLBLister{
+			get: lb,
+		},
+		&fakeDriverLister{
+			get: driver,
+		},
+		&fakeEventRecorder{store: store},
+		&fakeRunningInvoker{})
+	key, _ := controller.KeyFunc(lb)
+	result := ctrl.syncLB(key)
+	if !result.IsRunning() {
+		t.Fatalf("expect running, get %+v", result)
+	}
+	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
+	if util.LBCreated(get) {
+		t.Errorf("expect LoadBalancer created=false, get status: %#v", get.Status)
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "CalledCreateLoadBalancer" {
+		t.Fatalf("expect reason CalledCreateLoadBalancer, get %s", reason)
+	}
+}
+
+func TestLoadBalancerCreateInvalid(t *testing.T) {
+	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
+	lb.Spec.LBDriver = "test-driver"
+	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
+	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
+	ctrl := newLoadBalancerController(
+		fakeClient,
+		&fakeLBLister{
+			get: lb,
+		},
+		&fakeDriverLister{
+			get: driver,
+		},
+		&fakeEventRecorder{store: store},
+		&fakeInvalidInvoker{})
+	key, _ := controller.KeyFunc(lb)
+	result := ctrl.syncLB(key)
+	if !result.IsError() {
+		t.Fatalf("expect error, get %+v", result)
+	}
+	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
+	if util.LBCreated(get) {
+		t.Errorf("expect LoadBalancer created=false, get status: %#v", get.Status)
+	}
+
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "InvalidCreateLoadBalancer" {
+		t.Fatalf("expect reason InvalidCreateLoadBalancer, get %s", reason)
+	}
+}
+func TestLoadBalancerEnsure(t *testing.T) {
+	createdAt := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
+	lb.Spec.LBDriver = "test-driver"
+	lb.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+		Policy: lbcfapi.PolicyAlways,
+	}
+	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+		{
+			Type:               lbcfapi.LBCreated,
+			Status:             lbcfapi.ConditionTrue,
+			LastTransitionTime: createdAt,
+		},
+		{
+			Type:               lbcfapi.LBAttributesSynced,
+			Status:             lbcfapi.ConditionTrue,
+			LastTransitionTime: createdAt,
+		},
+	}
+	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
+	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
+	ctrl := newLoadBalancerController(
+		fakeClient,
+		&fakeLBLister{
+			get: lb,
+		},
+		&fakeDriverLister{
+			get: driver,
+		},
+		&fakeEventRecorder{store: store},
+		&fakeSuccInvoker{})
+	key, _ := controller.KeyFunc(lb)
+	result := ctrl.syncLB(key)
+	if !result.IsSucc() {
+		t.Fatalf("expect succ, get %+v", result)
+	}
+	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
+	if !util.LBCreated(get) {
+		t.Errorf("expect LoadBalancer created, get status: %#v", get.Status)
+	} else if !util.LBEnsured(get) {
+		t.Errorf("expect LoadBalancer ensured, get status: %#v", get.Status)
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "SuccEnsureLoadBalancer" {
+		t.Fatalf("expect reason SuccEnsureLoadBalancer, get %s", reason)
 	}
 }
 
@@ -158,13 +231,14 @@ func TestLoadBalancerEnsureFail(t *testing.T) {
 			LastTransitionTime: timestamp,
 		},
 		{
-			Type:               lbcfapi.LBEnsured,
+			Type:               lbcfapi.LBAttributesSynced,
 			Status:             lbcfapi.ConditionTrue,
 			LastTransitionTime: timestamp,
 		},
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -172,7 +246,9 @@ func TestLoadBalancerEnsureFail(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeFailInvoker{})
+		},
+		&fakeEventRecorder{store: store},
+		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
@@ -182,13 +258,16 @@ func TestLoadBalancerEnsureFail(t *testing.T) {
 	if util.LBEnsured(get) {
 		t.Errorf("expect LoadBalancer ensured=false, get status: %#v", get.Status)
 	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBEnsured)
-	if getCondition.LastTransitionTime == timestamp {
-		t.Fatalf("expect LastTransitionTime updated to current time, get %s", getCondition.LastTransitionTime.String())
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "FailedEnsureLoadBalancer" {
+		t.Fatalf("expect reason FailedEnsureLoadBalancer, get %s", reason)
 	}
 }
 
-func TestLoadBalancerEnsureRunningWithPreviousEnsured(t *testing.T) {
+func TestLoadBalancerEnsureRunning(t *testing.T) {
 	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
@@ -202,13 +281,14 @@ func TestLoadBalancerEnsureRunningWithPreviousEnsured(t *testing.T) {
 			LastTransitionTime: timestamp,
 		},
 		{
-			Type:               lbcfapi.LBEnsured,
+			Type:               lbcfapi.LBAttributesSynced,
 			Status:             lbcfapi.ConditionTrue,
 			LastTransitionTime: timestamp,
 		},
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -216,67 +296,24 @@ func TestLoadBalancerEnsureRunningWithPreviousEnsured(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeRunningInvoker{})
+		},
+		&fakeEventRecorder{store: store},
+		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
-		t.Fatalf("expect async, get %+v", result)
+		t.Fatalf("expect fail, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
 	if !util.LBEnsured(get) {
 		t.Errorf("expect LoadBalancer ensured=true, get status: %#v", get.Status)
 	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBEnsured)
-	if getCondition.Reason != string(lbcfapi.ReasonOperationInProgress) {
-		t.Fatalf("expect condition.Reason %s, get %s", lbcfapi.ReasonOperationInProgress, getCondition.Reason)
-	} else if getCondition.LastTransitionTime == timestamp {
-		t.Fatalf("expect LastTransitionTime updated to current time, get %s", getCondition.LastTransitionTime.String())
-	}
-}
-
-func TestLoadBalancerReEnsure(t *testing.T) {
-	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-	lb.Spec.LBDriver = "test-driver"
-	lb.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
-		Policy: lbcfapi.PolicyAlways,
-	}
-	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
-		{
-			Type:               lbcfapi.LBCreated,
-			Status:             lbcfapi.ConditionTrue,
-			LastTransitionTime: timestamp,
-		},
-		{
-			Type:               lbcfapi.LBEnsured,
-			Status:             lbcfapi.ConditionTrue,
-			LastTransitionTime: timestamp,
-		},
-	}
-	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := newLoadBalancerController(
-		fakeClient,
-		&fakeLBLister{
-			get: lb,
-		},
-		&fakeDriverLister{
-			get: driver,
-		}, &fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(lb)
-	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
-		t.Fatalf("expect succ, get %+v", result)
-	}
-	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
-	if !util.LBCreated(get) {
-		t.Errorf("expect LoadBalancer created, get status: %#v", get.Status)
-	} else if !util.LBEnsured(get) {
-		t.Errorf("expect LoadBalancer ensured, get status: %#v", get.Status)
-	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBEnsured)
-	if getCondition.LastTransitionTime == timestamp {
-		t.Fatalf("create timestamp should be updated to current time")
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "CalledEnsureLoadBalancer" {
+		t.Fatalf("expect reason CalledEnsureLoadBalancer, get %s", reason)
 	}
 }
 
@@ -291,13 +328,14 @@ func TestLoadBalancerNoReEnsure(t *testing.T) {
 			LastTransitionTime: timestamp,
 		},
 		{
-			Type:               lbcfapi.LBEnsured,
+			Type:               lbcfapi.LBAttributesSynced,
 			Status:             lbcfapi.ConditionTrue,
 			LastTransitionTime: timestamp,
 		},
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -305,7 +343,9 @@ func TestLoadBalancerNoReEnsure(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeSuccInvoker{})
+		},
+		&fakeEventRecorder{store: store},
+		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsSucc() {
@@ -317,9 +357,54 @@ func TestLoadBalancerNoReEnsure(t *testing.T) {
 	} else if !util.LBEnsured(get) {
 		t.Errorf("expect LoadBalancer ensured, get status: %#v", get.Status)
 	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBEnsured)
-	if getCondition.LastTransitionTime != timestamp {
-		t.Fatalf("create timestamp changed, this field should not be modified")
+	if len(store) != 0 {
+		t.Fatalf("expect 0 event, get %d", len(store))
+	}
+}
+
+func TestLoadBalancerEnsureInvalid(t *testing.T) {
+	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
+	lb.Spec.LBDriver = "test-driver"
+	lb.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+		Policy: lbcfapi.PolicyAlways,
+	}
+	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+		{
+			Type:               lbcfapi.LBCreated,
+			Status:             lbcfapi.ConditionTrue,
+			LastTransitionTime: timestamp,
+		},
+		{
+			Type:               lbcfapi.LBAttributesSynced,
+			Status:             lbcfapi.ConditionTrue,
+			LastTransitionTime: timestamp,
+		},
+	}
+	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
+	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
+	ctrl := newLoadBalancerController(
+		fakeClient,
+		&fakeLBLister{
+			get: lb,
+		},
+		&fakeDriverLister{
+			get: driver,
+		},
+		&fakeEventRecorder{store: store},
+		&fakeInvalidInvoker{})
+	key, _ := controller.KeyFunc(lb)
+	result := ctrl.syncLB(key)
+	if !result.IsError() {
+		t.Fatalf("expect error, get %+v", result)
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "InvalidEnsureLoadBalancer" {
+		t.Fatalf("expect reason InvalidEnsureLoadBalancer, get %s", reason)
 	}
 }
 
@@ -331,6 +416,7 @@ func TestLoadBalancerDelete(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -338,44 +424,17 @@ func TestLoadBalancerDelete(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeSuccInvoker{})
+		},
+		&fakeEventRecorder{store: store},
+		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsSucc() {
 		t.Fatalf("expect succ, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
-	if len(get.Finalizers) != 1 {
-		t.Fatalf("expect finalizers %v, get %#v", lbcfapi.FinalizerDeleteLB, get)
-	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBReadyToDelete)
-	if getCondition.Status != lbcfapi.ConditionTrue {
-		t.Fatalf("condition %s should be set to true, get %#v", lbcfapi.LBReadyToDelete, getCondition)
-	}
-}
-
-func TestLoadBalancerDeleteWithNoFinalizer(t *testing.T) {
-	timestamp := v1.Now()
-	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-	lb.DeletionTimestamp = &timestamp
-	lb.ObjectMeta.Finalizers = []string{}
-	lb.Spec.LBDriver = "test-driver"
-	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := newLoadBalancerController(
-		fakeClient,
-		&fakeLBLister{
-			get: lb,
-		},
-		&fakeDriverLister{
-			get: driver,
-		},
-		// all webhook invokes fail, the test will pass only if webhook is not invoked
-		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(lb)
-	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
-		t.Fatalf("expect succ, get %+v", result)
+	if len(get.Finalizers) != 0 {
+		t.Fatalf("expect empty finalizers, get %#v", get)
 	}
 }
 
@@ -387,6 +446,7 @@ func TestLoadBalancerDeleteFailed(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -394,7 +454,9 @@ func TestLoadBalancerDeleteFailed(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeFailInvoker{})
+		},
+		&fakeEventRecorder{store: store},
+		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
@@ -404,11 +466,12 @@ func TestLoadBalancerDeleteFailed(t *testing.T) {
 	if len(get.Finalizers) != 1 {
 		t.Fatalf("expect finalizer %s, get %#v", lbcfapi.FinalizerDeleteLB, get)
 	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBReadyToDelete)
-	if getCondition.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("condition %s should be set to false, get %#v", lbcfapi.LBReadyToDelete, getCondition)
-	} else if getCondition.Reason != string(lbcfapi.ReasonOperationFailed) {
-		t.Fatalf("expect Reason %s, get %s", lbcfapi.ReasonOperationFailed, getCondition.Reason)
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "FailedDeleteLoadBalancer" {
+		t.Fatalf("expect reason FailedDeleteLoadBalancer, get %s", reason)
 	}
 }
 
@@ -420,6 +483,7 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -427,7 +491,9 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeRunningInvoker{})
+		},
+		&fakeEventRecorder{store: store},
+		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
@@ -437,206 +503,24 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 	if len(get.Finalizers) != 1 {
 		t.Fatalf("expect finalizer %s, get %#v", lbcfapi.FinalizerDeleteLB, get)
 	}
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBReadyToDelete)
-	if getCondition.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("condition %s should be set to false, get %#v", lbcfapi.LBReadyToDelete, getCondition)
-	} else if getCondition.Reason != string(lbcfapi.ReasonOperationInProgress) {
-		t.Fatalf("expect Reason %s, get %s", lbcfapi.ReasonOperationInProgress, getCondition.Reason)
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "CalledDeleteLoadBalancer" {
+		t.Fatalf("expect reason CalledDeleteLoadBalancer, get %s", reason)
 	}
 }
 
-//func TestLoadBalancerSetOperationFailed(t *testing.T) {
-//	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-//	lb.Spec.LBDriver = "test-driver"
-//	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
-//		{
-//			Type:   lbcfapi.LBCreated,
-//			Status: lbcfapi.ConditionTrue,
-//		},
-//		{
-//			Type:   lbcfapi.LBEnsured,
-//			Status: lbcfapi.ConditionTrue,
-//		},
-//	}
-//	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-//	fakeClient := fake.NewSimpleClientset(lb)
-//	ctrl := newLoadBalancerController(
-//		fakeClient,
-//		&fakeLBLister{
-//			get: lb,
-//		},
-//		&fakeDriverLister{
-//			get: driver,
-//		}, &fakeSuccInvoker{})
-//	rsp := webhooks.ResponseForFailRetryHooks{
-//		Status:                 webhooks.StatusFail,
-//		Msg:                    "fake fail message",
-//		MinRetryDelayInSeconds: 1029,
-//	}
-//	result, get := ctrl.setOperationFailed(lb, rsp, lbcfapi.LBEnsured)
-//	if !result.IsFailed() {
-//		t.Fatalf("expect failed result, get %#v", result)
-//	} else if get == nil {
-//		t.Fatalf("expect latest Loadbalancer, get nil")
-//	} else if util.LBEnsured(get) {
-//		t.Fatalf("expect LoadBalancer not ensured, get %#v", get.Status.Conditions)
-//	} else if result.GetRetryDelay().Nanoseconds() != util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds).Nanoseconds() {
-//		t.Fatalf("expect minRetryDelay %d, get %d", util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds).Nanoseconds(), result.GetRetryDelay().Nanoseconds())
-//	}
-//	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBEnsured)
-//	if getCondition == nil {
-//		t.Fatalf("expect condition")
-//	} else if getCondition.Reason != string(lbcfapi.ReasonOperationFailed) {
-//		t.Fatalf("expect condition Reasong %v, get %q", lbcfapi.ReasonOperationFailed, getCondition.Reason)
-//	} else if getCondition.Message != rsp.Msg {
-//		t.Fatalf("expect condition message %q, get %q", rsp.Msg, getCondition.Message)
-//	}
-//}
-//
-//func TestLoadBalancerSetOperationFailedWithError(t *testing.T) {
-//	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-//	lb.Spec.LBDriver = "test-driver"
-//	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
-//		{
-//			Type:   lbcfapi.LBCreated,
-//			Status: lbcfapi.ConditionTrue,
-//		},
-//		{
-//			Type:   lbcfapi.LBEnsured,
-//			Status: lbcfapi.ConditionTrue,
-//		},
-//	}
-//	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-//	fakeClient := fake.NewSimpleClientset()
-//	ctrl := newLoadBalancerController(
-//		fakeClient,
-//		&fakeLBLister{
-//			get: lb,
-//		},
-//		&fakeDriverLister{
-//			get: driver,
-//		}, &fakeSuccInvoker{})
-//	rsp := webhooks.ResponseForFailRetryHooks{
-//		Status: webhooks.StatusFail,
-//		Msg:    "fake fail message",
-//	}
-//	result, _ := ctrl.setOperationFailed(lb, rsp, lbcfapi.LBEnsured)
-//	if !result.IsError() {
-//		t.Fatalf("expect error result, get %#v", result)
-//	}
-//}
-//
-//func TestLoadBalancerSetOperationRunning(t *testing.T) {
-//	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-//	lb.Spec.LBDriver = "test-driver"
-//	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
-//		{
-//			Type:   lbcfapi.LBCreated,
-//			Status: lbcfapi.ConditionTrue,
-//		},
-//		{
-//			Type:   lbcfapi.LBEnsured,
-//			Status: lbcfapi.ConditionTrue,
-//		},
-//	}
-//	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-//	fakeClient := fake.NewSimpleClientset(lb)
-//	ctrl := newLoadBalancerController(
-//		fakeClient,
-//		&fakeLBLister{
-//			get: lb,
-//		},
-//		&fakeDriverLister{
-//			get: driver,
-//		}, &fakeSuccInvoker{})
-//	rsp := webhooks.ResponseForFailRetryHooks{
-//		Status:                 webhooks.StatusRunning,
-//		Msg:                    "fake running message",
-//		MinRetryDelayInSeconds: 1029,
-//	}
-//	result, get := ctrl.setOperationRunning(lb, rsp, lbcfapi.LBEnsured)
-//	if !result.IsRunning() {
-//		t.Fatalf("expect async result, get %#v", result)
-//	} else if get == nil {
-//		t.Fatalf("expect latest Loadbalancer, get nil")
-//	} else if !util.LBEnsured(get) {
-//		t.Fatalf("expect LoadBalancer ensured=true, get %#v", get.Status.Conditions)
-//	} else if result.GetReEnsurePeriodic().Nanoseconds() != util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds).Nanoseconds() {
-//		t.Fatalf("expect minReEnsurePeriod %d, get %d", util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds).Nanoseconds(), result.GetReEnsurePeriodic().Nanoseconds())
-//	}
-//	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBEnsured)
-//	if getCondition == nil {
-//		t.Fatalf("expect condition")
-//	} else if getCondition.Reason != string(lbcfapi.ReasonOperationInProgress) {
-//		t.Fatalf("expect condition Reasong %v, get %q", lbcfapi.ReasonOperationInProgress, getCondition.Reason)
-//	} else if getCondition.Message != rsp.Msg {
-//		t.Fatalf("expect condition message %q, get %q", rsp.Msg, getCondition.Message)
-//	}
-//}
-//
-func TestLoadBalancerSetOperationInvalidOperation(t *testing.T) {
-	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
-	lb.Spec.LBDriver = "test-driver"
-	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
-		{
-			Type:   lbcfapi.LBCreated,
-			Status: lbcfapi.ConditionTrue,
-		},
-		{
-			Type:   lbcfapi.LBEnsured,
-			Status: lbcfapi.ConditionTrue,
-		},
-	}
-	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
-	fakeClient := fake.NewSimpleClientset(lb)
-	ctrl := newLoadBalancerController(
-		fakeClient,
-		&fakeLBLister{
-			get: lb,
-		},
-		&fakeDriverLister{
-			get: driver,
-		}, &fakeSuccInvoker{})
-	rsp := webhooks.ResponseForFailRetryHooks{
-		Status:                 "invalidStatus",
-		Msg:                    "fake running message",
-		MinRetryDelayInSeconds: 1029,
-	}
-	result := ctrl.setOperationInvalidResponse(lb, rsp, lbcfapi.LBEnsured)
-	if !result.IsError() {
-		t.Fatalf("expect error result, get %#v", result)
-	}
-	get, err := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
-	if err != nil {
-		t.Fatalf("expect latest Loadbalancer, get nil")
-	} else if util.LBEnsured(get) {
-		t.Fatalf("expect LoadBalancer not ensured, get %#v", get.Status.Conditions)
-	}
-
-	getCondition := util.GetLBCondition(&get.Status, lbcfapi.LBEnsured)
-	if getCondition == nil {
-		t.Fatalf("expect condition")
-	} else if getCondition.Reason != string(lbcfapi.ReasonInvalidResponse) {
-		t.Fatalf("expect condition Reasong %v, get %q", lbcfapi.ReasonInvalidResponse, getCondition.Reason)
-	} else if index := strings.Index(getCondition.Message, "unknown status"); index == -1 {
-		t.Fatalf("expect returned status in condition message, get %q", getCondition.Message)
-	}
-}
-
-func TestLoadBalancerRemoveFinalizer(t *testing.T) {
+func TestLoadBalancerDeleteInvalid(t *testing.T) {
 	timestamp := v1.Now()
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.DeletionTimestamp = &timestamp
-	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
-		{
-			Type:   lbcfapi.LBReadyToDelete,
-			Status: lbcfapi.ConditionTrue,
-		},
-	}
 	lb.ObjectMeta.Finalizers = []string{lbcfapi.FinalizerDeleteLB}
 	lb.Spec.LBDriver = "test-driver"
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
+	store := make(map[string]string)
 	ctrl := newLoadBalancerController(
 		fakeClient,
 		&fakeLBLister{
@@ -644,14 +528,23 @@ func TestLoadBalancerRemoveFinalizer(t *testing.T) {
 		},
 		&fakeDriverLister{
 			get: driver,
-		}, &fakeSuccInvoker{})
+		},
+		&fakeEventRecorder{store: store},
+		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
-		t.Fatalf("expect succ, get %+v", result)
+	if !result.IsError() {
+		t.Fatalf("expect error, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
-	if len(get.Finalizers) != 0 {
-		t.Fatalf("expect empty finalizers, get %#v", get.Finalizers)
+	if len(get.Finalizers) != 1 {
+		t.Fatalf("expect finalizer %s, get %#v", lbcfapi.FinalizerDeleteLB, get)
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[lb.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", lb.Name, store)
+	} else if reason != "InvalidDeleteLoadBalancer" {
+		t.Fatalf("expect reason InvalidDeleteLoadBalancer, get %s", reason)
 	}
 }

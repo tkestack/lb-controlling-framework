@@ -102,9 +102,8 @@ type LoadBalancerCondition struct {
 type LoadBalancerConditionType string
 
 const (
-	LBCreated       LoadBalancerConditionType = "Created"
-	LBEnsured       LoadBalancerConditionType = "Ensured"
-	LBReadyToDelete LoadBalancerConditionType = "ReadyToDelete"
+	LBCreated          LoadBalancerConditionType = "Created"
+	LBAttributesSynced LoadBalancerConditionType = "AttributesSynced"
 )
 
 // +genclient

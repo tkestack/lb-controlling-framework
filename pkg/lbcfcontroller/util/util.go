@@ -125,7 +125,7 @@ func LBCreated(lb *lbcfapi.LoadBalancer) bool {
 
 // LBEnsured indicates the given LoadBalancer is successfully ensured by webhook ensureLoadBalancer
 func LBEnsured(lb *lbcfapi.LoadBalancer) bool {
-	condition := GetLBCondition(&lb.Status, lbcfapi.LBEnsured)
+	condition := GetLBCondition(&lb.Status, lbcfapi.LBAttributesSynced)
 	if condition == nil {
 		return false
 	}
@@ -138,16 +138,6 @@ func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
 		return true
 	}
 	return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
-}
-
-// LBReadyToDelete indicates webhook deleteLoadBalancer has been successfully called,
-// and the given LoadBalancer is ok to be deleted from k8s
-func LBReadyToDelete(lb *lbcfapi.LoadBalancer) bool {
-	cond := GetLBCondition(&lb.Status, lbcfapi.LBReadyToDelete)
-	if cond != nil && cond.Status == lbcfapi.ConditionTrue {
-		return true
-	}
-	return false
 }
 
 // GetLBCondition is an helper function to get specific LoadBalancer condition

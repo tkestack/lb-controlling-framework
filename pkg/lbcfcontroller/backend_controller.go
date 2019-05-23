@@ -129,7 +129,7 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 			delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 			return util.AsyncResult(delay)
 		default:
-			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "status: %s, msg: %s", rsp.Status, rsp.Msg)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 			return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 		}
 	}
@@ -218,7 +218,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidEnsureBackend", "status: %s, msg: %s", rsp.Status, rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidEnsureBackend", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
@@ -257,7 +257,7 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidDeregister", "status: %s, msg: %s", rsp.Status, rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidDeregister", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
