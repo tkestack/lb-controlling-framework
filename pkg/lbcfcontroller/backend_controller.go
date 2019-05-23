@@ -196,24 +196,6 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		backend = backend.DeepCopy()
-		// running operation doesn't update condition's status field
-		status := lbcfapi.ConditionFalse
-		if curCondition := util.GetBackendRecordCondition(&backend.Status, lbcfapi.BackendRegistered); curCondition != nil {
-			status = curCondition.Status
-		}
-		util.AddBackendCondition(&backend.Status, lbcfapi.BackendRecordCondition{
-			Type:               lbcfapi.BackendRegistered,
-			Status:             status,
-			LastTransitionTime: v1.Now(),
-			Reason:             lbcfapi.ReasonOperationInProgress.String(),
-			Message:            rsp.Msg,
-		})
-		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
-		if err != nil {
-			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
-			return util.ErrorResult(err)
-		}
 		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "CalledEnsureBackend", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)

@@ -316,12 +316,8 @@ func TestBackendEnsureRunning(t *testing.T) {
 		t.Fatalf("expect reason CalledEnsureBackend, get %s", reason)
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
-	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); get.Status != ensureCondition.Status {
-		t.Fatalf("expect condition.status %v, get %v", ensureCondition.Status, get.Status)
-	} else if get.Reason != string(lbcfapi.ReasonOperationInProgress) {
-		t.Fatalf("expect condition.status %v, get %s", lbcfapi.ReasonOperationInProgress, ensureCondition.Reason)
-	} else if get.Message == "" {
-		t.Fatalf("expect non empty message")
+	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); !reflect.DeepEqual(*get, ensureCondition) {
+		t.Errorf("expect condition not changed, get %v", get)
 	}
 }
 
