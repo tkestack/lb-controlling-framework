@@ -799,39 +799,45 @@ func TestLBCFControllerUpdateBackendRecordRegisterStatusChanged(t *testing.T) {
 }
 
 func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
-	record := newFakeBackendRecord("", "record")
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+	record := util.ConstructBackendRecord(lb, group, "pod-0")
 	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
 	tomestoneKey, _ := controller.KeyFunc(record)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: record}
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
 
 	c.deleteBackendRecord(record)
-	if c.backendQueue.Len() != 1 {
-		t.Fatalf("queue length should be 1, get %d", c.backendQueue.Len())
+	if c.backendQueue.Len() != 0 {
+		t.Fatalf("queue length should be 0, get %d", c.backendQueue.Len())
+	} else if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
 	}
-	key, done := c.backendQueue.Get()
+	key, done := c.backendGroupQueue.Get()
 	if key == nil || done {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(record); expectedKey != key {
+	} else if expectedKey, _ := controller.KeyFunc(group); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
-	c.backendQueue.Done(key)
+	c.backendGroupQueue.Done(key)
 
 	c.deleteBackendRecord(tombstone)
-	if c.backendQueue.Len() != 1 {
-		t.Fatalf("queue length should be 1, get %d", c.backendQueue.Len())
+	if c.backendQueue.Len() != 0 {
+		t.Fatalf("queue length should be 0, get %d", c.backendQueue.Len())
+	} else if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
 	}
-	key, done = c.backendQueue.Get()
+	key, done = c.backendGroupQueue.Get()
 	if key == nil || done {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(record); expectedKey != key {
+	} else if expectedKey, _ := controller.KeyFunc(group); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
-	c.backendQueue.Done(key)
+	c.backendGroupQueue.Done(key)
 }
 
 func TestLBCFControllerProcessNextItemSucc(t *testing.T) {

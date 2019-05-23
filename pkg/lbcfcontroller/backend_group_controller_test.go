@@ -31,6 +31,7 @@ import (
 
 func TestBackendGroupCreateRecord(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
+	fakeLBEnsured(lb)
 	pod1 := newFakePod("", "pod-1", map[string]string{"k1": "v1"}, true, false)
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", pod1.Labels, nil, nil)
@@ -85,6 +86,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 
 func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
+	fakeLBEnsured(lb)
 	pod1 := newFakePod("", "pod-1", nil, true, false)
 	pod2 := newFakePod("", "pod-2", nil, true, false)
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-1"})
@@ -129,6 +131,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 
 func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
+	fakeLBEnsured(lb)
 	pod1 := newFakePod("", "pod-1", map[string]string{"k1": "v1"}, true, false)
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
 	oldGroup := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", pod1.Labels, nil, nil)
@@ -194,8 +197,10 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 
 func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 	oldLB := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
+	fakeLBEnsured(oldLB)
 	curLB := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
 	curLB.Spec.Attributes["a2"] = "v2"
+	fakeLBEnsured(curLB)
 
 	pod1 := newFakePod("", "pod-1", map[string]string{"k1": "v1"}, true, false)
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
@@ -260,7 +265,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 
 func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
-
+	fakeLBEnsured(lb)
 	oldPod := newFakePod("", "pod-1", map[string]string{"k1": "v1"}, true, false)
 	curPod := newFakePod("", "pod-1", map[string]string{"k1": "v1"}, false, true)
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
@@ -357,4 +362,18 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 	if len(records.Items) != 0 {
 		t.Fatalf("expect 0 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
+}
+
+func fakeLBEnsured(lb *lbcfapi.LoadBalancer) {
+	ts := metav1.Now()
+	util.AddLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
+		Type:               lbcfapi.LBCreated,
+		Status:             lbcfapi.ConditionTrue,
+		LastTransitionTime: ts,
+	})
+	util.AddLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
+		Type:               lbcfapi.LBAttributesSynced,
+		Status:             lbcfapi.ConditionTrue,
+		LastTransitionTime: ts,
+	})
 }

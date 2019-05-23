@@ -85,8 +85,13 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 		return c.deleteAllBackend(namespace, group.Spec.LBName, group.Name)
 	} else if err != nil {
 		return util.ErrorResult(err)
-	} else if lb.DeletionTimestamp != nil {
+	}
+
+	if lb.DeletionTimestamp != nil {
 		return c.deleteAllBackend(namespace, group.Spec.LBName, group.Name)
+	}
+	if !util.LBEnsured(lb) {
+		return util.SuccResult()
 	}
 
 	if group.Spec.Pods != nil {

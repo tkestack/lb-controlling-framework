@@ -177,6 +177,8 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 			klog.Infof("sync key %s, period", key)
 			queue.Forget(key)
 			queue.AddIntervalRateLimited(key, result.GetReEnsurePeriodic())
+		} else {
+			queue.Forget(key)
 		}
 	}()
 	return true
@@ -350,19 +352,20 @@ func (c *Controller) updateBackendRecord(old, cur interface{}) {
 }
 
 func (c *Controller) deleteBackendRecord(obj interface{}) {
-	if _, ok := obj.(*v1beta1.BackendRecord); ok {
-		c.addBackendRecord(obj)
-		return
-	}
-	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	backend, ok := obj.(*v1beta1.BackendRecord)
 	if !ok {
-		klog.Errorf("Couldn't get object from tombstone %#v", obj)
-		return
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		backend, ok = tombstone.Obj.(*v1beta1.BackendRecord)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not a BackendRecord: %#v", obj)
+			return
+		}
 	}
-	backend, ok := tombstone.Obj.(*v1beta1.BackendRecord)
-	if !ok {
-		klog.Errorf("Tombstone contained object that is not a BackendRecord: %#v", obj)
-		return
+	if controllerRef := metav1.GetControllerOf(backend); controllerRef != nil {
+		c.enqueue(util.NamespacedNameKeyFunc(backend.Namespace, controllerRef.Name), c.backendGroupQueue)
 	}
-	c.addBackendRecord(backend)
 }
