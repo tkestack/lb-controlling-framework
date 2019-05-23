@@ -68,36 +68,36 @@ func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 }
 
 // DriverUpdatedFieldsAllowed returns false if the updating to fields is not allowed
-func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.LoadBalancerDriver) bool {
+func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.LoadBalancerDriver) (bool, string) {
 	if old.Spec.Url != cur.Spec.Url {
-		return false
+		return false, "updating URL is prohibited"
 	}
 	if old.Spec.DriverType != cur.Spec.DriverType {
-		return false
+		return false, "updating driverType is prohibited"
 	}
-	return true
+	return true, ""
 }
 
 // LBUpdatedFieldsAllowed returns false if the updating to fields is not allowed
-func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer) bool {
+func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer) (bool, string) {
 	if cur.Spec.LBDriver != old.Spec.LBDriver {
-		return false
+		return false, "updating lbDriver is prohibited"
 	}
 	if !reflect.DeepEqual(cur.Spec.LBSpec, old.Spec.LBSpec) {
-		return false
+		return false, "updating lbSpec is prohibited"
 	}
-	return true
+	return true, ""
 }
 
 // BackendGroupUpdateFieldsAllowed returns false if the updating to fields is not allowed
-func BackendGroupUpdateFieldsAllowed(cur *lbcfapi.BackendGroup, old *lbcfapi.BackendGroup) bool {
+func BackendGroupUpdateFieldsAllowed(cur *lbcfapi.BackendGroup, old *lbcfapi.BackendGroup) (bool, string) {
 	if cur.Spec.LBName != old.Spec.LBName {
-		return false
+		return false, "updating lbName is prohibited"
 	}
 	if util.GetBackendType(cur) != util.GetBackendType(old) {
-		return false
+		return false, "changing backend type is prohibited"
 	}
-	return true
+	return true, ""
 }
 
 func validateEnsurePolicy(raw lbcfapi.EnsurePolicyConfig, path *field.Path) field.ErrorList {

@@ -150,8 +150,8 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 	if err := json.Unmarshal(ar.Request.OldObject.Raw, oldObj); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancer failed: %v", err))
 	}
-	if !LBUpdatedFieldsAllowed(curObj, oldObj) {
-		return toAdmissionResponse(fmt.Errorf("update to non-attributes fields is not permitted"))
+	if allowed, msg := LBUpdatedFieldsAllowed(curObj, oldObj); !allowed {
+		return toAdmissionResponse(fmt.Errorf(msg))
 	}
 
 	errList := ValidateLoadBalancer(curObj)
@@ -219,8 +219,8 @@ func (a *Admitter) ValidateDriverUpdate(ar *admission.AdmissionReview) *admissio
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
 	}
 
-	if !DriverUpdatedFieldsAllowed(curObj, oldObj) {
-		return toAdmissionResponse(fmt.Errorf("update to LoadBalancerUpdate is not permitted"))
+	if allowed, msg := DriverUpdatedFieldsAllowed(curObj, oldObj); !allowed {
+		return toAdmissionResponse(fmt.Errorf(msg))
 	}
 	errList := ValidateLoadBalancerDriver(curObj)
 	if len(errList) > 0 {
@@ -306,8 +306,8 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
 	}
 
-	if !BackendGroupUpdateFieldsAllowed(curObj, oldObj) {
-		return toAdmissionResponse(fmt.Errorf("update to backend type is not permitted"))
+	if allowed, msg := BackendGroupUpdateFieldsAllowed(curObj, oldObj); !allowed {
+		return toAdmissionResponse(fmt.Errorf(msg))
 	}
 
 	errList := ValidateBackendGroup(curObj)

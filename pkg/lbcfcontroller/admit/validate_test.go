@@ -866,7 +866,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if get := DriverUpdatedFieldsAllowed(c.cur, c.old); get != c.expectValid {
+		if get, _ := DriverUpdatedFieldsAllowed(c.cur, c.old); get != c.expectValid {
 			t.Fatalf("case %s: expect %v, get %v", c.name, c.expectValid, get)
 		}
 	}
@@ -965,7 +965,7 @@ func TestLBUpdatedFieldsAllowed(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if get := LBUpdatedFieldsAllowed(c.cur, c.old); get != c.expectValid {
+		if get, _ := LBUpdatedFieldsAllowed(c.cur, c.old); get != c.expectValid {
 			t.Fatalf("case %s: expect %v, get %v", c.name, c.expectValid, get)
 		}
 	}
@@ -1095,7 +1095,7 @@ func TestBackendGroupUpdateFieldsAllowed(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if get := BackendGroupUpdateFieldsAllowed(c.cur, c.old); get != c.expectValid {
+		if get, _ := BackendGroupUpdateFieldsAllowed(c.cur, c.old); get != c.expectValid {
 			t.Fatalf("case %s: expect %v, get %v", c.name, c.expectValid, get)
 		}
 	}
