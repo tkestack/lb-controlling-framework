@@ -125,6 +125,9 @@ func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 			return util.ErrorResult(err)
 		}
 		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "SuccCreateLoadBalancer", "Successfully created load balancer")
+		if lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
+			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
+		}
 		return util.SuccResult()
 	case webhooks.StatusFail:
 		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedCreateLoadBalancer", "msg: %s", rsp.Msg)

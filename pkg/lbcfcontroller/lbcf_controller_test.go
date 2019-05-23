@@ -438,7 +438,7 @@ func TestLBCFControllerUpdateLoadBalancer(t *testing.T) {
 	}
 	oldLB1 := newFakeLoadBalancer("", "lb-1", attr1, nil)
 	curLB1 := newFakeLoadBalancer("", "lb-1", attr2, nil)
-	curLB1.ResourceVersion = "2"
+	curLB1.Generation = 2
 	bg := newFakeBackendGroupOfPods("", "bg", "lb-1", 80, "tcp", nil, nil, nil)
 
 	lbCtrl := newLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
