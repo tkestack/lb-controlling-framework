@@ -18,6 +18,7 @@ package lbcfcontroller
 
 import (
 	"fmt"
+	"sync"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcfclient "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
@@ -36,25 +37,25 @@ import (
 
 func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *backendController {
 	return &backendController{
-		client:         client,
-		brLister:       brLister,
-		driverLister:   driverLister,
-		podLister:      podLister,
-		eventRecorder:  recorder,
-		webhookInvoker: invoker,
+		client:             client,
+		brLister:           brLister,
+		driverLister:       driverLister,
+		podLister:          podLister,
+		eventRecorder:      recorder,
+		inProgressDeleting: new(sync.Map),
+		webhookInvoker:     invoker,
 	}
 }
 
 type backendController struct {
-	client lbcfclient.Interface
-
-	brLister     v1beta1.BackendRecordLister
-	driverLister v1beta1.LoadBalancerDriverLister
-	podLister    corev1.PodLister
-
+	client        lbcfclient.Interface
+	brLister      v1beta1.BackendRecordLister
+	driverLister  v1beta1.LoadBalancerDriverLister
+	podLister     corev1.PodLister
 	eventRecorder record.EventRecorder
 
-	webhookInvoker util.WebhookInvoker
+	inProgressDeleting *sync.Map
+	webhookInvoker     util.WebhookInvoker
 }
 
 func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
@@ -138,6 +139,11 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 }
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+	if name, deleting := c.sameAddrDeleting(backend); deleting {
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "DelayedEnsureBackend", "ensureBackend will start once %s is finished", name)
+		return util.AsyncResult(util.CalculateRetryInterval(0))
+	}
+
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
@@ -206,6 +212,8 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 }
 
 func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+	c.storeDeletingBackend(backend)
+
 	if backend.Status.BackendAddr == "" {
 		return c.removeFinalizer(backend)
 	}
@@ -245,6 +253,8 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 }
 
 func (c *backendController) removeFinalizer(backend *lbcfapi.BackendRecord) *util.SyncResult {
+	c.removeDeletingRecord(backend)
+
 	backend = backend.DeepCopy()
 	backend.Finalizers = util.RemoveFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend)
 	_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).Update(backend)
@@ -252,4 +262,23 @@ func (c *backendController) removeFinalizer(backend *lbcfapi.BackendRecord) *uti
 		return util.ErrorResult(err)
 	}
 	return util.SuccResult()
+}
+
+func (c *backendController) storeDeletingBackend(backend *lbcfapi.BackendRecord) {
+	key := fmt.Sprintf("%s|%s", backend.Spec.LBInfo, backend.Status.BackendAddr)
+	c.inProgressDeleting.Store(key, backend.Name)
+}
+
+func (c *backendController) removeDeletingRecord(backend *lbcfapi.BackendRecord) {
+	key := fmt.Sprintf("%s|%s", backend.Spec.LBInfo, backend.Status.BackendAddr)
+	c.inProgressDeleting.Delete(key)
+}
+
+func (c *backendController) sameAddrDeleting(backend *lbcfapi.BackendRecord) (string, bool) {
+	key := fmt.Sprintf("%s|%s", backend.Spec.LBInfo, backend.Status.BackendAddr)
+	value, ok := c.inProgressDeleting.Load(key)
+	if ok {
+		return value.(string), ok
+	}
+	return "", ok
 }
