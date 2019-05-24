@@ -31,6 +31,7 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8slabel "k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
@@ -343,12 +344,12 @@ func (e ErrorList) Error() string {
 }
 
 // MakeBackendName generates a name for BackendRecord
-func MakeBackendName(lbName, groupName, podName string, port lbcfapi.PortSelector) string {
+func MakeBackendName(lbName, groupName string, podUID types.UID, port lbcfapi.PortSelector) string {
 	protocol := "TCP"
 	if port.Protocol != nil {
 		protocol = strings.ToUpper(*port.Protocol)
 	}
-	raw := fmt.Sprintf("%s_%s_%s_%d_%+v", lbName, groupName, podName, port.PortNumber, protocol)
+	raw := fmt.Sprintf("%s_%s_%s_%d_%+v", lbName, groupName, podUID, port.PortNumber, protocol)
 	h := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", h)
 }
@@ -372,13 +373,13 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAd
 }
 
 // ConstructBackendRecord constructs a new BackendRecord
-func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, podName string) *lbcfapi.BackendRecord {
+func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, pod *v1.Pod) *lbcfapi.BackendRecord {
 	valueTrue := true
 	return &lbcfapi.BackendRecord{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      MakeBackendName(lb.Name, group.Name, podName, group.Spec.Pods.Port),
+			Name:      MakeBackendName(lb.Name, group.Name, pod.UID, group.Spec.Pods.Port),
 			Namespace: group.Namespace,
-			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", podName, ""),
+			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", pod.Name, ""),
 			Finalizers: []string{
 				lbcfapi.FinalizerDeregisterBackend,
 			},
@@ -399,7 +400,7 @@ func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGrou
 			LBInfo:       lb.Status.LBInfo,
 			LBAttributes: lb.Spec.Attributes,
 			PodBackendInfo: &lbcfapi.PodBackendRecord{
-				Name: podName,
+				Name: pod.Name,
 				Port: group.Spec.Pods.Port,
 			},
 			Parameters:   group.Spec.Parameters,

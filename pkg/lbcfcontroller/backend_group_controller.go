@@ -128,7 +128,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 
 		var expectedRecords []*lbcfapi.BackendRecord
 		for _, pod := range util.FilterPods(pods, util.PodAvailable) {
-			record := util.ConstructBackendRecord(lb, group, pod.Name)
+			record := util.ConstructBackendRecord(lb, group, pod)
 			expectedRecords = append(expectedRecords, record)
 		}
 		needCreate, needUpdate, needDelete := util.CompareBackendRecords(expectedRecords, existingRecords)
