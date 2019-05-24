@@ -642,3 +642,111 @@ func TestBackendDeregisterEmptyAddr(t *testing.T) {
 		t.Fatalf("expect empty finalizer, get %#v", get.Finalizers)
 	}
 }
+
+func TestBackendSameAddrOperation(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
+	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+
+	// oldBackend is deleting
+	oldBackend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	oldBackend.DeletionTimestamp = &ts
+	oldBackend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
+	oldBackend.Spec.LBInfo = map[string]string{
+		"lbID": "1234",
+	}
+	oldBackend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+		Policy: lbcfapi.PolicyIfNotSucc,
+	}
+	oldBackend.Status.BackendAddr = "fake.addr.com:1234"
+	oldBackend.Status.Conditions = []lbcfapi.BackendRecordCondition{
+		{
+			Type:               lbcfapi.BackendRegistered,
+			Status:             lbcfapi.ConditionTrue,
+			LastTransitionTime: ts,
+		},
+	}
+
+	// newBackend has the same backendAddr and lbInfo
+	pod2 := newFakePod("", "pod-0", nil, true, false)
+	pod2.UID = "anotherUID"
+	newBackend := util.ConstructBackendRecord(lb, bg, pod2)
+	newBackend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
+	newBackend.Spec.LBInfo = map[string]string{
+		"lbID": "1234",
+	}
+	newBackend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+		Policy: lbcfapi.PolicyIfNotSucc,
+	}
+	newBackend.Status.BackendAddr = "fake.addr.com:1234"
+
+	fakeClient := fake.NewSimpleClientset(oldBackend, newBackend)
+	store := make(map[string]string)
+	backendLister := newFakeBackendListerWithStore()
+	backendLister.store[oldBackend.Name] = oldBackend
+	backendLister.store[newBackend.Name] = newBackend
+	ctrl := newBackendController(
+		fakeClient,
+		backendLister,
+		&fakeDriverLister{
+			get: newFakeDriver("", "driver"),
+		},
+		&fakePodLister{
+			get: newFakePod("", "pod=0", nil, true, false),
+		},
+		&fakeEventRecorder{store: store},
+		&fakeRunningInvoker{})
+
+	key, _ := controller.KeyFunc(oldBackend)
+	resp := ctrl.syncBackendRecord(key)
+	if !resp.IsRunning() {
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[oldBackend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", oldBackend.Name, store)
+	} else if reason != "CalledDeregister" {
+		t.Fatalf("expect reason CalledDeregister, get %s", reason)
+	}
+	delete(store, oldBackend.Name)
+
+	// ensureBackend on newBackend should be delayed
+	key, _ = controller.KeyFunc(newBackend)
+	resp = ctrl.syncBackendRecord(key)
+	if !resp.IsRunning() {
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[newBackend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", newBackend.Name, store)
+	} else if reason != "DelayedEnsureBackend" {
+		t.Fatalf("expect reason DelayedEnsureBackend, get %s", reason)
+	}
+	delete(store, newBackend.Name)
+
+	// bypass oldBackend deregisterBackend webhook
+	ctrl.webhookInvoker = &fakeSuccInvoker{}
+	key, _ = controller.KeyFunc(oldBackend)
+	resp = ctrl.syncBackendRecord(key)
+	if !resp.IsSucc() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	}
+	delete(store, oldBackend.Name)
+
+	// once oldBackend finished, ensureBackend of newBackend starts
+	key, _ = controller.KeyFunc(newBackend)
+	resp = ctrl.syncBackendRecord(key)
+	if !resp.IsSucc() {
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[newBackend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", newBackend.Name, store)
+	} else if reason != "SuccEnsureBackend" {
+		t.Fatalf("expect reason SuccEnsureBackend, get %s", reason)
+	}
+	delete(store, newBackend.Name)
+}

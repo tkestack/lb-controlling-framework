@@ -1174,6 +1174,39 @@ func (l *fakeBackendLister) BackendRecords(namespace string) lbcflister.BackendR
 	return l
 }
 
+func newFakeBackendListerWithStore() *fakeBackendListerWithStore {
+	return &fakeBackendListerWithStore{
+		store: make(map[string]*lbcfapi.BackendRecord),
+	}
+}
+
+type fakeBackendListerWithStore struct {
+	// map: name -> BackendRecord
+	store map[string]*lbcfapi.BackendRecord
+}
+
+func (l *fakeBackendListerWithStore) Get(name string) (*lbcfapi.BackendRecord, error) {
+	backend, ok := l.store[name]
+	if !ok {
+		return nil, errors.NewNotFound(schema.GroupResource{
+			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Resource: "BackendRecord",
+		}, name)
+	}
+	return backend, nil
+}
+
+func (l *fakeBackendListerWithStore) List(selector labels.Selector) (ret []*lbcfapi.BackendRecord, err error) {
+	for _, backend := range l.store {
+		ret = append(ret, backend)
+	}
+	return
+}
+
+func (l *fakeBackendListerWithStore) BackendRecords(namespace string) lbcflister.BackendRecordNamespaceLister {
+	return l
+}
+
 type fakeSuccInvoker struct{}
 
 func (c *fakeSuccInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
