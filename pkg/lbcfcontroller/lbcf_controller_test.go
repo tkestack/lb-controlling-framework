@@ -766,8 +766,8 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 func TestLBCFControllerUpdateBackendRecordRegisterStatusChanged(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	oldRecord := util.ConstructBackendRecord(lb, group, "pod-0")
-	curRecord := util.ConstructBackendRecord(lb, group, "pod-0")
+	oldRecord := util.ConstructBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
+	curRecord := util.ConstructBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
 	curRecord.Status.BackendAddr = "fake.addr.com:80"
 	curRecord.Status.Conditions = []lbcfapi.BackendRecordCondition{
 		{
@@ -801,7 +801,7 @@ func TestLBCFControllerUpdateBackendRecordRegisterStatusChanged(t *testing.T) {
 func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	record := util.ConstructBackendRecord(lb, group, "pod-0")
+	record := util.ConstructBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
 	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
 	tomestoneKey, _ := controller.KeyFunc(record)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: record}
@@ -1023,6 +1023,7 @@ func newFakePod(namespace string, name string, labels map[string]string, running
 			Name:      name,
 			Namespace: namespace,
 			Labels:    labels,
+			UID:       "12345",
 		},
 	}
 	if running && !deleting {

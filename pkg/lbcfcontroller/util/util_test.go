@@ -18,6 +18,7 @@ package util
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"strings"
 	"testing"
@@ -757,7 +758,7 @@ func TestMapEqual(t *testing.T) {
 func TestMakeBackendName(t *testing.T) {
 	lbName := "lb"
 	groupName := "group"
-	podName := "pod"
+	podUID := types.UID("12345")
 	p := "tcp"
 	p2 := "Tcp"
 	p3 := "TCP"
@@ -783,10 +784,10 @@ func TestMakeBackendName(t *testing.T) {
 		PortNumber: 12324,
 		Protocol:   &p4,
 	}
-	ne := MakeBackendName(lbName, groupName, podName, notEqual)
+	ne := MakeBackendName(lbName, groupName, podUID, notEqual)
 	lastOne := ""
 	for i := range equals {
-		n := MakeBackendName(lbName, groupName, podName, equals[i])
+		n := MakeBackendName(lbName, groupName, podUID, equals[i])
 		if i == 0 {
 			lastOne = n
 		} else {
