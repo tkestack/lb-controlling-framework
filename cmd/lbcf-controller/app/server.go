@@ -17,6 +17,8 @@
 package app
 
 import (
+	"net/http"
+
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller"
@@ -40,6 +42,12 @@ func NewServer() *cobra.Command {
 			context.Start()
 			admitServer.Start()
 			lbcf.Start()
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("ok"))
+			})
+			go http.ListenAndServe(":11029", mux)
 
 			<-wait.NeverStop
 		},

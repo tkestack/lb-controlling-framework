@@ -9,6 +9,9 @@ spec:
     - name: admit-server
       port: 443
       targetPort: 443
+    - name: healthz
+      port: 11029
+      targetPort: 11029
   selector:
     lbcf.tke.cloud.tencent.com/component: lbcf-controller
   sessionAffinity: None
