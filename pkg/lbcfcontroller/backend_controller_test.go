@@ -139,8 +139,8 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	} else if reason, ok := store[backend.Name]; !ok {
 		t.Fatalf("expect event for %s, get %v", backend.Name, store)
-	} else if reason != "CalledGenerateAddr" {
-		t.Fatalf("expect reason CalledGenerateAddr, get %s", reason)
+	} else if reason != "RunningGenerateAddr" {
+		t.Fatalf("expect reason RunningGenerateAddr, get %s", reason)
 	}
 	ensureCondition := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered)
 	if ensureCondition != nil {
@@ -312,8 +312,8 @@ func TestBackendEnsureRunning(t *testing.T) {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	} else if reason, ok := store[backend.Name]; !ok {
 		t.Fatalf("expect event for %s, get %v", backend.Name, store)
-	} else if reason != "CalledEnsureBackend" {
-		t.Fatalf("expect reason CalledEnsureBackend, get %s", reason)
+	} else if reason != "RunningEnsureBackend" {
+		t.Fatalf("expect reason RunningEnsureBackend, get %s", reason)
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); !reflect.DeepEqual(*get, ensureCondition) {
@@ -544,8 +544,8 @@ func TestBackendDeregisterRunning(t *testing.T) {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	} else if reason, ok := store[backend.Name]; !ok {
 		t.Fatalf("expect event for %s, get %v", backend.Name, store)
-	} else if reason != "CalledDeregister" {
-		t.Fatalf("expect reason CalledDeregister, get %s", reason)
+	} else if reason != "RunningDeregister" {
+		t.Fatalf("expect reason RunningDeregister, get %s", reason)
 	}
 }
 
@@ -706,8 +706,8 @@ func TestBackendSameAddrOperation(t *testing.T) {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	} else if reason, ok := store[oldBackend.Name]; !ok {
 		t.Fatalf("expect event for %s, get %v", oldBackend.Name, store)
-	} else if reason != "CalledDeregister" {
-		t.Fatalf("expect reason CalledDeregister, get %s", reason)
+	} else if reason != "RunningDeregister" {
+		t.Fatalf("expect reason RunningDeregister, get %s", reason)
 	}
 	delete(store, oldBackend.Name)
 

@@ -126,8 +126,8 @@ func TestLoadBalancerCreateRunning(t *testing.T) {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	} else if reason, ok := store[lb.Name]; !ok {
 		t.Fatalf("expect event for %s, get %v", lb.Name, store)
-	} else if reason != "CalledCreateLoadBalancer" {
-		t.Fatalf("expect reason CalledCreateLoadBalancer, get %s", reason)
+	} else if reason != "RunningCreateLoadBalancer" {
+		t.Fatalf("expect reason RunningCreateLoadBalancer, get %s", reason)
 	}
 }
 
@@ -312,8 +312,8 @@ func TestLoadBalancerEnsureRunning(t *testing.T) {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	} else if reason, ok := store[lb.Name]; !ok {
 		t.Fatalf("expect event for %s, get %v", lb.Name, store)
-	} else if reason != "CalledEnsureLoadBalancer" {
-		t.Fatalf("expect reason CalledEnsureLoadBalancer, get %s", reason)
+	} else if reason != "RunningEnsureLoadBalancer" {
+		t.Fatalf("expect reason RunningEnsureLoadBalancer, get %s", reason)
 	}
 }
 
@@ -507,8 +507,8 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	} else if reason, ok := store[lb.Name]; !ok {
 		t.Fatalf("expect event for %s, get %v", lb.Name, store)
-	} else if reason != "CalledDeleteLoadBalancer" {
-		t.Fatalf("expect reason CalledDeleteLoadBalancer, get %s", reason)
+	} else if reason != "RunningDeleteLoadBalancer" {
+		t.Fatalf("expect reason RunningDeleteLoadBalancer, get %s", reason)
 	}
 }
 

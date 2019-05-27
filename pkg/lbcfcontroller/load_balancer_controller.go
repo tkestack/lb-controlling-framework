@@ -133,7 +133,7 @@ func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedCreateLoadBalancer", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "CalledCreateLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningCreateLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
@@ -194,7 +194,7 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedEnsureLoadBalancer", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "CalledEnsureLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningEnsureLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
@@ -227,7 +227,7 @@ func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedDeleteLoadBalancer", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "CalledDeleteLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningDeleteLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:

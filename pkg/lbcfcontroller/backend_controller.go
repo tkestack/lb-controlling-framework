@@ -128,7 +128,7 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "msg: %s", rsp.Msg)
 			return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 		case webhooks.StatusRunning:
-			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "CalledGenerateAddr", "msg: %s", rsp.Msg)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningGenerateAddr", "msg: %s", rsp.Msg)
 			delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 			return util.AsyncResult(delay)
 		default:
@@ -204,7 +204,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "CalledEnsureBackend", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningEnsureBackend", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
@@ -245,7 +245,7 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedDeregister", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "CalledDeregister", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningDeregister", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
