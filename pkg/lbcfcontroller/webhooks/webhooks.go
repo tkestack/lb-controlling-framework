@@ -179,6 +179,9 @@ type ValidateBackendResponse struct {
 // GenerateBackendAddrRequest is the request for webhook generateBackendAddr
 type GenerateBackendAddrRequest struct {
 	RequestForRetryHooks
+	LBInfo         map[string]string                    `json:"lbInfo"`
+	LBAttributes   map[string]string                    `json:"lbAttributes"`
+	Parameters     map[string]string                    `json:"parameters"`
 	PodBackend     *PodBackendInGenerateAddrRequest     `json:"podBackend"`
 	ServiceBackend *ServiceBackendInGenerateAddrRequest `json:"serviceBackend"`
 }

@@ -102,6 +102,8 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 				RecordID: string(backend.UID),
 				RetryID:  string(uuid.NewUUID()),
 			},
+			LBInfo:       backend.Spec.LBInfo,
+			LBAttributes: backend.Spec.LBAttributes,
 			PodBackend: &webhooks.PodBackendInGenerateAddrRequest{
 				Pod:  *pod,
 				Port: backend.Spec.PodBackendInfo.Port,
