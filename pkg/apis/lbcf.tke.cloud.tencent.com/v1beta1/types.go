@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	ApiVersion = "lbcf.tke.cloud.tencent.com/vebeta1"
+	ApiVersion = "lbcf.tke.cloud.tencent.com/v1beta1"
 
 	SystemDriverPrefix = "lbcf-"
 
