@@ -226,7 +226,7 @@ func GetBackendType(bg *lbcfapi.BackendGroup) BackendType {
 // It returns "kube-system" if driverName starts with "lbcf-", otherwise the defaultNamespace is returned
 func GetDriverNamespace(driverName string, defaultNamespace string) string {
 	if strings.HasPrefix(driverName, lbcfapi.SystemDriverPrefix) {
-		return "kube-system"
+		return metav1.NamespaceSystem
 	}
 	return defaultNamespace
 }

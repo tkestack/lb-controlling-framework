@@ -26,6 +26,7 @@ import (
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	admission "k8s.io/api/admission/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"
 )
@@ -358,7 +359,7 @@ func (a *Admitter) listLoadBalancerByDriver(driverName string, driverNamespace s
 	}
 	var ret []*lbcfapi.LoadBalancer
 	for _, lb := range lbList {
-		if driverNamespace != "kube-system" && lb.Namespace != driverNamespace {
+		if driverNamespace != metav1.NamespaceSystem && lb.Namespace != driverNamespace {
 			continue
 		}
 		if lb.Spec.LBDriver == driverName {
@@ -375,7 +376,7 @@ func (a *Admitter) listBackendByDriver(driverName string, driverNamespace string
 	}
 	var ret []*lbcfapi.BackendRecord
 	for _, r := range recordList {
-		if driverNamespace != "kube-system" && r.Namespace != driverNamespace {
+		if driverNamespace != metav1.NamespaceSystem && r.Namespace != driverNamespace {
 			continue
 		}
 		if r.Spec.LBDriver == driverName {

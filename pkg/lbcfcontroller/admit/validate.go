@@ -18,16 +18,17 @@ package admit
 
 import (
 	"fmt"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"net/url"
 	"reflect"
 	"strings"
 	"time"
 
 	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -119,14 +120,14 @@ func validateEnsurePolicy(raw lbcfapi.EnsurePolicyConfig, path *field.Path) fiel
 
 func validateDriverName(name string, namespace string, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if namespace == "kube-system" {
+	if namespace == metav1.NamespaceSystem {
 		if !strings.HasPrefix(name, lbcfapi.SystemDriverPrefix) {
-			allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metadata.name must start with %q for drivers in namespace %q", lbcfapi.SystemDriverPrefix, "kube-system")))
+			allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metadata.name must start with %q for drivers in namespace %q", lbcfapi.SystemDriverPrefix, metav1.NamespaceSystem)))
 		}
 		return allErrs
 	}
 	if strings.HasPrefix(name, lbcfapi.SystemDriverPrefix) {
-		allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metaname.name must not start with %q for drivers not in namespace %q", lbcfapi.SystemDriverPrefix, "kube-system")))
+		allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metaname.name must not start with %q for drivers not in namespace %q", lbcfapi.SystemDriverPrefix, metav1.NamespaceSystem)))
 	}
 	return allErrs
 }
