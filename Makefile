@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 BINARY = lbcf-controller
 OUTPUT_PATH ?= output/$(BINARY)
-LBCF_IMAGE = ccr.ccs.tencentyun.com/lbcf/lbcf-controller:0.1.0
+LBCF_IMAGE = lbcf-controller:v0.1.0
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 mkfile_dir := $(dir $(mkfile_path))
