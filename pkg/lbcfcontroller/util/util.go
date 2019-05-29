@@ -25,7 +25,7 @@ import (
 	"text/template"
 	"time"
 
-	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"

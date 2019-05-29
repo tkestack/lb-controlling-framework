@@ -19,7 +19,7 @@ limitations under the License.
 package v1beta1
 
 import (
-	internalinterfaces "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
+	internalinterfaces "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.

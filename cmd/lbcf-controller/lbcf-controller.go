@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app"
+	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app"
 
 	"k8s.io/klog"
 )

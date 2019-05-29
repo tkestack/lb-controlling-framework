@@ -21,7 +21,7 @@ package internalinterfaces
 import (
 	time "time"
 
-	versioned "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	versioned "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	cache "k8s.io/client-go/tools/cache"

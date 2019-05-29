@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	"github.com/emicklei/go-restful"
 	"k8s.io/klog"

@@ -20,9 +20,9 @@ import (
 	"reflect"
 	"time"
 
-	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/context"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

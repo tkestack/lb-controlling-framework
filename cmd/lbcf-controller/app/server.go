@@ -19,10 +19,10 @@ package app
 import (
 	"net/http"
 
-	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/config"
-	"git.tencent.com/tke/lb-controlling-framework/cmd/lbcf-controller/app/context"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/admit"
+	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/config"
+	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/admit"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/wait"

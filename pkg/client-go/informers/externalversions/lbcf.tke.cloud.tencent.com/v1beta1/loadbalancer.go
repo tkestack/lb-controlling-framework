@@ -21,10 +21,10 @@ package v1beta1
 import (
 	time "time"
 
-	lbcftkecloudtencentcomv1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	versioned "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	internalinterfaces "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
-	v1beta1 "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcftkecloudtencentcomv1beta1 "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	versioned "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	internalinterfaces "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
+	v1beta1 "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"

@@ -18,9 +18,9 @@ package admit
 
 import (
 	"encoding/json"
-	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcflister "git.tencent.com/tke/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcflister "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 	"k8s.io/api/admission/v1beta1"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

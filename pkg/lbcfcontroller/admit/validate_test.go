@@ -17,11 +17,11 @@
 package admit
 
 import (
-	"git.tencent.com/tke/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 	"testing"
 	"time"
 
-	lbcfapi "git.tencent.com/tke/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
