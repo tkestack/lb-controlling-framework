@@ -20,15 +20,6 @@ docker-build:
 build:
 	go build -o $(OUTPUT_PATH) git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller
 
-.PHONY: build-example
-build-example:
-	cd $(mkfile_dir) && go mod vendor && \
-	docker run --rm -v "$(mkfile_dir)":/go/src/git.code.oa.com/tke/lb-controlling-framework \
-	-w /go/src/git.code.oa.com/tke/lb-controlling-framework \
-	-e GO111MODULE=off \
-	golang:1.12 \
-	go build -o output/example-driver git.code.oa.com/tke/lb-controlling-framework/cmd/drivers/example
-
 .PHONY: image
 image:
 	make docker-build && \
