@@ -1,3 +1,10 @@
+<!-- TOC -->
+
+- [设计目标](#设计目标)
+- [架构设计](#架构设计)
+
+<!-- /TOC -->
+
 ## 设计目标
 
 **LBCF**是专为Kubernetes平台操作负载均衡设计的通用框架，定位于对社区service-controller方案的增强，相较于社区的service-controller，LBCF具有以下特点：

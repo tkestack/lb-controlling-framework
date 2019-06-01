@@ -1,3 +1,16 @@
+<!-- TOC -->
+
+- [LoadBalancerDriver](#loadbalancerdriver)
+    - [LoadBalancerDriver.Status](#loadbalancerdriverstatus)
+- [LoadBalancer](#loadbalancer)
+    - [LoadBalancer.Status](#loadbalancerstatus)
+- [BackendGroup](#backendgroup)
+    - [BackendGroup.Status](#backendgroupstatus)
+- [BackendRecord](#backendrecord)
+    - [BackendRecord.Status](#backendrecordstatus)
+
+<!-- /TOC -->
+
 LBCF设计了4种CRD及其各自的Status Subresource，所有CRD皆为namespaced类型。
 
 ## LoadBalancerDriver
@@ -20,7 +33,7 @@ ValidatingAdmissionWebhook的使用：
 
 MutatingAdmissionWebhook的使用：未使用
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Required| Description|
 |:---:|:---:|:---:|:---|
@@ -35,7 +48,7 @@ MutatingAdmissionWebhook的使用：未使用
 |name|string|TRUE|Webhook名称，目前支持的webhook名称见[LBCF Webhook规范](lbcf-webhook-specification.md)|
 |timeout| string| FALSE|webhook超时时间。最长1分钟，默认10秒|
 
-### 样例
+**样例**
 ```yaml
 apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
 kind: LoadBalancerDriver
@@ -53,15 +66,15 @@ spec:
     # default timeout(10s) is used for other webhooks
 ```
 
-## LoadBalancerDriver.Status
+### LoadBalancerDriver.Status
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Description|
 |:---:|:---:|:---|
 |conditions|[]K8S.Condition|使用的Condition: `Accepted`。`Accepted`表示此LoadBalancerDriver已被lbcf-controller接受|
 
-### 样例
+**样例**
 ```yaml
 status:
   conditions:
@@ -86,7 +99,7 @@ MutatingAdmissionWebhook的使用：
 
 * lbcf.tke.cloud.tencent.com/delete-load-loadbalancer，删除前调用[deleteLoadBalancer](lbcf-webhook-specification.md#deleteloadbalancer)
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Required| Description|
 |:---:|:---:|:---:|:---|
@@ -102,7 +115,7 @@ MutatingAdmissionWebhook的使用：
 |policy|string|TRUE|重试策略，支持`IfNotSucc`和`Always`，默认`IfNotSucc`。设置为`IfNotSucc`或为空时，[ensureLoadBalancer](lbcf-webhook-specification.md#ensureloadbalancer)只有在LoadBalancer.spec.attributes被修改时才会被调用；设置为`Always`时，ensureLoadBalancer会被周期性调用|
 |minPeriod|string|FALSE|周期性调用的最小间隔，最少`30s`，默认`1m`。**仅当policy为`Always`时有效**|
 
-### 样例1：使用已存在的CLB实例与监听器(四层)
+**样例1：使用已存在的CLB实例与监听器(四层)**
 
 ```yaml
 apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
@@ -121,7 +134,7 @@ spec:
 
 在LoadBalancer被提交至K8S后，上述参数会通过[validateLoadBalancer](lbcf-webhook-specification.md#validateloadbalancer)发送给Webhook server，Webhook server会根据CLB的存在情况返回校验结果。
 
-### 样例2：临时创建CLB实例与监听器(四层)
+**样例2：临时创建CLB实例与监听器(四层)**
 
 ```yaml
 apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
@@ -158,16 +171,16 @@ status:
       lblID: lbl-2234
 ```
 
-## LoadBalancer.Status
+### LoadBalancer.Status
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Description|
 |:---:|:---:|:---|
 |lbInfo|map<string, string>|负载均衡唯一标识，由[createLoadBalancer](lbcf-webhook-specification.md#createloadbalancer)返回，若其返回值为空格，则lbcf-controller会自动向其中填入LoadBalancer.spec.lbSpec的值|
 |conditions|[]K8S.Condition|使用的Condition: `Created`，`AttributesSynced`。`Created`表示负载均衡已成功创建，`AttributesSynced`表示Loadbalancer.spec.attributes中的属性已同步至负载均衡|
 
-### 样例
+**样例**
 
 ```yaml
 status:
@@ -196,7 +209,7 @@ ValidatingAdmissionWebhook的使用：
 MutatingAdmissionWebhook的使用：未使用
 
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Required| Description|
 |:---:|:---:|:---:|:---|
@@ -238,7 +251,7 @@ MutatingAdmissionWebhook的使用：未使用
 |portNumber|int32|TRUE|端口号|
 |protocol|string|FALSE|支持`TCP`和`UDP`，默认`TCP`|
 
-### 样例1： 使用Service NodePort作为backend
+**样例1： 使用Service NodePort作为backend**
 
 ```yaml
 apiVersion: tke.cloud.tencent.com/v1beta1
@@ -258,7 +271,7 @@ spec:
     weight: 50
 ```
 
-### 样例2：使用Label选择Pod，并直接将Pod绑定至负载均衡
+**样例2：使用Label选择Pod，并直接将Pod绑定至负载均衡**
 
 ```yaml
 apiVersion: tke.cloud.tencent.com/v1beta1
@@ -282,7 +295,7 @@ spec:
     weight: 50
 ```
 
-### 样例3：使用name选择Pod，并直接将Pod绑定至负载均衡
+**样例3：使用name选择Pod，并直接将Pod绑定至负载均衡**
 
 ```yaml
 apiVersion: tke.cloud.tencent.com/v1beta1
@@ -304,7 +317,7 @@ spec:
     weight: 50
 ```
 
-### 样例4：使用静态地址作为backend, 
+**样例4：使用静态地址作为backend**
 
 ```yaml
 apiVersion: tke.cloud.tencent.com/v1beta1
@@ -321,16 +334,16 @@ spec:
     weight: 50
 ```
 
-## BackendGroup.Status
+### BackendGroup.Status
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Description|
 |:---:|:---:|:---|
 |backends|int32|BackendGroup内backend的数量。BackendGroup中配置了service时，数量为1；配置了pods时，等于被选中的Pod数量；配置了static时，等于static数组长度|
 |registerdBackends|int32|BackendGroup内已绑定backend的数量|
 
-### 样例
+**样例**
 
 ```yaml
 status:
@@ -361,7 +374,7 @@ finalizers:
 |lbcf.tke.cloud.tencent.com/backend-pod|BackendGroup类型为pods时，此BackendRecord对应的Pod的name|
 |lbcf.tke.cloud.tencent.com/backend-static-addr|BackendGroup类型为static时，此BackendRecord对应的静态地址|
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Required| Description|
 |:---:|:---:|:---:|:---|
@@ -374,7 +387,7 @@ finalizers:
 |parameters|map<string, string>|FALSE|当前绑定操作使用的参数|
 |ensurePolicy|EnsurePolicy|FALSE|来自BackendGroup.spec.ensurePolicy|
 
-### 样例：PodBackend
+**样例：PodBackend**
 
 ```yaml
 apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
@@ -416,9 +429,9 @@ spec:
       protocol: TCP
 ```
 
-## BackendRecord.Status
+### BackendRecord.Status
 
-**CRD 结构体定义**
+**CRD结构体定义**
 
 | Field | Type | Description|
 |:---:|:---:|:---|
@@ -426,7 +439,7 @@ spec:
 |injectedInfo|map<string, string>|绑定成功时由[ensureBackend](lbcf-webhook-specification.md#ensureBackend)返回的内容|
 |conditions|[]K8S.Condition|使用的Condition：`Registered`。`Registered`表示backend已绑定成功|
 
-### 样例：PodBackend
+**样例**
 
 ```yaml
 status:
