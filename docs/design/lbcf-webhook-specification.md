@@ -455,7 +455,7 @@ ensureBackend用来绑定backend，Webhook server在实现时**必须**遵守以
 |status|string|TRUE|执行结果。支持`Succ`，`Fail`，`Running`，其中`Running`用来实现异步操作|
 |msg|string|FALSE|反馈给用户的信息|
 |minRetryDelayinSeconds|string|FALSE|距离下次重试的最小间隔。实际重试间隔受LBCF控制，可能大于此值|
-|injectedInfo|map<string,string>|FALSE|需要LBCF持久化保存的信息。本字段将被LBCF持久化保存，并在下次调用ensureBackend与deregisterBackend时被放入请求中|
+|injectedInfo|map<string,string>|FALSE|需要LBCF持久化保存的信息。本字段将被LBCF持久化保存，并在下次调用ensureBackend与deregisterBackend时被放入请求中。**仅当status为`Succ`时有效**|
 
 **样例请求**
 ```json
