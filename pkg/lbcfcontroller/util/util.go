@@ -619,8 +619,10 @@ func (s *SyncResult) GetReEnsurePeriodic() time.Duration {
 	return s.minReEnsurePeriod
 }
 
-var firstFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers","value":["{{ .Finalizer }}"]}]`
-var additionalFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers/-","value":"{{ .Finalizer }}"}]`
+var (
+	firstFirnalizerPatchTemplate      = `[{"op":"add","path":"/metadata/finalizers","value":["{{ .Finalizer }}"]}]`
+	additionalFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers/-","value":"{{ .Finalizer }}"}]`
+)
 
 // MakeFinalizerPatch returns a patch that is used in MutatingAdmissionWebhook to add a finalizer into ObjectMeta.Finalizers
 func MakeFinalizerPatch(isFirst bool, finalizer string) []byte {
@@ -638,6 +640,36 @@ func MakeFinalizerPatch(isFirst bool, finalizer string) []byte {
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, wrapper); err != nil {
 		klog.Errorf("make finalizer patch failed: %v", err)
+		return nil
+	}
+	return buf.Bytes()
+}
+
+var (
+	addLabelPatchTemplate     = `[{"op":"add","path":"/metadata/labels","value": { "{{ .Key }}": "{{ .Value }}"} }]`
+	replaceLabelPatchTemplate = `[{"op":"replace","path":"/metadata/labels/{{ .Key }}","value": "{{ .Value }}" }]`
+)
+
+// MakeLabelPatch returns a patch that is used in MutatingAdmissionWebhook to add a label into ObjectMeta.Labels
+func MakeLabelPatch(isReplace bool, key string, value string) []byte {
+	tmpStr := addLabelPatchTemplate
+	if isReplace {
+		tmpStr = replaceLabelPatchTemplate
+		key = strings.ReplaceAll(key, "~", "~0")
+		key = strings.ReplaceAll(key, "/", "~1")
+	}
+	t := template.Must(template.New("patch").Parse(tmpStr))
+
+	wrapper := struct {
+		Key   string
+		Value string
+	}{
+		Key:   key,
+		Value: value,
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, wrapper); err != nil {
+		klog.Errorf("make label patch failed: %v", err)
 		return nil
 	}
 	return buf.Bytes()

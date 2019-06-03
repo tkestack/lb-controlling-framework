@@ -99,8 +99,28 @@ func (a *Admitter) MutateDriver(*admission.AdmissionReview) *admission.Admission
 }
 
 // MutateBackendGroup implements MutatingWebHook for BackendGroup
-func (a *Admitter) MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse {
-	return toAdmissionResponse(nil)
+func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	obj := &lbcfapi.BackendGroup{}
+	err := json.Unmarshal(ar.Request.Object.Raw, obj)
+	if err != nil {
+		return toAdmissionResponse(err)
+	}
+
+	var isReplace bool
+	if obj.Labels != nil {
+		if value, ok := obj.Labels[lbcfapi.LabelLBName]; ok && value == obj.Spec.LBName {
+			return toAdmissionResponse(nil)
+		} else if ok {
+			isReplace = true
+		}
+	}
+
+	reviewResponse := &admission.AdmissionResponse{}
+	reviewResponse.Allowed = true
+	reviewResponse.Patch = util.MakeLabelPatch(isReplace, lbcfapi.LabelLBName, obj.Spec.LBName)
+	pt := admission.PatchTypeJSONPatch
+	reviewResponse.PatchType = &pt
+	return reviewResponse
 }
 
 // ValidateLoadBalancerCreate implements ValidatingWebHook for LoadBalancer creating
