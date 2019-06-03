@@ -20,11 +20,11 @@ LBCF对K8S内部晦涩的运行机制进行了封装并以Webhook的形式对外
 
 * [LBCF Webhook规范](docs/design/lbcf-webhook-specification.md)
 
-* [操作手册](docs/design/how-to-use.md)
+* [操作手册](docs/design/how-to-use.md)(WIP)
 
 ## 安装LBCF
 
-系统要求：
+### 系统要求：
 
 * K8S 1.10及以上版本
 
@@ -40,13 +40,30 @@ LBCF对K8S内部晦涩的运行机制进行了封装并以Webhook的形式对外
 在[腾讯云](https://cloud.tencent.com/product/tke)上购买1.12.4版本集群，无需修改任何参数，开箱可用
    
 
-## Examples
+### 步骤1: 制作镜像
 
-* [公有云绑定CLB——Service NodePort方式](docs/examples/tencent-cloud-service-nodeport.md)
+进入项目根目录，运行命令制作镜像
+```bash
+make image
+```
 
-* [公有云绑定CLB——Pod直通CLB](docs/examples/tencent-cloud-eni.md)
+### 步骤2：修改YAML中的镜像名称
 
-## 自定义负载均衡对接实践
+[deployments目录](deployments)中包含了部署LBCF需要的所有YAML, 在其中找到[deployment.yaml](deployments/deployment.yaml)并使用步骤1生成的镜像替换文件中的`${IMAGE_NAME}`
+
+### 步骤3：安装YAML
+
+登陆K8S集群，使用`kubectl apply -f $file_name` 命令安装[deployments目录](deployments)下的所有YAML文件。
+
+*注：deployments目录中使用的所有证书皆为自签名证书，可按需替换*
+
+## 使用LBCF对接负载均衡/名字服务
+
+LBCF为所有负载均衡提供了统一的控制面，开发人员在对接负载均衡时需要按照[LBCF Webhook规范](docs/design/lbcf-webhook-specification.md)的要求实现Webhook服务器。
+
+Webhook服务器的实现可参考[最佳实践](#best_practice)中的项目。
+
+## <a name="best_practice"></a> 最佳实践
 
 * [God游戏](https://git.code.oa.com/ianlang/lbcf-driver-ieg-god)
   
@@ -59,3 +76,7 @@ LBCF对K8S内部晦涩的运行机制进行了封装并以Webhook的形式对外
   * 控制面：每个Pod端口独占一个CLB监听器，监听器端口号为`10000 +（pod名后缀[0, n-1] * 10）+ (pod的端口%10)`
 
   
+* [公有云绑定CLB——Service NodePort方式](docs/examples/tencent-cloud-service-nodeport.md)(WIP)
+
+* [公有云绑定CLB——Pod直通CLB](docs/examples/tencent-cloud-eni.md)(WIP)
+

@@ -17,7 +17,7 @@ spec:
       serviceAccountName: lbcf-controller
       containers:
         - name: controller
-          image: ccr.ccs.tencentyun.com/lbcf/lbcf-controller:0.1.0
+          image: ${IMAGE_NAME}
           ports:
             - containerPort: 443
               name: admit-server
