@@ -216,9 +216,6 @@ type BackendOperationRequest struct {
 
 // BackendOperationResponse is the response for webhook ensureBackend and deregisterBackend
 type BackendOperationResponse struct {
-	RecordID string            `json:"recordID"`
-	RetryID  string            `json:"retryID"`
-	LBInfo   map[string]string `json:"lbInfo"`
 	ResponseForFailRetryHooks
 	InjectedInfo map[string]string `json:"injectedInfo"`
 }
