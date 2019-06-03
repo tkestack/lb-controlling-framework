@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcflister "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 	"k8s.io/api/admission/v1beta1"
 	apiv1 "k8s.io/api/core/v1"
@@ -102,9 +103,78 @@ func TestAdmitter_MutateDriver(t *testing.T) {
 
 func TestAdmitter_MutateBackendGroup(t *testing.T) {
 	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
-	rsp := a.MutateBackendGroup(&v1beta1.AdmissionReview{})
+	group := &lbcfapi.BackendGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-backendgroup",
+			Namespace: "test",
+		},
+		Spec: lbcfapi.BackendGroupSpec{
+			LBName: "test-lb",
+			Pods: &lbcfapi.PodBackend{
+				Port: lbcfapi.PortSelector{
+					PortNumber: 80,
+				},
+				ByLabel: &lbcfapi.SelectPodByLabel{
+					Selector: map[string]string{
+						"key1": "value1",
+					},
+				},
+			},
+		},
+	}
+	raw, _ := json.Marshal(group)
+	rsp := a.MutateBackendGroup(&v1beta1.AdmissionReview{
+		Request: &v1beta1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: raw,
+			},
+		},
+	})
 	if !rsp.Allowed {
 		t.Fatalf("expect always allow")
+	}
+	expect := util.MakeLabelPatch(false, lbcfapi.LabelLBName, group.Spec.LBName)
+	if string(rsp.Patch) != string(expect) {
+		t.Fatalf("expect patch %s, get %s", expect, rsp.Patch)
+	}
+
+	group = &lbcfapi.BackendGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-backendgroup",
+			Namespace: "test",
+			Labels: map[string]string{
+				"k1":                "v1",
+				lbcfapi.LabelLBName: "a-random-value",
+			},
+		},
+		Spec: lbcfapi.BackendGroupSpec{
+			LBName: "test-lb",
+			Pods: &lbcfapi.PodBackend{
+				Port: lbcfapi.PortSelector{
+					PortNumber: 80,
+				},
+				ByLabel: &lbcfapi.SelectPodByLabel{
+					Selector: map[string]string{
+						"key1": "value1",
+					},
+				},
+			},
+		},
+	}
+	raw, _ = json.Marshal(group)
+	rsp = a.MutateBackendGroup(&v1beta1.AdmissionReview{
+		Request: &v1beta1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: raw,
+			},
+		},
+	})
+	if !rsp.Allowed {
+		t.Fatalf("expect always allow")
+	}
+	expect = util.MakeLabelPatch(true, lbcfapi.LabelLBName, group.Spec.LBName)
+	if string(rsp.Patch) != string(expect) {
+		t.Fatalf("expect patch %s, get %s", expect, rsp.Patch)
 	}
 }
 
