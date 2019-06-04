@@ -263,7 +263,9 @@ spec:
   lbName: my-load-balancer-1
   service:
     name: my-service
-    portName: svc-port-1
+    port:
+      portNumber: 80
+      protocol: TCP 
     nodeSelector: 
       key1: value1
       key2: value2
