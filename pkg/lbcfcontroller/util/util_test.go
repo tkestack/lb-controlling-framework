@@ -427,13 +427,20 @@ func TestGetBackendType(t *testing.T) {
 			backendType: TypeStatic,
 		},
 		{
-			name: "unknown-backend",
+			name: "empty-static-backend",
 			backendGroup: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
 					Static: []string{},
 				},
 			},
-			backendType: TypeUnknown,
+			backendType: TypeStatic,
+		},
+		{
+			name: "nil-static-backend",
+			backendGroup: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{},
+			},
+			backendType: TypeStatic,
 		},
 	}
 	for _, c := range cases {
@@ -784,10 +791,10 @@ func TestMakeBackendName(t *testing.T) {
 		PortNumber: 12324,
 		Protocol:   &p4,
 	}
-	ne := MakeBackendName(lbName, groupName, podUID, notEqual)
+	ne := MakePodBackendName(lbName, groupName, podUID, notEqual)
 	lastOne := ""
 	for i := range equals {
-		n := MakeBackendName(lbName, groupName, podUID, equals[i])
+		n := MakePodBackendName(lbName, groupName, podUID, equals[i])
 		if i == 0 {
 			lastOne = n
 		} else {

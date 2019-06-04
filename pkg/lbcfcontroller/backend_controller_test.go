@@ -32,7 +32,7 @@ import (
 func TestBackendGenerateAddr(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	fakeClient := fake.NewSimpleClientset(backend)
 	store := make(map[string]string)
 	ctrl := newBackendController(
@@ -46,6 +46,8 @@ func TestBackendGenerateAddr(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -69,7 +71,7 @@ func TestBackendGenerateAddr(t *testing.T) {
 func TestBackendGenerateAddrFailed(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	fakeClient := fake.NewSimpleClientset(backend)
 	store := make(map[string]string)
 	ctrl := newBackendController(
@@ -83,6 +85,8 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -110,7 +114,7 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 func TestBackendGenerateAddrRunning(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	fakeClient := fake.NewSimpleClientset(backend)
 	store := make(map[string]string)
 	ctrl := newBackendController(
@@ -124,6 +128,8 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -151,7 +157,7 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 func TestBackendGenerateAddrInvalidResponse(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	fakeClient := fake.NewSimpleClientset(backend)
 	store := make(map[string]string)
 	ctrl := newBackendController(
@@ -165,6 +171,8 @@ func TestBackendGenerateAddrInvalidResponse(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -193,7 +201,7 @@ func TestBackendEnsure(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	//ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.Status.BackendAddr = "fake.addr.com:1234"
 	fakeClient := fake.NewSimpleClientset(backend)
 	store := make(map[string]string)
@@ -208,6 +216,8 @@ func TestBackendEnsure(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -233,7 +243,7 @@ func TestBackendEnsureFailed(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	//ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.Status.BackendAddr = "fake.addr.com:1234"
 	fakeClient := fake.NewSimpleClientset(backend)
 	store := make(map[string]string)
@@ -248,6 +258,8 @@ func TestBackendEnsureFailed(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -277,7 +289,7 @@ func TestBackendEnsureRunning(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
 		Policy: lbcfapi.PolicyAlways,
 	}
@@ -301,6 +313,8 @@ func TestBackendEnsureRunning(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -325,7 +339,7 @@ func TestBackendEnsureNoRerun(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
 		Policy: lbcfapi.PolicyIfNotSucc,
 	}
@@ -349,6 +363,8 @@ func TestBackendEnsureNoRerun(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -372,7 +388,7 @@ func TestBackendEnsureInvalidResponse(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	//ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.Status.BackendAddr = "fake.addr.com:1234"
 	fakeClient := fake.NewSimpleClientset(backend)
 	store := make(map[string]string)
@@ -387,6 +403,8 @@ func TestBackendEnsureInvalidResponse(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -407,7 +425,7 @@ func TestBackendDeregister(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
@@ -434,6 +452,8 @@ func TestBackendDeregister(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -451,7 +471,7 @@ func TestBackendDeregisterFailed(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
@@ -478,6 +498,8 @@ func TestBackendDeregisterFailed(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -502,7 +524,7 @@ func TestBackendDeregisterRunning(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
@@ -529,6 +551,8 @@ func TestBackendDeregisterRunning(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -553,7 +577,7 @@ func TestBackendDeregisterInvalidResponse(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
@@ -580,6 +604,8 @@ func TestBackendDeregisterInvalidResponse(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -604,7 +630,7 @@ func TestBackendDeregisterEmptyAddr(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
-	backend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
@@ -630,6 +656,8 @@ func TestBackendDeregisterEmptyAddr(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
@@ -649,7 +677,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 
 	// oldBackend is deleting
-	oldBackend := util.ConstructBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
+	oldBackend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	oldBackend.DeletionTimestamp = &ts
 	oldBackend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
 	oldBackend.Spec.LBInfo = map[string]string{
@@ -670,7 +698,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 	// newBackend has the same backendAddr and lbInfo
 	pod2 := newFakePod("", "pod-0", nil, true, false)
 	pod2.UID = "anotherUID"
-	newBackend := util.ConstructBackendRecord(lb, bg, pod2)
+	newBackend := util.ConstructPodBackendRecord(lb, bg, pod2)
 	newBackend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
 	newBackend.Spec.LBInfo = map[string]string{
 		"lbID": "1234",
@@ -694,6 +722,8 @@ func TestBackendSameAddrOperation(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 

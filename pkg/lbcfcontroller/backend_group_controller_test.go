@@ -50,7 +50,10 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 		&fakePodLister{
 			get:  pod1,
 			list: []*v1.Pod{pod1, pod2},
-		})
+		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsSucc() {
@@ -72,10 +75,10 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 	for _, r := range records.Items {
 		var expected *lbcfapi.BackendRecord
 		switch r.Name {
-		case util.MakeBackendName(lb.Name, group.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80}):
-			expected = util.ConstructBackendRecord(lb, group, pod1)
-		case util.MakeBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}):
-			expected = util.ConstructBackendRecord(lb, group, pod2)
+		case util.MakePodBackendName(lb.Name, group.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80}):
+			expected = util.ConstructPodBackendRecord(lb, group, pod1)
+		case util.MakePodBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}):
+			expected = util.ConstructPodBackendRecord(lb, group, pod2)
 		default:
 			t.Fatalf("unknown BackendRecord %#v", r)
 		}
@@ -105,7 +108,10 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 		&fakePodLister{
 			get:  pod1,
 			list: []*v1.Pod{pod1, pod2},
-		})
+		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsSucc() {
@@ -124,7 +130,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 	if len(records.Items) != 1 {
 		t.Fatalf("expect 1 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
-	expect := util.ConstructBackendRecord(lb, group, pod1)
+	expect := util.ConstructPodBackendRecord(lb, group, pod1)
 	if !reflect.DeepEqual(*expect, records.Items[0]) {
 		t.Errorf("expect BackendRecord %#v \n get %#v", *expect, records.Items[0])
 	}
@@ -141,8 +147,8 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	curGroup.Spec.Parameters = map[string]string{
 		"p1": "v1",
 	}
-	oldBackend1 := util.ConstructBackendRecord(lb, oldGroup, pod1)
-	oldBackend2 := util.ConstructBackendRecord(lb, oldGroup, pod2)
+	oldBackend1 := util.ConstructPodBackendRecord(lb, oldGroup, pod1)
+	oldBackend2 := util.ConstructPodBackendRecord(lb, oldGroup, pod2)
 	fakeClient := fake.NewSimpleClientset(curGroup, oldBackend1, oldBackend2)
 	ctrl := newBackendGroupController(
 		fakeClient,
@@ -162,7 +168,10 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 		&fakePodLister{
 			get:  pod1,
 			list: []*v1.Pod{pod1, pod2},
-		})
+		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+	)
 	key, _ := controller.KeyFunc(curGroup)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsSucc() {
@@ -184,10 +193,10 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	for _, r := range records.Items {
 		var expected *lbcfapi.BackendRecord
 		switch r.Name {
-		case util.MakeBackendName(lb.Name, curGroup.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80}):
-			expected = util.ConstructBackendRecord(lb, curGroup, pod1)
-		case util.MakeBackendName(lb.Name, curGroup.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}):
-			expected = util.ConstructBackendRecord(lb, curGroup, pod2)
+		case util.MakePodBackendName(lb.Name, curGroup.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80}):
+			expected = util.ConstructPodBackendRecord(lb, curGroup, pod1)
+		case util.MakePodBackendName(lb.Name, curGroup.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}):
+			expected = util.ConstructPodBackendRecord(lb, curGroup, pod2)
 		default:
 			t.Fatalf("unknown BackendRecord %#v", r)
 		}
@@ -208,8 +217,8 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
 	pod2.UID = "anotherUID"
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", curLB.Name, 80, "tcp", pod1.Labels, nil, nil)
-	oldBackend1 := util.ConstructBackendRecord(oldLB, group, pod1)
-	oldBackend2 := util.ConstructBackendRecord(oldLB, group, pod2)
+	oldBackend1 := util.ConstructPodBackendRecord(oldLB, group, pod1)
+	oldBackend2 := util.ConstructPodBackendRecord(oldLB, group, pod2)
 	fakeClient := fake.NewSimpleClientset(group, oldBackend1, oldBackend2)
 
 	ctrl := newBackendGroupController(
@@ -230,7 +239,10 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 		&fakePodLister{
 			get:  pod1,
 			list: []*v1.Pod{pod1, pod2},
-		})
+		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsSucc() {
@@ -252,10 +264,10 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 	for _, r := range records.Items {
 		var expected *lbcfapi.BackendRecord
 		switch r.Name {
-		case util.MakeBackendName(curLB.Name, group.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80}):
-			expected = util.ConstructBackendRecord(curLB, group, pod1)
-		case util.MakeBackendName(curLB.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}):
-			expected = util.ConstructBackendRecord(curLB, group, pod2)
+		case util.MakePodBackendName(curLB.Name, group.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80}):
+			expected = util.ConstructPodBackendRecord(curLB, group, pod1)
+		case util.MakePodBackendName(curLB.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}):
+			expected = util.ConstructPodBackendRecord(curLB, group, pod2)
 		default:
 			t.Fatalf("unknown BackendRecord %#v", r)
 		}
@@ -274,8 +286,8 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	pod2.UID = "anotherUID"
 
 	group := newFakeBackendGroupOfPods(curPod.Namespace, "group", lb.Name, 80, "tcp", curPod.Labels, nil, nil)
-	existingBackend1 := util.ConstructBackendRecord(lb, group, oldPod)
-	existingBackend2 := util.ConstructBackendRecord(lb, group, pod2)
+	existingBackend1 := util.ConstructPodBackendRecord(lb, group, oldPod)
+	existingBackend2 := util.ConstructPodBackendRecord(lb, group, pod2)
 
 	fakeClient := fake.NewSimpleClientset(group, existingBackend1, existingBackend2)
 	ctrl := newBackendGroupController(
@@ -293,7 +305,10 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 		&fakePodLister{
 			get:  curPod,
 			list: []*v1.Pod{curPod, pod2},
-		})
+		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsSucc() {
@@ -313,7 +328,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	if len(records.Items) != 1 {
 		t.Fatalf("expect 1 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
-	if records.Items[0].Name != util.MakeBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}) {
+	if records.Items[0].Name != util.MakePodBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80}) {
 		t.Fatalf("wrong BackendRecord, get %v", records.Items[0])
 	}
 }
@@ -326,8 +341,8 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
 	pod2.UID = "anotherUID"
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", pod1.Labels, nil, nil)
-	existingBackend1 := util.ConstructBackendRecord(lb, group, pod1)
-	existingBackend2 := util.ConstructBackendRecord(lb, group, pod2)
+	existingBackend1 := util.ConstructPodBackendRecord(lb, group, pod1)
+	existingBackend2 := util.ConstructPodBackendRecord(lb, group, pod2)
 	fakeClient := fake.NewSimpleClientset(group, existingBackend1, existingBackend2)
 	ctrl := newBackendGroupController(
 		fakeClient,
@@ -347,7 +362,10 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 		&fakePodLister{
 			get:  pod1,
 			list: []*v1.Pod{pod1, pod2},
-		})
+		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsSucc() {
