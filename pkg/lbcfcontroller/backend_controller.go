@@ -151,7 +151,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 
 	req := &webhooks.BackendOperationRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
-			RecordID: string(backend.UID),
+			RecordID: fmt.Sprintf("ensureBackend(%s)", backend.UID),
 			RetryID:  string(uuid.NewUUID()),
 		},
 		LBInfo:       backend.Spec.LBInfo,
@@ -224,7 +224,7 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	}
 	req := &webhooks.BackendOperationRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
-			RecordID: string(backend.UID),
+			RecordID: fmt.Sprintf("deregisterBackend(%s)", backend.UID),
 			RetryID:  string(uuid.NewUUID()),
 		},
 		LBInfo:       backend.Spec.LBInfo,
@@ -290,7 +290,7 @@ func (c *backendController) generatePodAddr(backend *lbcfapi.BackendRecord, driv
 	}
 	req := &webhooks.GenerateBackendAddrRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
-			RecordID: string(backend.UID),
+			RecordID: fmt.Sprintf("generateBackendAddr(%s)", backend.UID),
 			RetryID:  string(uuid.NewUUID()),
 		},
 		LBInfo:       backend.Spec.LBInfo,
@@ -314,7 +314,7 @@ func (c *backendController) generateServiceAddr(backend *lbcfapi.BackendRecord, 
 	}
 	req := &webhooks.GenerateBackendAddrRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
-			RecordID: string(backend.UID),
+			RecordID: fmt.Sprintf("generateBackendAddr(%s)", backend.UID),
 			RetryID:  string(uuid.NewUUID()),
 		},
 		LBInfo:       backend.Spec.LBInfo,

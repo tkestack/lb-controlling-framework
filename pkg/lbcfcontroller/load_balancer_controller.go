@@ -89,7 +89,7 @@ func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 	req := &webhooks.CreateLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
-			RecordID: string(lb.UID),
+			RecordID: fmt.Sprintf("createLoadBalancer(%s)", lb.UID),
 			RetryID:  string(uuid.NewUUID()),
 		},
 		LBSpec:     lb.Spec.LBSpec,
@@ -149,7 +149,7 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 	req := &webhooks.EnsureLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
-			RecordID: string(lb.UID),
+			RecordID: fmt.Sprintf("ensureLoadBalancer(%s)", lb.UID),
 			RetryID:  string(uuid.NewUUID()),
 		},
 		Attributes: lb.Spec.Attributes,
@@ -210,7 +210,7 @@ func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	}
 	req := &webhooks.DeleteLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
-			RecordID: string(lb.UID),
+			RecordID: fmt.Sprintf("deleteLoadBalancer(%s)", lb.UID),
 			RetryID:  string(uuid.NewUUID()),
 		},
 		LBInfo:     lb.Status.LBInfo,
