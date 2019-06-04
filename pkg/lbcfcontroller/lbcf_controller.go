@@ -45,8 +45,25 @@ func NewController(context *context.Context) *Controller {
 
 	c.driverCtrl = newDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
 	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.EventRecorder, util.NewWebhookInvoker())
-	c.backendCtrl = newBackendController(c.context.LbcfClient, c.context.BRInformer.Lister(), context.LBDriverInformer.Lister(), c.context.PodInformer.Lister(), c.context.EventRecorder, util.NewWebhookInvoker())
-	c.backendGroupCtrl = newBackendGroupController(c.context.LbcfClient, c.context.LBInformer.Lister(), c.context.BGInformer.Lister(), c.context.BRInformer.Lister(), c.context.PodInformer.Lister())
+	c.backendCtrl = newBackendController(
+		c.context.LbcfClient,
+		c.context.BRInformer.Lister(),
+		context.LBDriverInformer.Lister(),
+		c.context.PodInformer.Lister(),
+		c.context.SvcInformer.Lister(),
+		c.context.NodeInformer.Lister(),
+		c.context.EventRecorder,
+		util.NewWebhookInvoker(),
+	)
+	c.backendGroupCtrl = newBackendGroupController(
+		c.context.LbcfClient,
+		c.context.LBInformer.Lister(),
+		c.context.BGInformer.Lister(),
+		c.context.BRInformer.Lister(),
+		c.context.PodInformer.Lister(),
+		c.context.SvcInformer.Lister(),
+		c.context.NodeInformer.Lister(),
+	)
 
 	// enqueue backendgroup
 	c.context.PodInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
@@ -186,7 +203,7 @@ func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, s
 
 func (c *Controller) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
-	for key := range c.backendGroupCtrl.getBackendGroupsForPod(pod) {
+	for key := range c.backendGroupCtrl.listRelatedBackendGroupsForPod(pod) {
 		c.enqueue(key, c.backendGroupQueue)
 	}
 }
@@ -199,8 +216,8 @@ func (c *Controller) updatePod(old, cur interface{}) {
 	statusChanged := util.PodAvailable(oldPod) != util.PodAvailable(curPod)
 
 	if labelChanged || statusChanged {
-		oldGroups := c.backendGroupCtrl.getBackendGroupsForPod(oldPod)
-		groups := c.backendGroupCtrl.getBackendGroupsForPod(curPod)
+		oldGroups := c.backendGroupCtrl.listRelatedBackendGroupsForPod(oldPod)
+		groups := c.backendGroupCtrl.listRelatedBackendGroupsForPod(curPod)
 		groups = util.DetermineNeededBackendGroupUpdates(oldGroups, groups, statusChanged)
 		for key := range groups {
 			c.enqueue(key, c.backendGroupQueue)
@@ -226,14 +243,48 @@ func (c *Controller) deletePod(obj interface{}) {
 	c.addPod(pod)
 }
 
-// TODO: implement this
-func (c *Controller) addService(obj interface{}) {}
+func (c *Controller) addService(obj interface{}) {
+	svc := obj.(*v1.Service)
+	filter := func(group *v1beta1.BackendGroup) bool {
+		return util.IsSvcMatchBackendGroup(group, svc)
+	}
+	keys, err := c.backendGroupCtrl.listRelatedBackendGroups(svc.Namespace, filter)
+	if err != nil {
+		klog.Errorf("skip svc(%s/%s) add, list backendgroup failed: %v", svc.Namespace, svc.Name, err)
+	}
+	for key := range keys {
+		c.enqueue(key, c.backendGroupQueue)
+	}
+}
 
-// TODO: implement this
-func (c *Controller) updateService(old, cur interface{}) {}
+func (c *Controller) updateService(old, cur interface{}) {
+	oldSvc := old.(*v1.Service)
+	curSvc := cur.(*v1.Service)
+	if oldSvc.ResourceVersion == curSvc.ResourceVersion || oldSvc.Generation == curSvc.Generation {
+		return
+	}
+	for key := range c.backendGroupCtrl.listRelatedBackendGroupForSvc(curSvc) {
+		c.enqueue(key, c.backendGroupQueue)
+	}
+}
 
-// TODO: implement this
-func (c *Controller) deleteService(obj interface{}) {}
+func (c *Controller) deleteService(obj interface{}) {
+	if _, ok := obj.(*v1.Service); ok {
+		c.addService(obj)
+		return
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		klog.Errorf("Couldn't get object from tombstone %#v", obj)
+		return
+	}
+	svc, ok := tombstone.Obj.(*v1.Service)
+	if !ok {
+		klog.Errorf("Tombstone contained object that is not a BackendGroup: %#v", obj)
+		return
+	}
+	c.addService(svc)
+}
 
 func (c *Controller) addBackendGroup(obj interface{}) {
 	c.enqueue(obj, c.backendGroupQueue)
@@ -269,7 +320,8 @@ func (c *Controller) deleteBackendGroup(obj interface{}) {
 func (c *Controller) addLoadBalancer(obj interface{}) {
 	lb := obj.(*v1beta1.LoadBalancer)
 	c.enqueue(obj, c.loadBalancerQueue)
-	for key := range c.backendGroupCtrl.getBackendGroupsForLoadBalancer(lb) {
+
+	for key := range c.backendGroupCtrl.listRelatedBackendGroupsForLB(lb) {
 		c.backendGroupQueue.Add(key)
 	}
 }
@@ -280,7 +332,7 @@ func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 	if oldLB.Generation != curLB.Generation {
 		c.enqueue(curLB, c.loadBalancerQueue)
 	}
-	for key := range c.backendGroupCtrl.getBackendGroupsForLoadBalancer(curLB) {
+	for key := range c.backendGroupCtrl.listRelatedBackendGroupsForLB(curLB) {
 		c.enqueue(key, c.backendGroupQueue)
 	}
 }

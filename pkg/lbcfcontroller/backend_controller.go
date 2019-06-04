@@ -35,12 +35,14 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
-func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *backendController {
+func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, svcLister corev1.ServiceLister, nodeLister corev1.NodeLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *backendController {
 	return &backendController{
 		client:             client,
 		brLister:           brLister,
 		driverLister:       driverLister,
 		podLister:          podLister,
+		svcLister:          svcLister,
+		nodeLister:         nodeLister,
 		eventRecorder:      recorder,
 		inProgressDeleting: new(sync.Map),
 		webhookInvoker:     invoker,
@@ -52,6 +54,8 @@ type backendController struct {
 	brLister      v1beta1.BackendRecordLister
 	driverLister  v1beta1.LoadBalancerDriverLister
 	podLister     corev1.PodLister
+	svcLister     corev1.ServiceLister
+	nodeLister    corev1.NodeLister
 	eventRecorder record.EventRecorder
 
 	inProgressDeleting *sync.Map
@@ -92,51 +96,45 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
 
+	var rsp *webhooks.GenerateBackendAddrResponse
 	if backend.Spec.PodBackendInfo != nil {
-		pod, err := c.podLister.Pods(backend.Namespace).Get(backend.Spec.PodBackendInfo.Name)
+		rsp, err = c.generatePodAddr(backend, driver)
 		if err != nil {
 			return util.ErrorResult(err)
 		}
-		req := &webhooks.GenerateBackendAddrRequest{
-			RequestForRetryHooks: webhooks.RequestForRetryHooks{
-				RecordID: string(backend.UID),
-				RetryID:  string(uuid.NewUUID()),
-			},
-			LBInfo:       backend.Spec.LBInfo,
-			LBAttributes: backend.Spec.LBAttributes,
-			PodBackend: &webhooks.PodBackendInGenerateAddrRequest{
-				Pod:  *pod,
-				Port: backend.Spec.PodBackendInfo.Port,
-			},
-		}
-		rsp, err := c.webhookInvoker.CallGenerateBackendAddr(driver, req)
+	} else if backend.Spec.ServiceBackendInfo != nil {
+		rsp, err = c.generateServiceAddr(backend, driver)
 		if err != nil {
 			return util.ErrorResult(err)
 		}
-		switch rsp.Status {
-		case webhooks.StatusSucc:
-			cpy := backend.DeepCopy()
-			cpy.Status.BackendAddr = rsp.BackendAddr
-			_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
-			if err != nil {
-				c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "update status failed: %v", err)
-				return util.ErrorResult(err)
-			}
-			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccGenerateAddr", "addr: %s", rsp.BackendAddr)
-			return util.SuccResult()
-		case webhooks.StatusFail:
-			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "msg: %s", rsp.Msg)
-			return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
-		case webhooks.StatusRunning:
-			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningGenerateAddr", "msg: %s", rsp.Msg)
-			delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
-			return util.AsyncResult(delay)
-		default:
-			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
-			return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
-		}
+	} else if backend.Spec.StaticAddr != nil {
+		rsp, _ = c.generateStaticAddr(backend)
+	} else {
+		return util.ErrorResult(fmt.Errorf("unknown backend type"))
 	}
-	// TODO: generateBackendAddr for service backend
+
+	switch rsp.Status {
+	case webhooks.StatusSucc:
+		cpy := backend.DeepCopy()
+		cpy.Status.BackendAddr = rsp.BackendAddr
+		_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+		if err != nil {
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "update status failed: %v", err)
+			return util.ErrorResult(err)
+		}
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccGenerateAddr", "addr: %s", rsp.BackendAddr)
+		return util.SuccResult()
+	case webhooks.StatusFail:
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "msg: %s", rsp.Msg)
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+	case webhooks.StatusRunning:
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningGenerateAddr", "msg: %s", rsp.Msg)
+		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
+		return util.AsyncResult(delay)
+	default:
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
+		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
+	}
 	return util.SuccResult()
 }
 
@@ -283,4 +281,57 @@ func (c *backendController) sameAddrDeleting(backend *lbcfapi.BackendRecord) (st
 		return value.(string), ok
 	}
 	return "", ok
+}
+
+func (c *backendController) generatePodAddr(backend *lbcfapi.BackendRecord, driver *lbcfapi.LoadBalancerDriver) (*webhooks.GenerateBackendAddrResponse, error) {
+	pod, err := c.podLister.Pods(backend.Namespace).Get(backend.Spec.PodBackendInfo.Name)
+	if err != nil {
+		return nil, err
+	}
+	req := &webhooks.GenerateBackendAddrRequest{
+		RequestForRetryHooks: webhooks.RequestForRetryHooks{
+			RecordID: string(backend.UID),
+			RetryID:  string(uuid.NewUUID()),
+		},
+		LBInfo:       backend.Spec.LBInfo,
+		LBAttributes: backend.Spec.LBAttributes,
+		PodBackend: &webhooks.PodBackendInGenerateAddrRequest{
+			Pod:  *pod,
+			Port: backend.Spec.PodBackendInfo.Port,
+		},
+	}
+	return c.webhookInvoker.CallGenerateBackendAddr(driver, req)
+}
+
+func (c *backendController) generateServiceAddr(backend *lbcfapi.BackendRecord, driver *lbcfapi.LoadBalancerDriver) (*webhooks.GenerateBackendAddrResponse, error) {
+	node, err := c.nodeLister.Get(backend.Spec.ServiceBackendInfo.NodeName)
+	if err != nil {
+		return nil, err
+	}
+	svc, err := c.svcLister.Services(backend.Namespace).Get(backend.Spec.ServiceBackendInfo.Name)
+	if err != nil {
+		return nil, err
+	}
+	req := &webhooks.GenerateBackendAddrRequest{
+		RequestForRetryHooks: webhooks.RequestForRetryHooks{
+			RecordID: string(backend.UID),
+			RetryID:  string(uuid.NewUUID()),
+		},
+		LBInfo:       backend.Spec.LBInfo,
+		LBAttributes: backend.Spec.LBAttributes,
+		ServiceBackend: &webhooks.ServiceBackendInGenerateAddrRequest{
+			Service:       *svc,
+			Port:          backend.Spec.ServiceBackendInfo.Port,
+			NodeName:      node.Name,
+			NodeAddresses: node.Status.Addresses,
+		},
+	}
+	return c.webhookInvoker.CallGenerateBackendAddr(driver, req)
+}
+
+func (c *backendController) generateStaticAddr(backend *lbcfapi.BackendRecord) (*webhooks.GenerateBackendAddrResponse, error) {
+	rsp := &webhooks.GenerateBackendAddrResponse{}
+	rsp.Status = webhooks.StatusSucc
+	rsp.BackendAddr = *backend.Spec.StaticAddr
+	return rsp, nil
 }

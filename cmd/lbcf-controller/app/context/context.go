@@ -51,6 +51,7 @@ func NewContext(cfg *config.Config) *Context {
 
 	c.PodInformer = c.K8sFactory.Core().V1().Pods()
 	c.SvcInformer = c.K8sFactory.Core().V1().Services()
+	c.NodeInformer = c.K8sFactory.Core().V1().Nodes()
 	c.LBInformer = c.LbcfFactory.Lbcf().V1beta1().LoadBalancers()
 	c.LBDriverInformer = c.LbcfFactory.Lbcf().V1beta1().LoadBalancerDrivers()
 	c.BGInformer = c.LbcfFactory.Lbcf().V1beta1().BackendGroups()
@@ -78,6 +79,7 @@ type Context struct {
 
 	PodInformer      v1.PodInformer
 	SvcInformer      v1.ServiceInformer
+	NodeInformer     v1.NodeInformer
 	LBInformer       v1beta1.LoadBalancerInformer
 	LBDriverInformer v1beta1.LoadBalancerDriverInformer
 	BGInformer       v1beta1.BackendGroupInformer

@@ -216,10 +216,8 @@ func GetBackendType(bg *lbcfapi.BackendGroup) BackendType {
 		return TypePod
 	} else if bg.Spec.Service != nil {
 		return TypeService
-	} else if len(bg.Spec.Static) > 0 {
-		return TypeStatic
 	}
-	return TypeUnknown
+	return TypeStatic
 }
 
 // GetDriverNamespace returns the namespace where the driver is created.
@@ -343,13 +341,23 @@ func (e ErrorList) Error() string {
 	return strings.Join(msg, "\n")
 }
 
-// MakeBackendName generates a name for BackendRecord
-func MakeBackendName(lbName, groupName string, podUID types.UID, port lbcfapi.PortSelector) string {
-	protocol := "TCP"
-	if port.Protocol != nil {
-		protocol = strings.ToUpper(*port.Protocol)
-	}
-	raw := fmt.Sprintf("%s_%s_%s_%d_%+v", lbName, groupName, podUID, port.PortNumber, protocol)
+// MakePodBackendName generates a name for BackendRecord
+func MakePodBackendName(lbName, groupName string, podUID types.UID, port lbcfapi.PortSelector) string {
+	raw := fmt.Sprintf("%s_%s_%s_%d_%+v", lbName, groupName, podUID, port.PortNumber, GetPortSelectorProto(port))
+	h := md5.Sum([]byte(raw))
+	return fmt.Sprintf("%x", h)
+}
+
+// MakeServiceBackendName generates a name for BackendRecord of service type
+func MakeServiceBackendName(lbName, groupName, svcName string, nodePort int32, nodePortProtocol string, nodeName string) string {
+	raw := fmt.Sprintf("%s_%s_%s_%d_%s_%s", lbName, groupName, svcName, nodePort, nodePortProtocol, nodeName)
+	h := md5.Sum([]byte(raw))
+	return fmt.Sprintf("%x", h)
+}
+
+// MakeStaticBackendName generates a name for BackendRecord of service type
+func MakeStaticBackendName(lbName, groupName, staticAddr string) string {
+	raw := fmt.Sprintf("%s_%s_%s", lbName, groupName, staticAddr)
 	h := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", h)
 }
@@ -372,12 +380,12 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAd
 	return ret
 }
 
-// ConstructBackendRecord constructs a new BackendRecord
-func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, pod *v1.Pod) *lbcfapi.BackendRecord {
+// ConstructPodBackendRecord constructs a new BackendRecord
+func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, pod *v1.Pod) *lbcfapi.BackendRecord {
 	valueTrue := true
 	return &lbcfapi.BackendRecord{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      MakeBackendName(lb.Name, group.Name, pod.UID, group.Spec.Pods.Port),
+			Name:      MakePodBackendName(lb.Name, group.Name, pod.UID, group.Spec.Pods.Port),
 			Namespace: group.Namespace,
 			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", pod.Name, ""),
 			Finalizers: []string{
@@ -405,6 +413,91 @@ func ConstructBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGrou
 			},
 			Parameters:   group.Spec.Parameters,
 			EnsurePolicy: group.Spec.EnsurePolicy,
+		},
+	}
+}
+
+// ConstructServiceBackendRecord constructs a new BackendRecord of type service
+func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, svc *v1.Service, node *v1.Node) *lbcfapi.BackendRecord {
+	var selectedSvcPort *v1.ServicePort
+	wantedPort := group.Spec.Service.Port
+	for i, svcPort := range svc.Spec.Ports {
+		if svcPort.Port == wantedPort.PortNumber && strings.ToUpper(string(svcPort.Protocol)) == GetPortSelectorProto(wantedPort) {
+			selectedSvcPort = &svc.Spec.Ports[i]
+			break
+		}
+	}
+	if selectedSvcPort == nil || selectedSvcPort.NodePort == 0 {
+		return nil
+	}
+
+	valueTrue := true
+	return &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      MakeServiceBackendName(lb.Name, group.Name, svc.Name, selectedSvcPort.Port, string(selectedSvcPort.Protocol), node.Name),
+			Namespace: group.Namespace,
+			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, svc.Name, "", ""),
+			Finalizers: []string{
+				lbcfapi.FinalizerDeregisterBackend,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         lbcfapi.ApiVersion,
+					BlockOwnerDeletion: &valueTrue,
+					Controller:         &valueTrue,
+					Kind:               "BackendGroup",
+					Name:               group.Name,
+					UID:                group.UID,
+				},
+			},
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:       lb.Name,
+			LBDriver:     lb.Spec.LBDriver,
+			LBInfo:       lb.Status.LBInfo,
+			LBAttributes: lb.Spec.Attributes,
+			ServiceBackendInfo: &lbcfapi.ServiceBackendRecord{
+				Name:     svc.Name,
+				Port:     group.Spec.Service.Port,
+				NodePort: selectedSvcPort.NodePort,
+				NodeName: node.Name,
+			},
+			Parameters:   group.Spec.Parameters,
+			EnsurePolicy: group.Spec.EnsurePolicy,
+		},
+	}
+}
+
+// ConstructStaticBackend constructs BackendRecords of type service
+func ConstructStaticBackend(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, staticAddr string) *lbcfapi.BackendRecord {
+	valueTrue := true
+	return &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      MakeStaticBackendName(lb.Name, group.Name, staticAddr),
+			Namespace: group.Namespace,
+			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", "", staticAddr),
+			Finalizers: []string{
+				lbcfapi.FinalizerDeregisterBackend,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         lbcfapi.ApiVersion,
+					BlockOwnerDeletion: &valueTrue,
+					Controller:         &valueTrue,
+					Kind:               "BackendGroup",
+					Name:               group.Name,
+					UID:                group.UID,
+				},
+			},
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:       lb.Name,
+			LBDriver:     lb.Spec.LBDriver,
+			LBInfo:       lb.Status.LBInfo,
+			LBAttributes: lb.Spec.Attributes,
+			Parameters:   group.Spec.Parameters,
+			EnsurePolicy: group.Spec.EnsurePolicy,
+			StaticAddr:   &staticAddr,
 		},
 	}
 }
@@ -482,6 +575,17 @@ func IsPodMatchBackendGroup(group *lbcfapi.BackendGroup, pod *v1.Pod) bool {
 // IsLBMatchBackendGroup returns true if group is connected to lb
 func IsLBMatchBackendGroup(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) bool {
 	if group.Namespace == lb.Namespace && group.Spec.LBName == lb.Name {
+		return true
+	}
+	return false
+}
+
+// IsSvcMatchBackendGroup returns true if group is connected to lb
+func IsSvcMatchBackendGroup(group *lbcfapi.BackendGroup, svc *v1.Service) bool {
+	if group.Spec.Service == nil {
+		return false
+	}
+	if group.Namespace == svc.Namespace && group.Spec.Service.Name == svc.Name {
 		return true
 	}
 	return false
@@ -683,4 +787,12 @@ func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatus
 		groups = groups.Difference(oldGroups).Union(oldGroups.Difference(groups))
 	}
 	return groups
+}
+
+// GetPortSelectorProto returns protocol of the selected port
+func GetPortSelectorProto(selector lbcfapi.PortSelector) string {
+	if selector.Protocol != nil {
+		return strings.ToUpper(*selector.Protocol)
+	}
+	return "TCP"
 }
