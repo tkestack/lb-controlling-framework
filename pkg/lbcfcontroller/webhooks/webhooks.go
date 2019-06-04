@@ -194,9 +194,10 @@ type PodBackendInGenerateAddrRequest struct {
 
 // ServiceBackendInGenerateAddrRequest is part of GenerateBackendAddrRequest
 type ServiceBackendInGenerateAddrRequest struct {
-	Service v1.Service     `json:"service"`
-	Port    v1.ServicePort `json:"port"`
-	Node    v1.Node        `json:"node"`
+	Service       v1.Service           `json:"service"`
+	Port          v1beta1.PortSelector `json:"port"`
+	NodeName      string               `json:"nodeName"`
+	NodeAddresses []v1.NodeAddress     `json:"nodeAddresses"`
 }
 
 // GenerateBackendAddrResponse is the response for webhook generateBackendAddr
