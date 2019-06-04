@@ -267,6 +267,8 @@ type BackendRecordSpec struct {
 	// +optional
 	ServiceBackendInfo *ServiceBackendRecord `json:"serviceBackend,omitempty"`
 	// +optional
+	StaticAddr *string `json:"staticAddr,omitempty"`
+	// +optional
 	EnsurePolicy *EnsurePolicyConfig `json:"ensurePolicy,omitempty"`
 }
 
@@ -276,9 +278,10 @@ type PodBackendRecord struct {
 }
 
 type ServiceBackendRecord struct {
-	Name string            `json:"name"`
-	Port ServicePort       `json:"port"`
-	Node NodeBackendRecord `json:"node"`
+	Name     string       `json:"name"`
+	Port     PortSelector `json:"port"`
+	NodePort int32        `json:"nodePort"`
+	NodeName string       `json:"nodeName"`
 }
 
 type NodeBackendRecord struct {
