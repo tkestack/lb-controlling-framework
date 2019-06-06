@@ -89,6 +89,7 @@ webhooks:
           - v1beta1
         operations:
           - CREATE
+          - UPDATE
         resources:
           - backendgroups
     clientConfig:

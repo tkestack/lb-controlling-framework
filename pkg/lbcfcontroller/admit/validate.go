@@ -232,11 +232,8 @@ func validatePortSelector(raw lbcfapi.PortSelector, path *field.Path) field.Erro
 		allErrs = append(allErrs, field.Invalid(path.Child("portNumber"), raw.PortNumber, "portNumber must be greater than 0 and less than 65536"))
 	}
 
-	if raw.Protocol != nil {
-		p := strings.ToUpper(*raw.Protocol)
-		if p != string(v1.ProtocolTCP) && p != string(v1.ProtocolUDP) {
-			allErrs = append(allErrs, field.Invalid(path.Child("protocol"), raw.Protocol, "portNumber must be \"TCP\" or \"UDP\""))
-		}
+	if raw.Protocol != string(v1.ProtocolTCP) && raw.Protocol != string(v1.ProtocolUDP) {
+		allErrs = append(allErrs, field.Invalid(path.Child("protocol"), raw.Protocol, "protocol must be \"TCP\" or \"UDP\""))
 	}
 	return allErrs
 }

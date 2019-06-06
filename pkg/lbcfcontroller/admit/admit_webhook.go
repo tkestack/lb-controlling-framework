@@ -106,18 +106,37 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 		return toAdmissionResponse(err)
 	}
 
-	var isReplace bool
+	var patches []Patch
+
+	// label BackendGroup with BackendGroup.spec.lbName
+	var skip, createLabel, replace bool
 	if obj.Labels != nil {
 		if value, ok := obj.Labels[lbcfapi.LabelLBName]; ok && value == obj.Spec.LBName {
-			return toAdmissionResponse(nil)
+			skip = true
 		} else if ok {
-			isReplace = true
+			replace = true
 		}
+	}
+	createLabel = obj.Labels == nil || len(obj.Labels) == 0
+	if !skip {
+		patches = append(patches, addLBNameLabel(createLabel, replace, lbcfapi.LabelLBName, obj.Spec.LBName))
+	}
+
+	// set default value for portSelector
+	if obj.Spec.Service != nil && obj.Spec.Service.Port.Protocol == "" {
+		patches = append(patches, addDefaultSvcProtocol())
+	} else if obj.Spec.Pods != nil && obj.Spec.Pods.Port.Protocol == "" {
+		patches = append(patches, addDefaultPodProtocol())
+	}
+
+	p, err := json.Marshal(patches)
+	if err != nil {
+		toAdmissionResponse(err)
 	}
 
 	reviewResponse := &admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
-	reviewResponse.Patch = util.MakeLabelPatch(isReplace, lbcfapi.LabelLBName, obj.Spec.LBName)
+	reviewResponse.Patch = p
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return reviewResponse

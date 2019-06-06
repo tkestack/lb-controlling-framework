@@ -791,8 +791,5 @@ func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatus
 
 // GetPortSelectorProto returns protocol of the selected port
 func GetPortSelectorProto(selector lbcfapi.PortSelector) string {
-	if selector.Protocol != nil {
-		return strings.ToUpper(*selector.Protocol)
-	}
-	return "TCP"
+	return selector.Protocol
 }

@@ -150,7 +150,7 @@ type PodBackend struct {
 type PortSelector struct {
 	PortNumber int32 `json:"portNumber"`
 	// +optional
-	Protocol *string `json:"protocol,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
 }
 
 type SelectPodByLabel struct {
