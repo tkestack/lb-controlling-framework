@@ -766,38 +766,16 @@ func TestMakeBackendName(t *testing.T) {
 	lbName := "lb"
 	groupName := "group"
 	podUID := types.UID("12345")
-	equals := []lbcfapi.PortSelector{
-		{
-			PortNumber: 12324,
-			Protocol:   "tcp",
-		},
-		{
-			PortNumber: 12324,
-			Protocol:   "Tcp",
-		},
-		{
-			PortNumber: 12324,
-			Protocol:   "TCP",
-		},
+	port1 := lbcfapi.PortSelector{
+		PortNumber: 12324,
+		Protocol:   "TCP",
 	}
-	notEqual := lbcfapi.PortSelector{
+	port2 := lbcfapi.PortSelector{
 		PortNumber: 12324,
 		Protocol:   "UDP",
 	}
-	ne := MakePodBackendName(lbName, groupName, podUID, notEqual)
-	lastOne := ""
-	for i := range equals {
-		n := MakePodBackendName(lbName, groupName, podUID, equals[i])
-		if i == 0 {
-			lastOne = n
-		} else {
-			if lastOne != n {
-				t.Fatalf("expect %s, get %s", lastOne, n)
-			}
-		}
-		if n == ne {
-			t.Fatalf("should not equal")
-		}
+	if MakePodBackendName(lbName, groupName, podUID, port1) == MakePodBackendName(lbName, groupName, podUID, port2) {
+		t.Fatalf("expect not equal")
 	}
 }
 

@@ -173,7 +173,7 @@ func (c *backendGroupController) expectedServiceBackends(group *lbcfapi.BackendG
 		if backend == nil {
 			klog.Infof("servicePort not found in svc %s/%s. looking for: %d/%s",
 				svc.Namespace, svc.Name,
-				group.Spec.Service.Port.PortNumber, util.GetPortSelectorProto(group.Spec.Service.Port))
+				group.Spec.Service.Port.PortNumber, group.Spec.Service.Port.Protocol)
 			continue
 		}
 		expectedRecords = append(expectedRecords, backend)

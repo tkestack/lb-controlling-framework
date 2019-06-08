@@ -343,7 +343,7 @@ func (e ErrorList) Error() string {
 
 // MakePodBackendName generates a name for BackendRecord
 func MakePodBackendName(lbName, groupName string, podUID types.UID, port lbcfapi.PortSelector) string {
-	raw := fmt.Sprintf("%s_%s_%s_%d_%+v", lbName, groupName, podUID, port.PortNumber, GetPortSelectorProto(port))
+	raw := fmt.Sprintf("%s_%s_%s_%d_%s", lbName, groupName, podUID, port.PortNumber, port.Protocol)
 	h := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", h)
 }
@@ -422,7 +422,7 @@ func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.Back
 	var selectedSvcPort *v1.ServicePort
 	wantedPort := group.Spec.Service.Port
 	for i, svcPort := range svc.Spec.Ports {
-		if svcPort.Port == wantedPort.PortNumber && strings.ToUpper(string(svcPort.Protocol)) == GetPortSelectorProto(wantedPort) {
+		if svcPort.Port == wantedPort.PortNumber && string(svcPort.Protocol) == wantedPort.Protocol {
 			selectedSvcPort = &svc.Spec.Ports[i]
 			break
 		}
@@ -787,12 +787,4 @@ func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatus
 		groups = groups.Difference(oldGroups).Union(oldGroups.Difference(groups))
 	}
 	return groups
-}
-
-// GetPortSelectorProto returns protocol of the selected port
-func GetPortSelectorProto(selector lbcfapi.PortSelector) string {
-	if selector.Protocol != "" {
-		return strings.ToUpper(selector.Protocol)
-	}
-	return "TCP"
 }
