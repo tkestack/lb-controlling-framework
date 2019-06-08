@@ -33,7 +33,7 @@ type Patch struct {
 	Value interface{} `json:"value"`
 }
 
-func addLBNameLabel(createLabel, isReplace bool, key string, value string) Patch {
+func addLabel(createLabel, isReplace bool, key string, value string) Patch {
 	patch := Patch{}
 	if createLabel {
 		patch.OP = patchOpAdd

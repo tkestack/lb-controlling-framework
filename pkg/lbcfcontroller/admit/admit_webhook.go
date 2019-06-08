@@ -125,7 +125,7 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 	}
 	createLabel = obj.Labels == nil || len(obj.Labels) == 0
 	if !skip {
-		patches = append(patches, addLBNameLabel(createLabel, replace, lbcfapi.LabelLBName, obj.Spec.LBName))
+		patches = append(patches, addLabel(createLabel, replace, lbcfapi.LabelLBName, obj.Spec.LBName))
 	}
 	// set default value for portSelector
 	if obj.Spec.Service != nil && obj.Spec.Service.Port.Protocol == "" {
