@@ -101,7 +101,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	if lb.DeletionTimestamp != nil {
 		return c.deleteAllBackend(namespace, group.Spec.LBName, group.Name)
 	}
-	if !util.LBEnsured(lb) {
+	if !util.LBCreated(lb) {
 		return util.SuccResult()
 	}
 
@@ -166,6 +166,9 @@ func (c *backendGroupController) expectedServiceBackends(group *lbcfapi.BackendG
 			return nil, nil
 		}
 		return nil, err
+	}
+	if svc.DeletionTimestamp != nil || svc.Spec.Type != v1.ServiceTypeNodePort {
+		return nil, nil
 	}
 	var expectedRecords []*lbcfapi.BackendRecord
 	for _, node := range nodes {

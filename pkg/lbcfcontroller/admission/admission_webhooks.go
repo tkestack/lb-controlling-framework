@@ -317,6 +317,11 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
 	}
+	if util.IsDriverDraining(driver) {
+		return toAdmissionResponse(fmt.Errorf("driver %q is draining, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver))
+	} else if driver.DeletionTimestamp != nil {
+		return toAdmissionResponse(fmt.Errorf("driver %q is deleting, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver))
+	}
 	req := &webhooks.ValidateBackendRequest{
 		BackendType: string(util.GetBackendType(bg)),
 		LBInfo:      lb.Status.LBInfo,
