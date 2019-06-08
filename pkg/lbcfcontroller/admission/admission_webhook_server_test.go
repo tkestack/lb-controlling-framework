@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admit
+package admission
 
 import (
 	"k8s.io/api/admission/v1beta1"

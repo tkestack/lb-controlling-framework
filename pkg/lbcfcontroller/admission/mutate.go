@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admit
+package admission
 
 import (
 	"path"

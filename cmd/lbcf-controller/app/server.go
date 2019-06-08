@@ -22,7 +22,7 @@ import (
 	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/admit"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/admission"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -36,11 +36,11 @@ func NewServer() *cobra.Command {
 
 		Run: func(cmd *cobra.Command, args []string) {
 			context := context.NewContext(cfg)
-			admitServer := admit.NewAdmitServer(context, cfg.ServerCrt, cfg.ServerKey)
+			admissionWebhookServer := admission.NewWebhookServer(context, cfg.ServerCrt, cfg.ServerKey)
 			lbcf := lbcfcontroller.NewController(context)
 
 			context.Start()
-			admitServer.Start()
+			admissionWebhookServer.Start()
 			lbcf.Start()
 
 			mux := http.NewServeMux()

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admit
+package admission
 
 import (
 	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"

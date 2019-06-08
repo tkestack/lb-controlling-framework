@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admit
+package admission
 
 import (
 	"encoding/json"
@@ -33,12 +33,12 @@ import (
 
 // Webhook is an abstract interface for testability
 type Webhook interface {
-	ValidateAdmitWebhook
-	MutateAdmitWebhook
+	ValidatingAdmissionWebhook
+	MutatingAdmissionWebhook
 }
 
-// ValidateAdmitWebhook is an abstract interface for testability
-type ValidateAdmitWebhook interface {
+// ValidatingAdmissionWebhook is an abstract interface for testability
+type ValidatingAdmissionWebhook interface {
 	ValidateLoadBalancerCreate(*admission.AdmissionReview) *admission.AdmissionResponse
 	ValidateLoadBalancerUpdate(*admission.AdmissionReview) *admission.AdmissionResponse
 	ValidateLoadBalancerDelete(*admission.AdmissionReview) *admission.AdmissionResponse
@@ -52,14 +52,14 @@ type ValidateAdmitWebhook interface {
 	ValidateBackendGroupDelete(*admission.AdmissionReview) *admission.AdmissionResponse
 }
 
-// MutateAdmitWebhook is an abstract interface for testability
-type MutateAdmitWebhook interface {
+// MutatingAdmissionWebhook is an abstract interface for testability
+type MutatingAdmissionWebhook interface {
 	MutateLB(*admission.AdmissionReview) *admission.AdmissionResponse
 	MutateDriver(*admission.AdmissionReview) *admission.AdmissionResponse
 	MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse
 }
 
-// NewAdmitter creates a new instance Webhook
+// NewAdmitter creates a new instance of Webhook
 func NewAdmitter(lbLister lbcflister.LoadBalancerLister, driverLister lbcflister.LoadBalancerDriverLister, backendLister lbcflister.BackendRecordLister, invoker util.WebhookInvoker) Webhook {
 	return &Admitter{
 		lbLister:       lbLister,

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admit
+package admission
 
 import (
 	"fmt"
@@ -29,8 +29,8 @@ import (
 	"k8s.io/klog"
 )
 
-// NewAdmitServer creates a new Server
-func NewAdmitServer(context *context.Context, crtFile string, keyFile string) *Server {
+// NewWebhookServer creates a new Server
+func NewWebhookServer(context *context.Context, crtFile string, keyFile string) *Server {
 	s := &Server{
 		context:      context,
 		admitWebhook: NewAdmitter(context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.BRInformer.Lister(), util.NewWebhookInvoker()),
