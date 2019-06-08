@@ -56,7 +56,22 @@ func addLBNameLabel(createLabel, isReplace bool, key string, value string) Patch
 	return patch
 }
 
-func addDefaultSvcProtocol() Patch {
+func addFinalizer(createFinalizer bool, finalizer string) Patch {
+	patch := Patch{
+		OP: patchOpAdd,
+	}
+	if createFinalizer {
+		patch.Path = path.Join("/", "metadata", "finalizers")
+		patch.Value = []string{finalizer}
+		return patch
+	}
+
+	patch.Path = path.Join("/", "metadata", "finalizers", "-")
+	patch.Value = finalizer
+	return patch
+}
+
+func defaultSvcProtocol() Patch {
 	return Patch{
 		OP:    patchOpAdd,
 		Path:  "/spec/service/port/protocol",
@@ -64,7 +79,7 @@ func addDefaultSvcProtocol() Patch {
 	}
 }
 
-func addDefaultPodProtocol() Patch {
+func defaultPodProtocol() Patch {
 	return Patch{
 		OP:    patchOpAdd,
 		Path:  "/spec/pods/port/protocol",

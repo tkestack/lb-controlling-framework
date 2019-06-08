@@ -85,9 +85,16 @@ func (a *Admitter) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionR
 	if err != nil {
 		return toAdmissionResponse(err)
 	}
+	var patches []Patch
+	patches = append(patches, addFinalizer(len(obj.Finalizers) == 0, lbcfapi.FinalizerDeleteLB))
+	p, err := json.Marshal(patches)
+	if err != nil {
+		toAdmissionResponse(err)
+	}
+
 	reviewResponse := &admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
-	reviewResponse.Patch = util.MakeFinalizerPatch(len(obj.Finalizers) == 0, lbcfapi.FinalizerDeleteLB)
+	reviewResponse.Patch = p
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return reviewResponse
@@ -107,7 +114,6 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 	}
 
 	var patches []Patch
-
 	// label BackendGroup with BackendGroup.spec.lbName
 	var skip, createLabel, replace bool
 	if obj.Labels != nil {
@@ -121,14 +127,12 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 	if !skip {
 		patches = append(patches, addLBNameLabel(createLabel, replace, lbcfapi.LabelLBName, obj.Spec.LBName))
 	}
-
 	// set default value for portSelector
 	if obj.Spec.Service != nil && obj.Spec.Service.Port.Protocol == "" {
-		patches = append(patches, addDefaultSvcProtocol())
+		patches = append(patches, defaultSvcProtocol())
 	} else if obj.Spec.Pods != nil && obj.Spec.Pods.Port.Protocol == "" {
-		patches = append(patches, addDefaultPodProtocol())
+		patches = append(patches, defaultPodProtocol())
 	}
-
 	p, err := json.Marshal(patches)
 	if err != nil {
 		toAdmissionResponse(err)

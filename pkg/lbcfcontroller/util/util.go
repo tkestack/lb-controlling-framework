@@ -17,12 +17,10 @@
 package util
 
 import (
-	"bytes"
 	"crypto/md5"
 	"fmt"
 	"reflect"
 	"strings"
-	"text/template"
 	"time"
 
 	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
@@ -721,62 +719,6 @@ func (s *SyncResult) GetRetryDelay() time.Duration {
 // GetReEnsurePeriodic returns in how long time the operation should be taken again
 func (s *SyncResult) GetReEnsurePeriodic() time.Duration {
 	return s.minReEnsurePeriod
-}
-
-var (
-	firstFirnalizerPatchTemplate      = `[{"op":"add","path":"/metadata/finalizers","value":["{{ .Finalizer }}"]}]`
-	additionalFirnalizerPatchTemplate = `[{"op":"add","path":"/metadata/finalizers/-","value":"{{ .Finalizer }}"}]`
-)
-
-// MakeFinalizerPatch returns a patch that is used in MutatingAdmissionWebhook to add a finalizer into ObjectMeta.Finalizers
-func MakeFinalizerPatch(isFirst bool, finalizer string) []byte {
-	tmpStr := firstFirnalizerPatchTemplate
-	if !isFirst {
-		tmpStr = additionalFirnalizerPatchTemplate
-	}
-	t := template.Must(template.New("patch").Parse(tmpStr))
-
-	wrapper := struct {
-		Finalizer string
-	}{
-		Finalizer: finalizer,
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, wrapper); err != nil {
-		klog.Errorf("make finalizer patch failed: %v", err)
-		return nil
-	}
-	return buf.Bytes()
-}
-
-var (
-	addLabelPatchTemplate     = `[{"op":"add","path":"/metadata/labels","value": { "{{ .Key }}": "{{ .Value }}"} }]`
-	replaceLabelPatchTemplate = `[{"op":"replace","path":"/metadata/labels/{{ .Key }}","value": "{{ .Value }}" }]`
-)
-
-// MakeLabelPatch returns a patch that is used in MutatingAdmissionWebhook to add a label into ObjectMeta.Labels
-func MakeLabelPatch(isReplace bool, key string, value string) []byte {
-	tmpStr := addLabelPatchTemplate
-	if isReplace {
-		tmpStr = replaceLabelPatchTemplate
-		key = strings.ReplaceAll(key, "~", "~0")
-		key = strings.ReplaceAll(key, "/", "~1")
-	}
-	t := template.Must(template.New("patch").Parse(tmpStr))
-
-	wrapper := struct {
-		Key   string
-		Value string
-	}{
-		Key:   key,
-		Value: value,
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, wrapper); err != nil {
-		klog.Errorf("make label patch failed: %v", err)
-		return nil
-	}
-	return buf.Bytes()
 }
 
 // DetermineNeededBackendGroupUpdates compares oldGroups with groups, and returns BackendGroups that should be
