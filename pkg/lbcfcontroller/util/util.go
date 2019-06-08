@@ -286,47 +286,6 @@ func GetDuration(cfg *lbcfapi.Duration, defaultValue time.Duration) time.Duratio
 	return cfg.Duration
 }
 
-// LoadBalancerNonStatusUpdated returns true if non-status fields are modified
-func LoadBalancerNonStatusUpdated(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBalancer) bool {
-	if !reflect.DeepEqual(old.Spec.Attributes, cur.Spec.Attributes) {
-		return true
-	}
-	return false
-}
-
-// BackendGroupNonStatusUpdated returns true if non-status fields are modified
-func BackendGroupNonStatusUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
-	if bgServiceUpdated(old, cur) {
-		return true
-	}
-	if bgPodsUpdated(old, cur) {
-		return true
-	}
-	if bgStaticUpdated(old, cur) {
-		return true
-	}
-	if !reflect.DeepEqual(old.Spec.Parameters, cur.Spec.Parameters) {
-		return true
-	}
-	return false
-}
-
-// TODO: implement this
-func bgServiceUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
-	return false
-}
-
-func bgPodsUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
-	return !reflect.DeepEqual(old.Spec.Pods, cur.Spec.Pods)
-}
-
-func bgStaticUpdated(old *lbcfapi.BackendGroup, cur *lbcfapi.BackendGroup) bool {
-	if !reflect.DeepEqual(old.Spec.Static, cur.Spec.Static) {
-		return true
-	}
-	return false
-}
-
 // ErrorList is an helper that collects errors
 type ErrorList []error
 

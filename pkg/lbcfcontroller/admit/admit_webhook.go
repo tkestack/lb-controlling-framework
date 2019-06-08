@@ -203,11 +203,6 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
-	// if LoadBalancer.status is the only updated field, return immediately
-	if !util.LoadBalancerNonStatusUpdated(oldObj, curObj) {
-		return toAdmissionResponse(nil)
-	}
-
 	driverNamespace := util.GetDriverNamespace(curObj.Spec.LBDriver, curObj.Namespace)
 	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(curObj.Spec.LBDriver)
 	if err != nil {
@@ -357,11 +352,6 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 	errList := ValidateBackendGroup(curObj)
 	if len(errList) > 0 {
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
-	}
-
-	// if BackendGroup.status is the only updated field, return immediately
-	if !util.BackendGroupNonStatusUpdated(oldObj, curObj) {
-		return toAdmissionResponse(nil)
 	}
 
 	lb, err := a.lbLister.LoadBalancers(curObj.Namespace).Get(curObj.Spec.LBName)

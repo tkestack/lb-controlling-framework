@@ -703,61 +703,6 @@ func TestAdmitter_ValidateLoadBalancerUpdate(t *testing.T) {
 	}
 }
 
-func TestAdmitter_ValidateLoadBalancerUpdate_OnlyStatusUpdated(t *testing.T) {
-	old := &lbcfapi.LoadBalancer{
-		Spec: lbcfapi.LoadBalancerSpec{
-			LBDriver: "test-driver",
-			LBSpec: map[string]string{
-				"k1": "v1",
-			},
-			Attributes: map[string]string{
-				"a1": "v1",
-			},
-		},
-	}
-	cur := &lbcfapi.LoadBalancer{
-		Spec: lbcfapi.LoadBalancerSpec{
-			LBDriver: "test-driver",
-			LBSpec: map[string]string{
-				"k1": "v1",
-			},
-			Attributes: map[string]string{
-				"a1": "v1",
-			},
-		},
-		Status: lbcfapi.LoadBalancerStatus{
-			LBInfo: map[string]string{
-				"lbid": "12345",
-			},
-		},
-	}
-
-	oldRaw, _ := json.Marshal(old)
-	curRaw, _ := json.Marshal(cur)
-	ar := &v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: curRaw,
-			},
-			OldObject: runtime.RawExtension{
-				Raw: oldRaw,
-			},
-		},
-	}
-
-	a := NewAdmitter(&alwaysSuccLBLister{},
-		&alwaysSuccDriverLister{
-			get: &lbcfapi.LoadBalancerDriver{},
-		},
-		&alwaysSuccBackendLister{},
-		// use fakeFailInvoker here, so that the test can pass only if it is finished before webhook invoke
-		&fakeFailInvoker{})
-	resp := a.ValidateLoadBalancerUpdate(ar)
-	if !resp.Allowed {
-		t.Fatalf("expect allow")
-	}
-}
-
 func TestAdmitter_ValidateLoadBalancerUpdate_UpdatedForbiddenField(t *testing.T) {
 	old := &lbcfapi.LoadBalancer{
 		Spec: lbcfapi.LoadBalancerSpec{
@@ -1164,77 +1109,6 @@ func TestAdmitter_ValidateBackendGroupUpdate(t *testing.T) {
 			get: &lbcfapi.LoadBalancerDriver{},
 		},
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
-	resp := a.ValidateBackendGroupUpdate(ar)
-	if !resp.Allowed {
-		t.Fatalf("expect allow")
-	}
-}
-
-func TestAdmitter_ValidateBackendGroupUpdate_OnlyStatusUpdated(t *testing.T) {
-	old := &lbcfapi.BackendGroup{
-		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
-			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-					Protocol:   "TCP",
-				},
-				ByLabel: &lbcfapi.SelectPodByLabel{
-					Selector: map[string]string{
-						"k1": "v1",
-					},
-				},
-			},
-			Parameters: map[string]string{
-				"p1": "v1",
-			},
-		},
-	}
-	cur := &lbcfapi.BackendGroup{
-		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
-			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-					Protocol:   "TCP",
-				},
-				ByLabel: &lbcfapi.SelectPodByLabel{
-					Selector: map[string]string{
-						"k1": "v1",
-					},
-				},
-			},
-			Parameters: map[string]string{
-				"p1": "v1",
-			},
-		},
-		Status: lbcfapi.BackendGroupStatus{
-			Backends:           2,
-			RegisteredBackends: 2,
-		},
-	}
-	oldRaw, _ := json.Marshal(old)
-	curRaw, _ := json.Marshal(cur)
-	ar := &v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: curRaw,
-			},
-			OldObject: runtime.RawExtension{
-				Raw: oldRaw,
-			},
-		},
-	}
-	a := NewAdmitter(
-		&alwaysSuccLBLister{
-			get: &lbcfapi.LoadBalancer{},
-		},
-		&alwaysSuccDriverLister{
-			get: &lbcfapi.LoadBalancerDriver{},
-		},
-		&alwaysSuccBackendLister{},
-		// use fakeFailInvoker here, so that the test can pass only if it is finished before webhook invoke
-		&fakeFailInvoker{})
 	resp := a.ValidateBackendGroupUpdate(ar)
 	if !resp.Allowed {
 		t.Fatalf("expect allow")
