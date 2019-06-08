@@ -766,30 +766,23 @@ func TestMakeBackendName(t *testing.T) {
 	lbName := "lb"
 	groupName := "group"
 	podUID := types.UID("12345")
-	p := "tcp"
-	p2 := "Tcp"
-	p3 := "TCP"
-	p4 := "udp"
 	equals := []lbcfapi.PortSelector{
 		{
 			PortNumber: 12324,
-			Protocol:   &p,
+			Protocol:   "tcp",
 		},
 		{
 			PortNumber: 12324,
+			Protocol:   "Tcp",
 		},
 		{
 			PortNumber: 12324,
-			Protocol:   &p2,
-		},
-		{
-			PortNumber: 12324,
-			Protocol:   &p3,
+			Protocol:   "TCP",
 		},
 	}
 	notEqual := lbcfapi.PortSelector{
 		PortNumber: 12324,
-		Protocol:   &p4,
+		Protocol:   "UDP",
 	}
 	ne := MakePodBackendName(lbName, groupName, podUID, notEqual)
 	lastOne := ""
@@ -1479,7 +1472,6 @@ func TestBackendGroupNonStatusUpdated(t *testing.T) {
 		cur    *lbcfapi.BackendGroup
 		expect bool
 	}
-	udp := "udp"
 	cases := []testCase{
 		{
 			name: "need-pod-port",
@@ -1519,7 +1511,7 @@ func TestBackendGroupNonStatusUpdated(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &udp,
+							Protocol:   "UDP",
 						},
 					},
 				},

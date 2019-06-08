@@ -18,10 +18,14 @@ package admit
 
 import (
 	"encoding/json"
+	"testing"
+	"time"
+
 	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcflister "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+
+	"github.com/evanphx/json-patch"
 	"k8s.io/api/admission/v1beta1"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -30,8 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/listers/core/v1"
-	"testing"
-	"time"
 )
 
 func TestAdmitter_MutateLB(t *testing.T) {
@@ -133,17 +135,33 @@ func TestAdmitter_MutateBackendGroup(t *testing.T) {
 	if !rsp.Allowed {
 		t.Fatalf("expect always allow")
 	}
-	expect := util.MakeLabelPatch(false, lbcfapi.LabelLBName, group.Spec.LBName)
-	if string(rsp.Patch) != string(expect) {
-		t.Fatalf("expect patch %s, get %s", expect, rsp.Patch)
+	patch, err := jsonpatch.DecodePatch(rsp.Patch)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modified, err := patch.Apply(raw)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modifiedGroup := &lbcfapi.BackendGroup{}
+	if err := json.Unmarshal(modified, modifiedGroup); err != nil {
+		t.Fatalf(err.Error())
 	}
 
+	if modifiedGroup.Labels[lbcfapi.LabelLBName] != group.Spec.LBName {
+		t.Fatalf("expect label value %s, get %s", group.Spec.LBName, modifiedGroup.Labels[lbcfapi.LabelLBName])
+	} else if modifiedGroup.Spec.Pods.Port.Protocol != "TCP" {
+		t.Fatalf("get protocol %s", modifiedGroup.Spec.Pods.Port.Protocol)
+	}
+
+	extraKey := "key1"
+	extraValue := "v1"
 	group = &lbcfapi.BackendGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-backendgroup",
 			Namespace: "test",
 			Labels: map[string]string{
-				"k1":                "v1",
+				extraKey:            extraValue,
 				lbcfapi.LabelLBName: "a-random-value",
 			},
 		},
@@ -172,9 +190,24 @@ func TestAdmitter_MutateBackendGroup(t *testing.T) {
 	if !rsp.Allowed {
 		t.Fatalf("expect always allow")
 	}
-	expect = util.MakeLabelPatch(true, lbcfapi.LabelLBName, group.Spec.LBName)
-	if string(rsp.Patch) != string(expect) {
-		t.Fatalf("expect patch %s, get %s", expect, rsp.Patch)
+	patch, err = jsonpatch.DecodePatch(rsp.Patch)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modified, err = patch.Apply(raw)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modifiedGroup = &lbcfapi.BackendGroup{}
+	if err := json.Unmarshal(modified, modifiedGroup); err != nil {
+		t.Fatalf(err.Error())
+	}
+	if modifiedGroup.Labels[extraKey] != extraValue {
+		t.Fatalf("key value lost")
+	} else if modifiedGroup.Labels[lbcfapi.LabelLBName] != group.Spec.LBName {
+		t.Fatalf("expect label value %s, get %s", group.Spec.LBName, modifiedGroup.Labels[lbcfapi.LabelLBName])
+	} else if modifiedGroup.Spec.Pods.Port.Protocol != "TCP" {
+		t.Fatalf("get protocol %s", modifiedGroup.Spec.Pods.Port.Protocol)
 	}
 }
 
@@ -839,14 +872,13 @@ func TestAdmitter_ValidateLoadBalancerDelete(t *testing.T) {
 }
 
 func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
-	tcp := "tcp"
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
 			LBName: "test-lb",
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 80,
-					Protocol:   &tcp,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -886,14 +918,13 @@ func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 }
 
 func TestAdmitter_ValidateBackendGroupCreate_InvalidGroup(t *testing.T) {
-	tcp := "tcp"
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
 			LBName: "test-lb",
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 0,
-					Protocol:   &tcp,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -931,14 +962,13 @@ func TestAdmitter_ValidateBackendGroupCreate_InvalidGroup(t *testing.T) {
 }
 
 func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
-	tcp := "tcp"
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
 			LBName: "test-lb",
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 80,
-					Protocol:   &tcp,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -976,14 +1006,13 @@ func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
 }
 
 func TestAdmitter_ValidateBackendGroupCreate_LBDeleting(t *testing.T) {
-	tcp := "tcp"
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
 			LBName: "test-lb",
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 80,
-					Protocol:   &tcp,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1028,14 +1057,13 @@ func TestAdmitter_ValidateBackendGroupCreate_LBDeleting(t *testing.T) {
 }
 
 func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
-	tcp := "tcp"
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
 			LBName: "test-lb",
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 80,
-					Protocol:   &tcp,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1081,6 +1109,7 @@ func TestAdmitter_ValidateBackendGroupUpdate(t *testing.T) {
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 80,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1099,6 +1128,7 @@ func TestAdmitter_ValidateBackendGroupUpdate(t *testing.T) {
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 8080,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1147,6 +1177,7 @@ func TestAdmitter_ValidateBackendGroupUpdate_OnlyStatusUpdated(t *testing.T) {
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 80,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1165,6 +1196,7 @@ func TestAdmitter_ValidateBackendGroupUpdate_OnlyStatusUpdated(t *testing.T) {
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: 80,
+					Protocol:   "TCP",
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{

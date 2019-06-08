@@ -391,8 +391,8 @@ func TestValidateBackendGroup(t *testing.T) {
 		group       *lbcfapi.BackendGroup
 		expectValid bool
 	}
-	tcp := "tcp"
-	udp := "udp"
+	tcp := "TCP"
+	udp := "UDP"
 	invalid := "invalid"
 
 	cases := []testCase{
@@ -413,7 +413,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &tcp,
+							Protocol:   tcp,
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -445,7 +445,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &udp,
+							Protocol:   udp,
 						},
 						ByName: []string{
 							"pod-1",
@@ -473,6 +473,7 @@ func TestValidateBackendGroup(t *testing.T) {
 						Name: "svc-name",
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
+							Protocol:   tcp,
 						},
 						NodeSelector: map[string]string{
 							"k1": "v1",
@@ -520,7 +521,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &udp,
+							Protocol:   udp,
 						},
 						ByName: []string{
 							"pod-1",
@@ -584,7 +585,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &udp,
+							Protocol:   udp,
 						},
 						ByName: []string{
 							"pod-1",
@@ -612,7 +613,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &invalid,
+							Protocol:   invalid,
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -633,7 +634,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 0,
-							Protocol:   &tcp,
+							Protocol:   tcp,
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -654,7 +655,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &invalid,
+							Protocol:   invalid,
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -678,7 +679,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &invalid,
+							Protocol:   invalid,
 						},
 					},
 				},
@@ -692,7 +693,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &udp,
+							Protocol:   udp,
 						},
 						ByName: []string{
 							"pod-1",
@@ -718,7 +719,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Pods: &lbcfapi.PodBackend{
 						Port: lbcfapi.PortSelector{
 							PortNumber: 80,
-							Protocol:   &tcp,
+							Protocol:   tcp,
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{},
 					},

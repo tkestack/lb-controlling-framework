@@ -35,7 +35,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 	pod1 := newFakePod("", "pod-1", map[string]string{"k1": "v1"}, true, false)
 	pod2 := newFakePod("", "pod-2", map[string]string{"k1": "v1"}, true, false)
 	pod2.UID = "anotherUID"
-	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", pod1.Labels, nil, nil)
+	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "TCP", pod1.Labels, nil, nil)
 	fakeClient := fake.NewSimpleClientset(group)
 	ctrl := newBackendGroupController(
 		fakeClient,

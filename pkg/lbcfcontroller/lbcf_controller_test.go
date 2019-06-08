@@ -984,7 +984,7 @@ func newFakeBackendGroupOfPods(namespace, name string, lbName string, portNum in
 			Pods: &lbcfapi.PodBackend{
 				Port: lbcfapi.PortSelector{
 					PortNumber: portNum,
-					Protocol:   &protocol,
+					Protocol:   protocol,
 				},
 			},
 		},
