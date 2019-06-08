@@ -853,9 +853,27 @@ func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{
-		get: &lbcfapi.LoadBalancer{},
-	}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := NewAdmitter(
+		&alwaysSuccLBLister{
+			get: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      group.Spec.LBName,
+					Namespace: group.Namespace,
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					LBDriver: "test-driver",
+				},
+			},
+		},
+		&alwaysSuccDriverLister{
+			get: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: group.Namespace,
+				},
+			},
+		},
+		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
 	if !resp.Allowed {
 		t.Fatalf("expect allow")
@@ -1038,9 +1056,27 @@ func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{
-		get: &lbcfapi.LoadBalancer{},
-	}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
+	a := NewAdmitter(
+		&alwaysSuccLBLister{
+			get: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      group.Spec.LBName,
+					Namespace: group.Namespace,
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					LBDriver: "test-driver",
+				},
+			},
+		},
+		&alwaysSuccDriverLister{
+			get: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: group.Namespace,
+				},
+			},
+		},
+		&alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
 	if resp.Allowed {
 		t.Fatalf("expect not allow")

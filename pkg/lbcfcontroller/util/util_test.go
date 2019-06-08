@@ -1114,6 +1114,71 @@ func TestIsLBMatchBackendGroup(t *testing.T) {
 	}
 }
 
+func TestIsSvcMatchBackendGroup(t *testing.T) {
+	type tc struct {
+		name   string
+		group  *lbcfapi.BackendGroup
+		svc    *v1.Service
+		expect bool
+	}
+	cases := []tc{
+		{
+			name: "match",
+			group: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "group",
+					Namespace: "test-ns",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Service: &lbcfapi.ServiceBackend{
+						Name: "test-svc",
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+							Protocol:   "TCP",
+						},
+					},
+				},
+			},
+			svc: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-svc",
+					Namespace: "test-ns",
+				},
+			},
+			expect: true,
+		},
+		{
+			name: "no-match-namespace",
+			group: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "group",
+					Namespace: "test-ns",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Service: &lbcfapi.ServiceBackend{
+						Name: "test-svc",
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+							Protocol:   "TCP",
+						},
+					},
+				},
+			},
+			svc: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-svc",
+					Namespace: "another-ns",
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		if get := IsSvcMatchBackendGroup(c.group, c.svc); get != c.expect {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expect, get)
+		}
+	}
+}
+
 func TestCompareBackendRecords(t *testing.T) {
 	expectAdd := &lbcfapi.BackendRecord{
 		ObjectMeta: metav1.ObjectMeta{

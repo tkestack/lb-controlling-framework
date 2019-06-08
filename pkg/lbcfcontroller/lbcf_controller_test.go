@@ -21,6 +21,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -400,6 +401,112 @@ func TestLBCFControllerDeleteBackendGroup(t *testing.T) {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
+}
+
+func TestLBCFControllerAddService(t *testing.T) {
+	svc := newFakeService("", "test-svc", apiv1.ServiceTypeNodePort)
+	bg := newFakeBackendGroupOfService(svc.Namespace, "bg", "lb", 80, "TCP", svc.Name)
+	bg2 := newFakeBackendGroupOfService(svc.Namespace, "another-bg", "lb", 80, "TCP", "another-svc")
+
+	bgCtrl := newBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{
+		list: []*lbcfapi.BackendGroup{bg, bg2},
+	}, &fakeBackendLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{})
+	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
+
+	c.addService(svc)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+
+	groupKey, done := c.backendGroupQueue.Get()
+	if groupKey == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := groupKey.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(groupKey)
+}
+
+func TestLBCFControllerUpdateService(t *testing.T) {
+	oldSvc := newFakeService("", "test-svc", apiv1.ServiceTypeNodePort)
+	statusChangedSvc := *oldSvc
+	statusChangedSvc.ResourceVersion = "another-rv"
+
+	bg := newFakeBackendGroupOfService(oldSvc.Namespace, "bg", "lb", 80, "TCP", oldSvc.Name)
+	bg2 := newFakeBackendGroupOfService(oldSvc.Namespace, "another-bg", "lb", 80, "TCP", "another-svc")
+
+	bgCtrl := newBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{
+		list: []*lbcfapi.BackendGroup{bg, bg2},
+	}, &fakeBackendLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{})
+	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
+
+	c.updateService(oldSvc, &statusChangedSvc)
+	if c.backendGroupQueue.Len() != 0 {
+		t.Fatalf("queue length should be 0, get %d", c.backendGroupQueue.Len())
+	}
+
+	specChangedSvc := statusChangedSvc
+	specChangedSvc.Generation++
+
+	c.updateService(oldSvc, &specChangedSvc)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+
+	groupKey, done := c.backendGroupQueue.Get()
+	if groupKey == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := groupKey.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(groupKey)
+}
+
+func TestLBCFControllerDeleteService(t *testing.T) {
+	svc := newFakeService("", "test-svc", apiv1.ServiceTypeNodePort)
+	bg := newFakeBackendGroupOfService(svc.Namespace, "bg", "lb", 80, "TCP", svc.Name)
+	bg2 := newFakeBackendGroupOfService(svc.Namespace, "another-bg", "lb", 80, "TCP", "another-svc")
+	tomestoneKey, _ := controller.KeyFunc(bg)
+	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: svc}
+
+	bgCtrl := newBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{
+		list: []*lbcfapi.BackendGroup{bg, bg2},
+	}, &fakeBackendLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{})
+	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
+
+	c.deleteService(svc)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+
+	groupKey, done := c.backendGroupQueue.Get()
+	if groupKey == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := groupKey.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(groupKey)
+
+	c.deleteService(tombstone)
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	}
+
+	groupKey, done = c.backendGroupQueue.Get()
+	if groupKey == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := groupKey.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendGroupQueue.Done(groupKey)
 }
 
 func TestLBCFControllerAddLoadBalancer(t *testing.T) {
@@ -1000,6 +1107,40 @@ func newFakeBackendGroupOfPods(namespace, name string, lbName string, portNum in
 	return group
 }
 
+func newFakeBackendGroupOfService(namespace, name string, lbName string, portNum int32, protocol string, serviceName string) *lbcfapi.BackendGroup {
+	group := &lbcfapi.BackendGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: lbcfapi.BackendGroupSpec{
+			LBName: lbName,
+			Service: &lbcfapi.ServiceBackend{
+				Name: serviceName,
+				Port: lbcfapi.PortSelector{
+					PortNumber: portNum,
+					Protocol:   protocol,
+				},
+			},
+		},
+	}
+	return group
+}
+
+func newFakeBackendGroupOfStatic(namespace, name string, lbName string, staticAddrs ...string) *lbcfapi.BackendGroup {
+	group := &lbcfapi.BackendGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: lbcfapi.BackendGroupSpec{
+			LBName: lbName,
+			Static: staticAddrs,
+		},
+	}
+	return group
+}
+
 func newFakePod(namespace string, name string, labels map[string]string, running bool, deleting bool) *apiv1.Pod {
 	pod := &apiv1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1026,6 +1167,45 @@ func newFakePod(namespace string, name string, labels map[string]string, running
 		pod.DeletionTimestamp = &ts
 	}
 	return pod
+}
+
+func newFakeService(namespace, name string, svcType apiv1.ServiceType) *apiv1.Service {
+	svc := &apiv1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: apiv1.ServiceSpec{
+			Type: svcType,
+		},
+	}
+	port1 := apiv1.ServicePort{
+		Name:       "http",
+		Port:       80,
+		Protocol:   apiv1.ProtocolTCP,
+		TargetPort: intstr.FromInt(80),
+	}
+	port2 := apiv1.ServicePort{
+		Name:       "https",
+		Port:       443,
+		Protocol:   apiv1.ProtocolTCP,
+		TargetPort: intstr.FromInt(443),
+	}
+	if svcType == apiv1.ServiceTypeNodePort || svcType == apiv1.ServiceTypeLoadBalancer {
+		port1.NodePort = 30000 + port1.Port
+		port2.NodePort = 30000 + port2.Port
+	}
+	svc.Spec.Ports = []apiv1.ServicePort{port1, port2}
+	return svc
+}
+
+func newFakeNode(namespace, name string) *apiv1.Node {
+	return &apiv1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
 }
 
 func newFakeLBCFController(driverCtrl *driverController, lbCtrl *loadBalancerController, backendCtrl *backendController, bgCtrl *backendGroupController) *Controller {

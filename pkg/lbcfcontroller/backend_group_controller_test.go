@@ -136,6 +136,177 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 	}
 }
 
+func TestBackendGroupCreateRecordByService(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
+	fakeLBEnsured(lb)
+	svc := newFakeService("", "test-svc", v1.ServiceTypeNodePort)
+	group := newFakeBackendGroupOfService("", "test-group", lb.Name, 80, "TCP", svc.Name)
+	fakeClient := fake.NewSimpleClientset(group)
+	ctrl := newBackendGroupController(
+		fakeClient,
+		&fakeLBLister{
+			get:  lb,
+			list: []*lbcfapi.LoadBalancer{lb},
+		},
+		&fakeBackendGroupLister{
+			get: group,
+		},
+		&fakeBackendLister{},
+		&fakePodLister{},
+		&fakeSvcListerWithStore{
+			store: map[string]*v1.Service{
+				svc.Name: svc,
+			},
+		},
+		&fakeNodeListerWithStore{
+			store: map[string]*v1.Node{
+				"node1": newFakeNode("", "node1"),
+				"node2": newFakeNode("", "node2"),
+			},
+		},
+	)
+	key, _ := controller.KeyFunc(group)
+	result := ctrl.syncBackendGroup(key)
+	if !result.IsSucc() {
+		t.Fatalf("expect succ result, get %#v", result)
+	}
+
+	if get, _ := fakeClient.LbcfV1beta1().BackendGroups(group.Namespace).Get(group.Name, metav1.GetOptions{}); get == nil {
+		t.Fatalf("miss BackendGroup")
+	} else if get.Status.Backends != 2 {
+		t.Fatalf("expect status.backends = 2, get %v", get.Status.Backends)
+	} else if get.Status.RegisteredBackends != 0 {
+		t.Fatalf("expect status.RegisteredBackends = 0, get %v", get.Status.RegisteredBackends)
+	}
+
+	records, _ := fakeClient.LbcfV1beta1().BackendRecords(group.Namespace).List(metav1.ListOptions{})
+	if len(records.Items) != 2 {
+		t.Fatalf("expect 2 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
+	}
+}
+
+func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
+	type testCase struct {
+		name string
+
+		lb    *lbcfapi.LoadBalancer
+		group *lbcfapi.BackendGroup
+		svc   *v1.Service
+		nodes []*v1.Node
+
+		expectTotalBackends int
+		expectRecords       int
+	}
+
+	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
+	fakeLBEnsured(lb)
+
+	cases := []testCase{
+		{
+			name:                "svc-not-found",
+			lb:                  lb,
+			group:               newFakeBackendGroupOfService("", "test-group", lb.Name, 80, "TCP", "not-exist-svc"),
+			nodes:               []*v1.Node{newFakeNode("", "node1"), newFakeNode("", "node2")},
+			expectTotalBackends: 0,
+			expectRecords:       0,
+		},
+		{
+			name:                "svc-not-NodePort",
+			lb:                  lb,
+			group:               newFakeBackendGroupOfService("", "test-group", lb.Name, 80, "TCP", "not-exist-svc"),
+			svc:                 newFakeService("", "test-svc", v1.ServiceTypeClusterIP),
+			nodes:               []*v1.Node{newFakeNode("", "node1"), newFakeNode("", "node2")},
+			expectTotalBackends: 0,
+			expectRecords:       0,
+		},
+	}
+	for _, c := range cases {
+		fakeClient := fake.NewSimpleClientset(c.group)
+		nodeStore := make(map[string]*v1.Node)
+		for _, node := range c.nodes {
+			nodeStore[node.Name] = node
+		}
+		svcSotre := make(map[string]*v1.Service)
+		if c.svc != nil {
+			svcSotre[c.svc.Name] = c.svc
+		}
+		ctrl := newBackendGroupController(
+			fakeClient,
+			&fakeLBLister{
+				get:  lb,
+				list: []*lbcfapi.LoadBalancer{lb},
+			},
+			&fakeBackendGroupLister{
+				get: c.group,
+			},
+			&fakeBackendLister{},
+			&fakePodLister{},
+			&fakeSvcListerWithStore{
+				store: svcSotre,
+			},
+			&fakeNodeListerWithStore{
+				store: nodeStore,
+			},
+		)
+		key, _ := controller.KeyFunc(c.group)
+		result := ctrl.syncBackendGroup(key)
+		if !result.IsSucc() {
+			t.Fatalf("expect succ result, get %#v", result)
+		}
+		if get, _ := fakeClient.LbcfV1beta1().BackendGroups(c.group.Namespace).Get(c.group.Name, metav1.GetOptions{}); get == nil {
+			t.Fatalf("miss BackendGroup")
+		} else if get.Status.Backends != int32(c.expectTotalBackends) {
+			t.Fatalf("expect status.backends = 0, get %v", get.Status.Backends)
+		}
+
+		records, _ := fakeClient.LbcfV1beta1().BackendRecords(c.group.Namespace).List(metav1.ListOptions{})
+		if len(records.Items) != c.expectRecords {
+			t.Fatalf("expect %d BackendReocrds, get %v", c.expectRecords, len(records.Items))
+		}
+	}
+}
+
+func TestBackendGroupCreateRecordByStatic(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
+	fakeLBEnsured(lb)
+	staticAddrs := []string{
+		"addr1",
+		"addr2",
+	}
+	group := newFakeBackendGroupOfStatic("", "test-group", lb.Name, staticAddrs...)
+	fakeClient := fake.NewSimpleClientset(group)
+	ctrl := newBackendGroupController(
+		fakeClient,
+		&fakeLBLister{
+			get:  lb,
+			list: []*lbcfapi.LoadBalancer{lb},
+		},
+		&fakeBackendGroupLister{
+			get: group,
+		},
+		&fakeBackendLister{},
+		&fakePodLister{},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+	)
+	key, _ := controller.KeyFunc(group)
+	result := ctrl.syncBackendGroup(key)
+	if !result.IsSucc() {
+		t.Fatalf("expect succ result, get %#v", result)
+	}
+
+	if get, _ := fakeClient.LbcfV1beta1().BackendGroups(group.Namespace).Get(group.Name, metav1.GetOptions{}); get == nil {
+		t.Fatalf("miss BackendGroup")
+	} else if int(get.Status.Backends) != len(staticAddrs) {
+		t.Fatalf("expect status.backends = %d, get %v", len(staticAddrs), get.Status.Backends)
+	}
+
+	records, _ := fakeClient.LbcfV1beta1().BackendRecords(group.Namespace).List(metav1.ListOptions{})
+	if len(records.Items) != len(staticAddrs) {
+		t.Fatalf("expect %d BackendReocrds, get %v", len(staticAddrs), len(records.Items))
+	}
+}
+
 func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", map[string]string{"a1": "v1"}, nil)
 	fakeLBEnsured(lb)

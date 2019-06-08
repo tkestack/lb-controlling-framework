@@ -17,6 +17,7 @@
 package lbcfcontroller
 
 import (
+	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
@@ -46,6 +47,91 @@ func TestBackendGenerateAddr(t *testing.T) {
 		&fakePodLister{
 			get: newFakePod("", "pod=0", nil, true, false),
 		},
+		&fakeSvcListerWithStore{},
+		&fakeNodeListerWithStore{},
+		&fakeEventRecorder{store: store},
+		&fakeSuccInvoker{})
+	key, _ := controller.KeyFunc(backend)
+	resp := ctrl.syncBackendRecord(key)
+	if !resp.IsSucc() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	}
+	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+	if get.Status.BackendAddr == "" {
+		t.Fatalf("expect addr not empty")
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "SuccGenerateAddr" {
+		t.Fatalf("expect reason SuccGenerateAddr, get %s", reason)
+	}
+}
+
+func TestBackendGenerateSvcAddr(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	svc := newFakeService("", "test-svc", v12.ServiceTypeNodePort)
+	node := newFakeNode("", "node")
+	bg := newFakeBackendGroupOfService("", "bg", lb.Name, 80, "TCP", svc.Name)
+	backend := util.ConstructServiceBackendRecord(lb, bg, svc, node)
+	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
+	ctrl := newBackendController(
+		fakeClient,
+		&fakeBackendLister{
+			get: backend,
+		},
+		&fakeDriverLister{
+			get: newFakeDriver("", "driver"),
+		},
+		&fakePodLister{},
+		&fakeSvcListerWithStore{
+			store: map[string]*v12.Service{
+				svc.Name: svc,
+			},
+		},
+		&fakeNodeListerWithStore{
+			store: map[string]*v12.Node{
+				node.Name: node,
+			},
+		},
+		&fakeEventRecorder{store: store},
+		&fakeSuccInvoker{})
+	key, _ := controller.KeyFunc(backend)
+	resp := ctrl.syncBackendRecord(key)
+	if !resp.IsSucc() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	}
+	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
+	if get.Status.BackendAddr == "" {
+		t.Fatalf("expect addr not empty")
+	}
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
+	} else if reason, ok := store[backend.Name]; !ok {
+		t.Fatalf("expect event for %s, get %v", backend.Name, store)
+	} else if reason != "SuccGenerateAddr" {
+		t.Fatalf("expect reason SuccGenerateAddr, get %s", reason)
+	}
+}
+
+func TestBackendGenerateStaticAddr(t *testing.T) {
+	lb := newFakeLoadBalancer("", "lb", nil, nil)
+	staticAddr := "addr.com"
+	bg := newFakeBackendGroupOfStatic("", "bg", lb.Name, staticAddr)
+	backend := util.ConstructStaticBackend(lb, bg, staticAddr)
+	fakeClient := fake.NewSimpleClientset(backend)
+	store := make(map[string]string)
+	ctrl := newBackendController(
+		fakeClient,
+		&fakeBackendLister{
+			get: backend,
+		},
+		&fakeDriverLister{
+			get: newFakeDriver("", "driver"),
+		},
+		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
