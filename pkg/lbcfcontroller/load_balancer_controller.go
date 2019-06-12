@@ -75,11 +75,7 @@ func (c *loadBalancerController) syncLB(key string) *util.SyncResult {
 	if !util.LBCreated(lb) {
 		return c.createLoadBalancer(lb)
 	}
-
-	if util.LBNeedEnsure(lb) {
-		return c.ensureLoadBalancer(lb)
-	}
-	return util.SuccResult()
+	return c.ensureLoadBalancer(lb)
 }
 
 func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {

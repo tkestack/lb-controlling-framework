@@ -84,10 +84,7 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 	if backend.Status.BackendAddr == "" {
 		return c.generateBackendAddr(backend)
 	}
-	if util.BackendNeedEnsure(backend) {
-		return c.ensureBackend(backend)
-	}
-	return util.SuccResult()
+	return c.ensureBackend(backend)
 }
 
 func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {

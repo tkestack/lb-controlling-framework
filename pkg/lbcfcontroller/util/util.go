@@ -131,14 +131,6 @@ func LBEnsured(lb *lbcfapi.LoadBalancer) bool {
 	return condition.Status == lbcfapi.ConditionTrue
 }
 
-// LBNeedEnsure indicates webhook ensureLoadBalancer should be called on the given LoadBalancer
-func LBNeedEnsure(lb *lbcfapi.LoadBalancer) bool {
-	if !LBEnsured(lb) {
-		return true
-	}
-	return lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
-}
-
 // GetLBCondition is an helper function to get specific LoadBalancer condition
 func GetLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
 	for i := range status.Conditions {
@@ -595,14 +587,6 @@ func BackendRegistered(backend *lbcfapi.BackendRecord) bool {
 	return false
 }
 
-// BackendNeedEnsure returns true if webhook ensureBackend should be called on backend
-func BackendNeedEnsure(backend *lbcfapi.BackendRecord) bool {
-	if !BackendRegistered(backend) {
-		return true
-	}
-	return backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
-}
-
 // SyncResult stores result for sync method of controllers
 type SyncResult struct {
 	err error
@@ -688,4 +672,35 @@ func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatus
 		groups = groups.Difference(oldGroups).Union(oldGroups.Difference(groups))
 	}
 	return groups
+}
+
+// NeedEnqueueLB determines if the given LoadBalancer should be enqueue
+func NeedEnqueueLB(old *lbcfapi.LoadBalancer, cur *lbcfapi.LoadBalancer) bool {
+	if old.DeletionTimestamp == nil && cur.DeletionTimestamp != nil {
+		return true
+	}
+	if old.Generation != cur.Generation {
+		return true
+	}
+	oldCreated := LBCreated(old)
+	curCreated := LBCreated(cur)
+	curAsynced := LBEnsured(cur)
+	if !oldCreated && curCreated && !curAsynced {
+		return true
+	}
+	return false
+}
+
+// NeedEnqueueBackend determines if the given BackendRecord should be enqueue
+func NeedEnqueueBackend(old *lbcfapi.BackendRecord, cur *lbcfapi.BackendRecord) bool {
+	if old.DeletionTimestamp == nil && cur.DeletionTimestamp != nil {
+		return true
+	}
+	if old.Generation != cur.Generation {
+		return true
+	}
+	if old.Status.BackendAddr != cur.Status.BackendAddr {
+		return true
+	}
+	return false
 }

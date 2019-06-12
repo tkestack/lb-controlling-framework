@@ -211,6 +211,9 @@ func (c *Controller) addPod(obj interface{}) {
 func (c *Controller) updatePod(old, cur interface{}) {
 	oldPod := old.(*v1.Pod)
 	curPod := cur.(*v1.Pod)
+	if oldPod.ResourceVersion == curPod.ResourceVersion {
+		return
+	}
 
 	labelChanged := !reflect.DeepEqual(oldPod.Labels, curPod.Labels)
 	statusChanged := util.PodAvailable(oldPod) != util.PodAvailable(curPod)
@@ -329,7 +332,10 @@ func (c *Controller) addLoadBalancer(obj interface{}) {
 func (c *Controller) updateLoadBalancer(old, cur interface{}) {
 	oldLB := old.(*v1beta1.LoadBalancer)
 	curLB := cur.(*v1beta1.LoadBalancer)
-	if oldLB.Generation != curLB.Generation {
+	if oldLB.ResourceVersion == curLB.ResourceVersion {
+		return
+	}
+	if util.NeedEnqueueLB(oldLB, curLB) {
 		c.enqueue(curLB, c.loadBalancerQueue)
 	}
 	for key := range c.backendGroupCtrl.listRelatedBackendGroupsForLB(curLB) {
@@ -393,7 +399,10 @@ func (c *Controller) addBackendRecord(obj interface{}) {
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := old.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
-	if oldObj.Generation != curObj.Generation || oldObj.Status.BackendAddr != curObj.Status.BackendAddr {
+	if oldObj.ResourceVersion == curObj.ResourceVersion {
+		return
+	}
+	if util.NeedEnqueueBackend(oldObj, curObj) {
 		c.enqueue(curObj, c.backendQueue)
 	}
 	if util.BackendRegistered(oldObj) != util.BackendRegistered(curObj) {
