@@ -421,7 +421,7 @@ func TestBackendEnsureRunning(t *testing.T) {
 	}
 }
 
-func TestBackendEnsureNoRerun(t *testing.T) {
+func TestBackendEnsureRerun(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
@@ -452,21 +452,21 @@ func TestBackendEnsureNoRerun(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeFailInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
+	if !resp.IsFailed() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
 	}
-	if len(store) != 0 {
-		t.Fatalf("expect 0 event, get %d", len(store))
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
 	}
 
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); get == nil {
 		t.Fatalf("missing condition")
-	} else if !reflect.DeepEqual(*get, ensureCondition) {
-		t.Fatalf("expect condition %#v, get %#v", ensureCondition, *get)
+	} else if get.Status != lbcfapi.ConditionFalse {
+		t.Fatalf("expect condition false, get %v", get.Status)
 	}
 }
 

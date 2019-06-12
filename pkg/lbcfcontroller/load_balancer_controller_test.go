@@ -317,7 +317,7 @@ func TestLoadBalancerEnsureRunning(t *testing.T) {
 	}
 }
 
-func TestLoadBalancerNoReEnsure(t *testing.T) {
+func TestLoadBalancerReEnsure(t *testing.T) {
 	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
@@ -345,11 +345,11 @@ func TestLoadBalancerNoReEnsure(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeRunningInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
-		t.Fatalf("expect succ, get %+v", result)
+	if !result.IsRunning() {
+		t.Fatalf("expect running, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
 	if !util.LBCreated(get) {
@@ -357,8 +357,8 @@ func TestLoadBalancerNoReEnsure(t *testing.T) {
 	} else if !util.LBEnsured(get) {
 		t.Errorf("expect LoadBalancer ensured, get status: %#v", get.Status)
 	}
-	if len(store) != 0 {
-		t.Fatalf("expect 0 event, get %d", len(store))
+	if len(store) != 1 {
+		t.Fatalf("expect 1 event, get %d", len(store))
 	}
 }
 

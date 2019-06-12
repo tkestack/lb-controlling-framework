@@ -101,12 +101,15 @@ func TestLBCFControllerUpdatePod_PodStatusChange(t *testing.T) {
 	}
 	oldPod1 := newFakePod("", "pod-0", podLabel, false, false)
 	curPod1 := newFakePod("", "pod-0", podLabel, true, false)
+	curPod1.ResourceVersion = "another"
 
 	oldPod2 := newFakePod("", "pod-0", podLabel, true, false)
 	curPod2 := newFakePod("", "pod-0", podLabel, false, false)
+	curPod2.ResourceVersion = "another"
 
 	oldPod3 := newFakePod("", "pod-0", podLabel, true, false)
 	curPod3 := newFakePod("", "pod-0", podLabel, false, true)
+	curPod3.ResourceVersion = "another"
 
 	bg1 := newFakeBackendGroupOfPods("", "bg-0", "", 80, "tcp", podLabel, nil, nil)
 
@@ -179,15 +182,19 @@ func TestLBCFControllerUpdatePod_PodLabelChange(t *testing.T) {
 	}
 	oldPod1 := newFakePod("", "pod-1", nil, true, false)
 	curPod1 := newFakePod("", "pod-1", podLabel1, true, false)
+	curPod1.ResourceVersion = "another"
 
 	oldPod2 := newFakePod("", "pod-2", podLabel1, true, false)
 	curPod2 := newFakePod("", "pod-2", nil, true, false)
+	curPod2.ResourceVersion = "another"
 
 	oldPod3 := newFakePod("", "pod-3", podLabel1, true, false)
 	curPod3 := newFakePod("", "pod-3", podLabel2, true, false)
+	curPod3.ResourceVersion = "another"
 
 	oldPod4 := newFakePod("", "pod-3", podLabel1, true, false)
 	curPod4 := newFakePod("", "pod-3", podLabel1Plus, true, false)
+	curPod4.ResourceVersion = "another"
 
 	bg1 := newFakeBackendGroupOfPods("", "bg-1", "", 80, "tcp", podLabel1, nil, nil)
 	bg2 := newFakeBackendGroupOfPods("", "bg-2", "", 80, "tcp", podLabel2, nil, nil)
@@ -549,49 +556,205 @@ func TestLBCFControllerAddLoadBalancer(t *testing.T) {
 }
 
 func TestLBCFControllerUpdateLoadBalancer(t *testing.T) {
-	attr1 := map[string]string{
-		"a1": "v1",
-	}
-	attr2 := map[string]string{
-		"a2": "v2",
-	}
-	oldLB1 := newFakeLoadBalancer("", "lb-1", attr1, nil)
-	curLB1 := newFakeLoadBalancer("", "lb-1", attr2, nil)
-	curLB1.Generation = 2
-	bg := newFakeBackendGroupOfPods("", "bg", "lb-1", 80, "tcp", nil, nil, nil)
-
 	lbCtrl := newLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
+	bg := newFakeBackendGroupOfPods("", "bg", "lb", 80, "TCP", nil, nil, nil)
 	bgCtrl := newBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{
 		list: []*lbcfapi.BackendGroup{bg},
 	}, &fakeBackendLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{})
-	c := newFakeLBCFController(nil, lbCtrl, nil, bgCtrl)
-
-	c.updateLoadBalancer(oldLB1, curLB1)
-	if c.loadBalancerQueue.Len() != 1 {
-		t.Fatalf("queue length should be 1, get %d", c.loadBalancerQueue.Len())
-	} else if c.backendGroupQueue.Len() != 1 {
-		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
+	type testCase struct {
+		name          string
+		old           *lbcfapi.LoadBalancer
+		cur           *lbcfapi.LoadBalancer
+		ctrl          *Controller
+		expectLBQueue int
+		expectBGQueue int
+	}
+	cases := []testCase{
+		{
+			name:          "periodic-resync",
+			old:           newFakeLoadBalancer("", "lb", nil, nil),
+			cur:           newFakeLoadBalancer("", "lb", nil, nil),
+			ctrl:          newFakeLBCFController(nil, lbCtrl, nil, bgCtrl),
+			expectLBQueue: 0,
+			expectBGQueue: 0,
+		},
+		{
+			name: "update-attr",
+			old: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Spec.Attributes = map[string]string{
+					"a1": "v1",
+				}
+				return lb
+			}(),
+			cur: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Spec.Attributes = map[string]string{
+					"a1": "v2",
+				}
+				lb.ResourceVersion = "another"
+				lb.Generation = 2
+				return lb
+			}(),
+			ctrl:          newFakeLBCFController(nil, lbCtrl, nil, bgCtrl),
+			expectLBQueue: 1,
+			expectBGQueue: 1,
+		},
+		{
+			name: "create-succ-but-not-sync",
+			old: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				return lb
+			}(),
+			cur: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+					{
+						Type:   lbcfapi.LBCreated,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				lb.ResourceVersion = "another"
+				return lb
+			}(),
+			ctrl:          newFakeLBCFController(nil, lbCtrl, nil, bgCtrl),
+			expectLBQueue: 1,
+			expectBGQueue: 1,
+		},
+		{
+			name: "sync-succ",
+			old: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				return lb
+			}(),
+			cur: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+					{
+						Type:   lbcfapi.LBCreated,
+						Status: lbcfapi.ConditionTrue,
+					},
+					{
+						Type:   lbcfapi.LBAttributesSynced,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				lb.ResourceVersion = "another"
+				return lb
+			}(),
+			ctrl:          newFakeLBCFController(nil, lbCtrl, nil, bgCtrl),
+			expectLBQueue: 0,
+			expectBGQueue: 1,
+		},
+		{
+			name: "ensure-failed",
+			old: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+					{
+						Type:   lbcfapi.LBCreated,
+						Status: lbcfapi.ConditionTrue,
+					},
+					{
+						Type:   lbcfapi.LBAttributesSynced,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				return lb
+			}(),
+			cur: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+					{
+						Type:   lbcfapi.LBCreated,
+						Status: lbcfapi.ConditionTrue,
+					},
+					{
+						Type:    lbcfapi.LBAttributesSynced,
+						Status:  lbcfapi.ConditionFalse,
+						Message: "some message",
+					},
+				}
+				lb.ResourceVersion = "another"
+				return lb
+			}(),
+			ctrl:          newFakeLBCFController(nil, lbCtrl, nil, bgCtrl),
+			expectLBQueue: 0,
+			expectBGQueue: 1,
+		},
+		{
+			name: "delete-lb",
+			old: func() *lbcfapi.LoadBalancer {
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+					{
+						Type:   lbcfapi.LBCreated,
+						Status: lbcfapi.ConditionTrue,
+					},
+					{
+						Type:   lbcfapi.LBAttributesSynced,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				return lb
+			}(),
+			cur: func() *lbcfapi.LoadBalancer {
+				dt := metav1.Now()
+				lb := newFakeLoadBalancer("", "lb", nil, nil)
+				lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
+					{
+						Type:   lbcfapi.LBCreated,
+						Status: lbcfapi.ConditionTrue,
+					},
+					{
+						Type:   lbcfapi.LBAttributesSynced,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				lb.DeletionTimestamp = &dt
+				lb.ResourceVersion = "another"
+				return lb
+			}(),
+			ctrl:          newFakeLBCFController(nil, lbCtrl, nil, bgCtrl),
+			expectLBQueue: 1,
+			expectBGQueue: 1,
+		},
 	}
 
-	lbKey, done := c.loadBalancerQueue.Get()
-	if lbKey == nil || done {
-		t.Error("failed to enqueue LoadBalancer")
-	} else if key, ok := lbKey.(string); !ok {
-		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(curLB1); expectedKey != key {
-		t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
-	}
-	c.loadBalancerQueue.Done(lbKey)
+	for _, c := range cases {
+		c.ctrl.updateLoadBalancer(c.old, c.cur)
+		if c.ctrl.loadBalancerQueue.Len() != c.expectLBQueue {
+			t.Errorf("case %s, expect %d, get %d", c.name, c.expectLBQueue, c.ctrl.loadBalancerQueue.Len())
+			continue
+		} else if c.ctrl.backendGroupQueue.Len() != c.expectBGQueue {
+			t.Errorf("case %s, expect %d, get %d", c.name, c.expectBGQueue, c.ctrl.backendGroupQueue.Len())
+			continue
+		}
 
-	groupKey, done := c.backendGroupQueue.Get()
-	if groupKey == nil || done {
-		t.Error("failed to enqueue BackendGroup")
-	} else if key, ok := groupKey.(string); !ok {
-		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
-		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+		if c.expectLBQueue > 0 {
+			key, done := c.ctrl.loadBalancerQueue.Get()
+			if key == nil || done {
+				t.Error("failed to enqueue BackendGroup")
+			} else if key, ok := key.(string); !ok {
+				t.Error("key is not a string")
+			} else if expectedKey, _ := controller.KeyFunc(c.cur); expectedKey != key {
+				t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
+			}
+			c.ctrl.loadBalancerQueue.Done(key)
+		}
+
+		if c.expectBGQueue > 0 {
+			key, done := c.ctrl.backendGroupQueue.Get()
+			if key == nil || done {
+				t.Error("failed to enqueue BackendGroup")
+			} else if key, ok := key.(string); !ok {
+				t.Error("key is not a string")
+			} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+				t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
+			}
+			c.ctrl.loadBalancerQueue.Done(key)
+		}
 	}
-	c.backendGroupQueue.Done(groupKey)
 }
 
 func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
@@ -767,53 +930,147 @@ func TestLBCFControllerAddBackendRecord(t *testing.T) {
 
 func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 	type testCase struct {
-		name        string
-		old         *lbcfapi.BackendRecord
-		cur         *lbcfapi.BackendRecord
-		ctrl        *Controller
-		expectQueue int
+		name          string
+		old           *lbcfapi.BackendRecord
+		cur           *lbcfapi.BackendRecord
+		ctrl          *Controller
+		expectQueue   int
+		expectBGQueue int
 	}
 	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
+	bg := newFakeBackendGroupOfPods("", "bg", "lb", 80, "TCP", nil, nil, nil)
+	bgCtrl := newBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{
+		list: []*lbcfapi.BackendGroup{bg},
+	}, &fakeBackendLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{})
 	cases := []testCase{
 		{
-			name:        "same-resource-version-0",
-			old:         newFakeBackendRecord("", "record"),
-			cur:         newFakeBackendRecord("", "record"),
-			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
-			expectQueue: 0,
+			name: "periodic-resync",
+			old: func() *lbcfapi.BackendRecord {
+				backend := newFakeBackendRecord("", "record")
+				setBackendRecordOwner(backend, bg)
+				return backend
+			}(),
+			cur: func() *lbcfapi.BackendRecord {
+				backend := newFakeBackendRecord("", "record")
+				setBackendRecordOwner(backend, bg)
+				return backend
+			}(),
+			ctrl:          newFakeLBCFController(nil, nil, backendCtrl, bgCtrl),
+			expectQueue:   0,
+			expectBGQueue: 0,
 		},
 		{
-			name: "same-resource-version-set-backendaddr-1",
-			old:  newFakeBackendRecord("", "record"),
+			name: "set-backendaddr",
+			old: func() *lbcfapi.BackendRecord {
+				backend := newFakeBackendRecord("", "record")
+				setBackendRecordOwner(backend, bg)
+				return backend
+			}(),
 			cur: func() *lbcfapi.BackendRecord {
 				record := newFakeBackendRecord("", "record")
+				record.ResourceVersion = "another-version"
 				record.Status.BackendAddr = "fakeaddr.com"
+				setBackendRecordOwner(record, bg)
 				return record
 			}(),
-			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
-			expectQueue: 1,
+			ctrl:          newFakeLBCFController(nil, nil, backendCtrl, bgCtrl),
+			expectQueue:   1,
+			expectBGQueue: 0,
 		},
 		{
-			name: "different-resource-version-1",
+			name: "ensure-succ",
 			old: func() *lbcfapi.BackendRecord {
 				record := newFakeBackendRecord("", "record")
 				record.Status.BackendAddr = "fakeaddr.com"
+				setBackendRecordOwner(record, bg)
 				return record
 			}(),
 			cur: func() *lbcfapi.BackendRecord {
 				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
 				record.ResourceVersion = "2"
-				record.Status.BackendAddr = "anotheraddr.com"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:   lbcfapi.BackendRegistered,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				setBackendRecordOwner(record, bg)
 				return record
 			}(),
-			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
-			expectQueue: 1,
+			ctrl:          newFakeLBCFController(nil, nil, backendCtrl, bgCtrl),
+			expectQueue:   0,
+			expectBGQueue: 1,
 		},
 		{
-			name: "same-resource-version-update-status-0",
+			name: "ensure-fail",
 			old: func() *lbcfapi.BackendRecord {
 				record := newFakeBackendRecord("", "record")
 				record.Status.BackendAddr = "fakeaddr.com"
+				setBackendRecordOwner(record, bg)
+				return record
+			}(),
+			cur: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				record.ResourceVersion = "another-rv"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:   lbcfapi.BackendRegistered,
+						Status: lbcfapi.ConditionFalse,
+					},
+				}
+				setBackendRecordOwner(record, bg)
+				return record
+			}(),
+			ctrl:          newFakeLBCFController(nil, nil, backendCtrl, bgCtrl),
+			expectQueue:   0,
+			expectBGQueue: 0,
+		},
+		{
+			name: "re-ensure-fail",
+			old: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:   lbcfapi.BackendRegistered,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				setBackendRecordOwner(record, bg)
+				return record
+			}(),
+			cur: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				record.ResourceVersion = "another-rv"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:    lbcfapi.BackendRegistered,
+						Status:  lbcfapi.ConditionFalse,
+						Message: "some message",
+					},
+				}
+				setBackendRecordOwner(record, bg)
+				return record
+			}(),
+			ctrl:          newFakeLBCFController(nil, nil, backendCtrl, bgCtrl),
+			expectQueue:   0,
+			expectBGQueue: 1,
+		},
+		{
+			name: "update-parameters",
+			old: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:   lbcfapi.BackendRegistered,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				setBackendRecordOwner(record, bg)
 				return record
 			}(),
 			cur: func() *lbcfapi.BackendRecord {
@@ -822,20 +1079,65 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
 					{
 						Type:   lbcfapi.BackendRegistered,
-						Status: lbcfapi.ConditionFalse,
+						Status: lbcfapi.ConditionTrue,
 					},
 				}
+				record.Spec.Parameters = map[string]string{
+					"newKey": "newValue",
+				}
+				record.ResourceVersion = "another-rv"
+				record.Generation = 2
+				setBackendRecordOwner(record, bg)
 				return record
 			}(),
-			ctrl:        newFakeLBCFController(nil, nil, backendCtrl, nil),
-			expectQueue: 0,
+			ctrl:          newFakeLBCFController(nil, nil, backendCtrl, bgCtrl),
+			expectQueue:   1,
+			expectBGQueue: 0,
+		},
+		{
+			name: "delete-backendrecord",
+			old: func() *lbcfapi.BackendRecord {
+				record := newFakeBackendRecord("", "record")
+				record.Status.BackendAddr = "fakeaddr.com"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:   lbcfapi.BackendRegistered,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				setBackendRecordOwner(record, bg)
+				return record
+			}(),
+			cur: func() *lbcfapi.BackendRecord {
+				dt := metav1.Now()
+				record := newFakeBackendRecord("", "record")
+				record.DeletionTimestamp = &dt
+				record.Status.BackendAddr = "fakeaddr.com"
+				record.Status.Conditions = []lbcfapi.BackendRecordCondition{
+					{
+						Type:   lbcfapi.BackendRegistered,
+						Status: lbcfapi.ConditionTrue,
+					},
+				}
+				record.ResourceVersion = "another-rv"
+				setBackendRecordOwner(record, bg)
+				return record
+			}(),
+			ctrl:          newFakeLBCFController(nil, nil, backendCtrl, bgCtrl),
+			expectQueue:   1,
+			expectBGQueue: 0,
 		},
 	}
 	for _, c := range cases {
 		c.ctrl.updateBackendRecord(c.old, c.cur)
 		if c.ctrl.backendQueue.Len() != c.expectQueue {
-			t.Errorf("expect len %d, get %d", c.expectQueue, c.ctrl.backendQueue.Len())
+			t.Errorf("case %s, expect len %d, get %d", c.name, c.expectQueue, c.ctrl.backendQueue.Len())
+			continue
+		} else if c.ctrl.backendGroupQueue.Len() != c.expectBGQueue {
+			t.Errorf("case %s, expect len %d, get %d", c.name, c.expectBGQueue, c.ctrl.backendGroupQueue.Len())
+			continue
 		}
+
 		if c.expectQueue > 0 {
 			key, done := c.ctrl.backendQueue.Get()
 			if key == nil || done {
@@ -850,42 +1152,19 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 				t.Fatalf("expect empty backendGroup queue, get %v", c.ctrl.backendGroupQueue.Len())
 			}
 		}
-	}
-}
 
-func TestLBCFControllerUpdateBackendRecordRegisterStatusChanged(t *testing.T) {
-	lb := newFakeLoadBalancer("", "lb", nil, nil)
-	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	oldRecord := util.ConstructPodBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
-	curRecord := util.ConstructPodBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
-	curRecord.Status.BackendAddr = "fake.addr.com:80"
-	curRecord.Status.Conditions = []lbcfapi.BackendRecordCondition{
-		{
-			Type:   lbcfapi.BackendRegistered,
-			Status: lbcfapi.ConditionTrue,
-		},
+		if c.expectBGQueue > 0 {
+			key, done := c.ctrl.backendGroupQueue.Get()
+			if key == nil || done {
+				t.Error("failed to enqueue BackendGroup")
+			} else if key, ok := key.(string); !ok {
+				t.Error("key is not a string")
+			} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+				t.Errorf("expected BackendGroup key %s found %s", expectedKey, key)
+			}
+			c.ctrl.loadBalancerQueue.Done(key)
+		}
 	}
-
-	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
-	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
-	c.updateBackendRecord(oldRecord, curRecord)
-
-	if c.backendQueue.Len() != 1 {
-		t.Fatalf("expect empty backend queue, get %d", c.backendQueue.Len())
-	}
-
-	if c.backendGroupQueue.Len() != 1 {
-		t.Fatalf("expect backendgroup queue 1, get %d", c.backendGroupQueue.Len())
-	}
-	key, done := c.backendGroupQueue.Get()
-	if key == nil || done {
-		t.Error("failed to enqueue BackendGroup")
-	} else if key, ok := key.(string); !ok {
-		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(group); expectedKey != key {
-		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
-	}
-	c.backendGroupQueue.Done(key)
 }
 
 func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
@@ -1051,6 +1330,20 @@ func newFakeBackendRecord(namespace, name string) *lbcfapi.BackendRecord {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+		},
+	}
+}
+
+func setBackendRecordOwner(backend *lbcfapi.BackendRecord, group *lbcfapi.BackendGroup) {
+	valueTrue := true
+	backend.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion:         lbcfapi.ApiVersion,
+			BlockOwnerDeletion: &valueTrue,
+			Controller:         &valueTrue,
+			Kind:               "BackendGroup",
+			Name:               group.Name,
+			UID:                group.UID,
 		},
 	}
 }
