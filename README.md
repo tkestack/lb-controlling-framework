@@ -20,7 +20,7 @@ LBCF对K8S内部晦涩的运行机制进行了封装并以Webhook的形式对外
 
 * [LBCF Webhook规范](docs/design/lbcf-webhook-specification.md)
 
-* [操作手册](docs/design/how-to-use.md)(WIP)
+* [操作手册](docs/design/how-to-use.md)
 
 ## 安装LBCF
 
@@ -65,6 +65,15 @@ Webhook服务器的实现可参考[最佳实践](#best_practice)中的项目。
 
 ## <a name="best_practice"></a> 最佳实践
 
+* [公有云CLB](https://git.code.oa.com/ianlang/lbcf-clb-driver)
+  
+  关键词：
+  
+  * 支持绑定NodePort
+  * 支持Pod直通CLB
+  * 支持创建四/七层CLB
+  * 支持权重调整
+
 * [God游戏](https://git.code.oa.com/ianlang/lbcf-driver-ieg-god)
   
   关键词：
@@ -76,7 +85,4 @@ Webhook服务器的实现可参考[最佳实践](#best_practice)中的项目。
   * 控制面：每个Pod端口独占一个CLB监听器，监听器端口号为`10000 +（pod名后缀[0, n-1] * 10）+ (pod的端口%10)`
 
   
-* [公有云绑定CLB——Service NodePort方式](docs/examples/tencent-cloud-service-nodeport.md)(WIP)
-
-* [公有云绑定CLB——Pod直通CLB](docs/examples/tencent-cloud-eni.md)(WIP)
 
