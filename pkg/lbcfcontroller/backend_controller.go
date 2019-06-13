@@ -69,6 +69,7 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 	}
 	backend, err := c.brLister.BackendRecords(namespace).Get(name)
 	if errors.IsNotFound(err) {
+		c.removeDeletingRecordByBackendName(namespace, name)
 		return util.SuccResult()
 	} else if err != nil {
 		return util.ErrorResult(err)
@@ -76,6 +77,7 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 
 	if backend.DeletionTimestamp != nil {
 		if !util.HasFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend) {
+			c.removeDeletingRecord(backend)
 			return util.SuccResult()
 		}
 		return c.deregisterBackend(backend)
@@ -263,12 +265,30 @@ func (c *backendController) removeFinalizer(backend *lbcfapi.BackendRecord) *uti
 
 func (c *backendController) storeDeletingBackend(backend *lbcfapi.BackendRecord) {
 	key := fmt.Sprintf("%s|%s", backend.Spec.LBInfo, backend.Status.BackendAddr)
-	c.inProgressDeleting.Store(key, backend.Name)
+	value := util.NamespacedNameKeyFunc(backend.Namespace, backend.Name)
+	c.inProgressDeleting.Store(key, value)
 }
 
 func (c *backendController) removeDeletingRecord(backend *lbcfapi.BackendRecord) {
 	key := fmt.Sprintf("%s|%s", backend.Spec.LBInfo, backend.Status.BackendAddr)
 	c.inProgressDeleting.Delete(key)
+}
+
+func (c *backendController) removeDeletingRecordByBackendName(namespace, name string) {
+	var remainedKey *string
+	targetValue := util.NamespacedNameKeyFunc(namespace, name)
+	c.inProgressDeleting.Range(func(key, value interface{}) bool {
+		k := key.(string)
+		v := value.(string)
+		if v == targetValue {
+			remainedKey = &k
+			return false
+		}
+		return true
+	})
+	if remainedKey != nil {
+		c.inProgressDeleting.Delete(*remainedKey)
+	}
 }
 
 func (c *backendController) sameAddrDeleting(backend *lbcfapi.BackendRecord) (string, bool) {
