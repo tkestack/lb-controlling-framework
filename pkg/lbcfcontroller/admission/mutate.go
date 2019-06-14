@@ -22,6 +22,9 @@ import (
 	"time"
 
 	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
@@ -123,5 +126,46 @@ func (bp *backendGroupPatch) patch() []Patch {
 }
 
 const (
-	DefaultWebhookTimeout = 10 * time.Second
+	defaultWebhookTimeout = 10 * time.Second
 )
+
+type driverPatch struct {
+	obj     *lbcfapi.LoadBalancerDriver
+	patches []Patch
+}
+
+func (dp *driverPatch) setWebhook() {
+	createArray := len(dp.obj.Spec.Webhooks) == 0
+	if createArray {
+		dp.patches = append(dp.patches, Patch{
+			OP:    patchOpAdd,
+			Path:  path.Join("/", "spec", "webhooks"),
+			Value: []interface{}{},
+		})
+	}
+
+	existWebhooks := sets.NewString()
+	for _, has := range dp.obj.Spec.Webhooks {
+		existWebhooks.Insert(has.Name)
+	}
+
+	for known := range webhooks.KnownWebhooks {
+		if existWebhooks.Has(known) {
+			continue
+		}
+		dp.patches = append(dp.patches, Patch{
+			OP:   patchOpAdd,
+			Path: path.Join("/", "spec", "webhooks", "-"),
+			Value: lbcfapi.WebhookConfig{
+				Name: known,
+				Timeout: lbcfapi.Duration{
+					Duration: defaultWebhookTimeout,
+				},
+			},
+		})
+	}
+}
+
+func (dp *driverPatch) patch() []Patch {
+	return dp.patches
+}

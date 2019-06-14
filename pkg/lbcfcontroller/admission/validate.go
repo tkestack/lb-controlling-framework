@@ -29,7 +29,6 @@ import (
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -40,9 +39,7 @@ func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList
 	allErrs = append(allErrs, validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
 	allErrs = append(allErrs, validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
 	allErrs = append(allErrs, validateDriverURL(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
-	if raw.Spec.Webhooks != nil {
-		allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec"))...)
-	}
+	allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec").Child("webhooks"))...)
 	return allErrs
 }
 
@@ -150,24 +147,32 @@ func validateDriverURL(raw string, path *field.Path) field.ErrorList {
 
 func validateDriverWebhooks(raw []lbcfapi.WebhookConfig, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	webhookSet := sets.NewString()
-	for i, wh := range raw {
-		curPath := path.Child(fmt.Sprintf("webhooks[%d]", i))
-		if wh.Name == "" {
-			allErrs = append(allErrs, field.Required(curPath.Child("name"), "name must be specified"))
+	var supported []string
+	for known := range webhooks.KnownWebhooks {
+		supported = append(supported, known)
+	}
+
+	hasWebhook := make(map[string]lbcfapi.WebhookConfig)
+	for _, wh := range raw {
+		hasWebhook[wh.Name] = wh
+		if _, ok := webhooks.KnownWebhooks[wh.Name]; !ok {
+			allErrs = append(allErrs, field.NotSupported(path.Child(wh.Name).Child("name"), wh.Name, supported))
 		}
-		if !webhooks.KnownWebhooks.Has(wh.Name) {
-			allErrs = append(allErrs, field.NotSupported(curPath.Child("name"), wh, webhooks.KnownWebhooks.List()))
+	}
+	if len(allErrs) > 0 {
+		return allErrs
+	}
+
+	for known := range webhooks.KnownWebhooks {
+		wh, ok := hasWebhook[known]
+		if !ok {
+			allErrs = append(allErrs, field.Required(path.Child(known), fmt.Sprintf("webhook %s must be configured", known)))
 			continue
 		}
-		if webhookSet.Has(wh.Name) {
-			allErrs = append(allErrs, field.Duplicate(curPath.Child("name"), wh.Name))
-			continue
-		}
-		webhookSet.Insert(wh.Name)
 		if wh.Timeout.Nanoseconds() > (1 * time.Minute).Nanoseconds() {
-			allErrs = append(allErrs, field.Invalid(curPath.Child("timeout"), wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
-			continue
+			allErrs = append(allErrs, field.Invalid(path.Child(known).Child("timeout"), wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
+		} else if wh.Timeout.Duration == 0 {
+			allErrs = append(allErrs, field.Invalid(path.Child(known).Child("timeout"), wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be specified", wh.Name)))
 		}
 	}
 	return allErrs

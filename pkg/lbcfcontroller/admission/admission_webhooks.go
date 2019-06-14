@@ -101,8 +101,27 @@ func (a *Admitter) MutateLB(ar *admission.AdmissionReview) *admission.AdmissionR
 }
 
 // MutateDriver implements MutatingWebHook for LoadBalancerDriver
-func (a *Admitter) MutateDriver(*admission.AdmissionReview) *admission.AdmissionResponse {
-	return toAdmissionResponse(nil)
+func (a *Admitter) MutateDriver(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	obj := &lbcfapi.LoadBalancerDriver{}
+	err := json.Unmarshal(ar.Request.Object.Raw, obj)
+	if err != nil {
+		return toAdmissionResponse(err)
+	}
+
+	dPatch := &driverPatch{obj: obj}
+	dPatch.setWebhook()
+
+	p, err := json.Marshal(dPatch.patch())
+	if err != nil {
+		toAdmissionResponse(err)
+	}
+
+	reviewResponse := &admission.AdmissionResponse{}
+	reviewResponse.Allowed = true
+	reviewResponse.Patch = p
+	pt := admission.PatchTypeJSONPatch
+	reviewResponse.PatchType = &pt
+	return reviewResponse
 }
 
 // MutateBackendGroup implements MutatingWebHook for BackendGroup

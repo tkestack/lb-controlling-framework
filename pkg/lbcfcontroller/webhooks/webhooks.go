@@ -47,9 +47,6 @@ const (
 
 	// DeregBackend is the name and URL path of webhook deregisterBackend
 	DeregBackend = "deregisterBackend"
-
-	// UpdateBackend is the name and URL path of webhook updateBackend
-	UpdateBackend = "updateBackend"
 )
 
 // KnownWebhooks is a set contains all supported webhooks
@@ -62,7 +59,6 @@ var KnownWebhooks = sets.NewString(
 	GenerateBackendAddr,
 	EnsureBackend,
 	DeregBackend,
-	UpdateBackend,
 )
 
 // RequestForRetryHooks is the common request for webhooks that can be retried, including:

@@ -55,7 +55,7 @@ func (s *Server) Start() {
 
 	ws.Route(ws.POST("mutate-load-balancer").To(s.MutateAdmitLoadBalancer).
 		Consumes(restful.MIME_JSON))
-	ws.Route(ws.POST("mutate-load-balancerDriver").To(s.MutateAdmitLoadBalancerDriver).
+	ws.Route(ws.POST("mutate-load-balancer-driver").To(s.MutateAdmitLoadBalancerDriver).
 		Consumes(restful.MIME_JSON))
 	ws.Route(ws.POST("mutate-backend-broup").To(s.MutateAdmitBackendGroup).
 		Consumes(restful.MIME_JSON))
