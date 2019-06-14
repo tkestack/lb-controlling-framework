@@ -46,6 +46,9 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
 						},
 						{
 							Name: webhooks.CreateLoadBalancer,
@@ -104,6 +107,56 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
 					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.CreateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeleteLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.GenerateBackendAddr,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureBackend,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeregBackend,
+							Timeout: lbcfapi.Duration{
+								10 * time.Second,
+							},
+						},
+					},
 				},
 			},
 			expectValid: true,

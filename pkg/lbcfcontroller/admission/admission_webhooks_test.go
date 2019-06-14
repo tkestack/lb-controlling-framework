@@ -52,7 +52,7 @@ func TestAdmitter_MutateLB(t *testing.T) {
 		},
 	}
 	rsp := a.MutateLB(ar)
-	if rsp.Allowed != true {
+	if !rsp.Allowed {
 		t.Fatalf("expect allow")
 	} else if string(rsp.Patch) != `[{"op":"add","path":"/metadata/finalizers","value":["lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"]}]` {
 		t.Fatalf("wrong patch")
@@ -75,7 +75,7 @@ func TestAdmitter_MutateLB(t *testing.T) {
 		},
 	}
 	rsp = a.MutateLB(ar)
-	if rsp.Allowed != true {
+	if !rsp.Allowed {
 		t.Fatalf("expect allow")
 	} else if string(rsp.Patch) != `[{"op":"add","path":"/metadata/finalizers/-","value":"lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"}]` {
 		t.Fatalf("wrong patch")
@@ -97,9 +97,133 @@ func TestAdmitter_MutateLB(t *testing.T) {
 
 func TestAdmitter_MutateDriver(t *testing.T) {
 	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
-	rsp := a.MutateDriver(&v1beta1.AdmissionReview{})
+	driver := &lbcfapi.LoadBalancerDriver{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-driver",
+			Namespace: "test",
+		},
+		Spec: lbcfapi.LoadBalancerDriverSpec{
+			DriverType: string(lbcfapi.WebhookDriver),
+			Url:        "http://test-driver.com",
+		},
+	}
+	raw, _ := json.Marshal(driver)
+	rsp := a.MutateDriver(&v1beta1.AdmissionReview{
+		Request: &v1beta1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: raw,
+			},
+		},
+	})
 	if !rsp.Allowed {
 		t.Fatalf("expect always allow")
+	}
+
+	patch, err := jsonpatch.DecodePatch(rsp.Patch)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modified, err := patch.Apply(raw)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modifiedDriver := &lbcfapi.LoadBalancerDriver{}
+	if err := json.Unmarshal(modified, modifiedDriver); err != nil {
+		t.Fatalf(err.Error())
+	}
+	if len(modifiedDriver.Spec.Webhooks) != len(webhooks.KnownWebhooks) {
+		t.Errorf("expect %d webhooks, get %d", len(webhooks.KnownWebhooks), len(modifiedDriver.Spec.Webhooks))
+	}
+	for known := range webhooks.KnownWebhooks {
+		found := false
+		for _, wh := range modifiedDriver.Spec.Webhooks {
+			if wh.Name == known {
+				found = true
+				if wh.Timeout.Duration != defaultWebhookTimeout {
+					t.Errorf("webhook %s expect timeout %s, get %s", wh.Name, defaultWebhookTimeout.String(), wh.Timeout.Duration.String())
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("webhook %s not found", known)
+		}
+	}
+
+	// case 2: partially specified
+	existWebhook := map[string]lbcfapi.WebhookConfig{
+		webhooks.ValidateLoadBalancer: {
+			Name: webhooks.ValidateLoadBalancer,
+			Timeout: lbcfapi.Duration{
+				Duration: 13 * time.Second},
+		},
+		webhooks.ValidateBackend: {
+			Name: webhooks.ValidateBackend,
+			Timeout: lbcfapi.Duration{
+				Duration: 15 * time.Second,
+			},
+		},
+	}
+	var hooks []lbcfapi.WebhookConfig
+	for _, exist := range existWebhook {
+		hooks = append(hooks, exist)
+	}
+
+	driver = &lbcfapi.LoadBalancerDriver{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-driver",
+			Namespace: "test",
+		},
+		Spec: lbcfapi.LoadBalancerDriverSpec{
+			DriverType: string(lbcfapi.WebhookDriver),
+			Url:        "http://test-driver.com",
+			Webhooks:   hooks,
+		},
+	}
+	raw, _ = json.Marshal(driver)
+	rsp = a.MutateDriver(&v1beta1.AdmissionReview{
+		Request: &v1beta1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: raw,
+			},
+		},
+	})
+	patch, err = jsonpatch.DecodePatch(rsp.Patch)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modified, err = patch.Apply(raw)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	modifiedDriver = &lbcfapi.LoadBalancerDriver{}
+	if err := json.Unmarshal(modified, modifiedDriver); err != nil {
+		t.Fatalf(err.Error())
+	}
+	if len(modifiedDriver.Spec.Webhooks) != len(webhooks.KnownWebhooks) {
+		t.Errorf("expect %d webhooks, get %d", len(webhooks.KnownWebhooks), len(modifiedDriver.Spec.Webhooks))
+	}
+
+	for known := range webhooks.KnownWebhooks {
+		found := false
+		for _, wh := range modifiedDriver.Spec.Webhooks {
+			if wh.Name == known {
+				found = true
+				if existTimeout, ok := existWebhook[wh.Name]; ok {
+					if wh.Timeout.Duration != existTimeout.Timeout.Duration {
+						t.Errorf("webhook %s expect timeout %s, get %s", wh.Name, existTimeout.Timeout.Duration.String(), wh.Timeout.Duration.String())
+					}
+				} else {
+					if wh.Timeout.Duration != defaultWebhookTimeout {
+						t.Errorf("webhook %s expect timeout %s, get %s", wh.Name, defaultWebhookTimeout.String(), wh.Timeout.Duration.String())
+					}
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("webhook %s not found", known)
+		}
 	}
 }
 
@@ -212,64 +336,289 @@ func TestAdmitter_MutateBackendGroup(t *testing.T) {
 }
 
 func TestAdmitter_ValidateDriverCreate(t *testing.T) {
+	type testCase struct {
+		name        string
+		driver      *lbcfapi.LoadBalancerDriver
+		expectAllow bool
+	}
+	cases := []testCase{
+		{
+			name: "webhooks-not-configured",
+			driver: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+				},
+			},
+			expectAllow: false,
+		},
+		{
+			name: "webhooks-partially-configured",
+			driver: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 20 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			expectAllow: false,
+		},
+		{
+			name: "webhooks-timeout-not-set",
+			driver: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+						},
+						{
+							Name: webhooks.CreateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeleteLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.GenerateBackendAddr,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeregBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			expectAllow: false,
+		},
+
+		{
+			name: "webhooks-timeout-too-long",
+			driver: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 2 * time.Minute,
+							},
+						},
+						{
+							Name: webhooks.CreateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeleteLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.GenerateBackendAddr,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeregBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			expectAllow: false,
+		},
+		{
+			name: "invalid-name",
+			driver: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "invalid-name",
+					Namespace: "kube-system",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+				},
+			},
+			expectAllow: false,
+		},
+		{
+			name: "unsupported-webhook-name",
+			driver: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: "a-not-supported-webhook",
+							Timeout: lbcfapi.Duration{
+								Duration: 10 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			expectAllow: false,
+		},
+		{
+			name: "valid",
+			driver: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.CreateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeleteLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.GenerateBackendAddr,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeregBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			expectAllow: true,
+		},
+	}
 	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 
-	// case 1: valid driver, expect allow
-	driver := &lbcfapi.LoadBalancerDriver{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-driver",
-			Namespace: "default",
-		},
-		Spec: lbcfapi.LoadBalancerDriverSpec{
-			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://1.1.1.1:80",
-		},
-	}
-	raw, _ := json.Marshal(driver)
-	ar := &v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: raw,
+	for _, c := range cases {
+		raw, _ := json.Marshal(c.driver)
+		ar := &v1beta1.AdmissionReview{
+			Request: &v1beta1.AdmissionRequest{
+				Object: runtime.RawExtension{
+					Raw: raw,
+				},
 			},
-		},
-	}
-	if resp := a.ValidateDriverCreate(ar); !resp.Allowed {
-		t.Fatalf("expect allow, msg: %v", resp.Result.Message)
-	}
-
-	// case 2: invalid driver, expect not allow
-	driver = &lbcfapi.LoadBalancerDriver{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "invalid-name",
-			Namespace: "kube-system",
-		},
-		Spec: lbcfapi.LoadBalancerDriverSpec{
-			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://1.1.1.1:80",
-		},
-	}
-	raw, _ = json.Marshal(driver)
-	ar = &v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: raw,
-			},
-		},
-	}
-	if resp := a.ValidateDriverCreate(ar); resp.Allowed {
-		t.Fatalf("expect not allow")
-	}
-
-	// case 3: loadbalancer decode error, expect not allow
-	ar = &v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: []byte("invalid json"),
-			},
-		},
-	}
-	if resp := a.ValidateDriverCreate(ar); resp.Allowed {
-		t.Fatalf("expect not allow")
+		}
+		if resp := a.ValidateDriverCreate(ar); resp.Allowed != c.expectAllow {
+			t.Errorf("case %s, expect %v, get %v", c.name, c.expectAllow, resp.Allowed)
+		}
 	}
 }
 
@@ -384,47 +733,239 @@ func TestAdmitter_ValidateDriverDelete_BackendRemaining(t *testing.T) {
 }
 
 func TestAdmitter_ValidateDriverUpdate(t *testing.T) {
-	old := &lbcfapi.LoadBalancerDriver{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-driver",
-			Namespace: "default",
-		},
-		Spec: lbcfapi.LoadBalancerDriverSpec{
-			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://1.1.1.1:80",
-		},
+	type testCase struct {
+		name        string
+		old         *lbcfapi.LoadBalancerDriver
+		cur         *lbcfapi.LoadBalancerDriver
+		expectAllow bool
 	}
-	cur := &lbcfapi.LoadBalancerDriver{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-driver",
-			Namespace: "default",
-		},
-		Spec: lbcfapi.LoadBalancerDriverSpec{
-			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://1.1.1.1:80",
-			Webhooks: []lbcfapi.WebhookConfig{
-				{
-					Name: webhooks.ValidateLoadBalancer,
+	cases := []testCase{
+		{
+			name: "allow-modify-timeout",
+			old: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.CreateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeleteLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.GenerateBackendAddr,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeregBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+					},
 				},
 			},
+			cur: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 30 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.CreateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 30 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 30 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeleteLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 30 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.GenerateBackendAddr,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeregBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			expectAllow: true,
+		},
+		{
+			name: "not-allow-delete-webhook",
+			old: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 10 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.CreateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeleteLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.ValidateBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.GenerateBackendAddr,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.EnsureBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+						{
+							Name: webhooks.DeregBackend,
+							Timeout: lbcfapi.Duration{
+								Duration: 15 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			cur: &lbcfapi.LoadBalancerDriver{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-driver",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerDriverSpec{
+					DriverType: string(lbcfapi.WebhookDriver),
+					Url:        "http://1.1.1.1:80",
+					Webhooks: []lbcfapi.WebhookConfig{
+						{
+							Name: webhooks.ValidateLoadBalancer,
+							Timeout: lbcfapi.Duration{
+								Duration: 30 * time.Second,
+							},
+						},
+					},
+				},
+			},
+			expectAllow: false,
 		},
 	}
-	oldRaw, _ := json.Marshal(old)
-	curRaw, _ := json.Marshal(cur)
-	ar := &v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: curRaw,
-			},
-			OldObject: runtime.RawExtension{
-				Raw: oldRaw,
-			},
-		},
-	}
+
 	a := NewAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
-	resp := a.ValidateDriverUpdate(ar)
-	if !resp.Allowed {
-		t.Fatalf("expect allow")
+	for _, c := range cases {
+		oldRaw, _ := json.Marshal(c.old)
+		curRaw, _ := json.Marshal(c.cur)
+		ar := &v1beta1.AdmissionReview{
+			Request: &v1beta1.AdmissionRequest{
+				Object: runtime.RawExtension{
+					Raw: curRaw,
+				},
+				OldObject: runtime.RawExtension{
+					Raw: oldRaw,
+				},
+			},
+		}
+		resp := a.ValidateDriverUpdate(ar)
+		if resp.Allowed != c.expectAllow {
+			t.Fatalf("case %s, expect %v, get %v", c.name, c.expectAllow, resp.Allowed)
+		}
 	}
 }
 
