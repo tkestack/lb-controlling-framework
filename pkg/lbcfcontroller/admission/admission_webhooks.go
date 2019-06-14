@@ -113,27 +113,11 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 		return toAdmissionResponse(err)
 	}
 
-	var patches []Patch
-	// label BackendGroup with BackendGroup.spec.lbName
-	var skip, createLabel, replace bool
-	if obj.Labels != nil {
-		if value, ok := obj.Labels[lbcfapi.LabelLBName]; ok && value == obj.Spec.LBName {
-			skip = true
-		} else if ok {
-			replace = true
-		}
-	}
-	createLabel = obj.Labels == nil || len(obj.Labels) == 0
-	if !skip {
-		patches = append(patches, addLabel(createLabel, replace, lbcfapi.LabelLBName, obj.Spec.LBName))
-	}
-	// set default value for portSelector
-	if obj.Spec.Service != nil && obj.Spec.Service.Port.Protocol == "" {
-		patches = append(patches, defaultSvcProtocol())
-	} else if obj.Spec.Pods != nil && obj.Spec.Pods.Port.Protocol == "" {
-		patches = append(patches, defaultPodProtocol())
-	}
-	p, err := json.Marshal(patches)
+	bgPatch := &backendGroupPatch{obj: obj}
+	bgPatch.addLabel()
+	bgPatch.setDefaultProtocol()
+
+	p, err := json.Marshal(bgPatch.patch())
 	if err != nil {
 		toAdmissionResponse(err)
 	}

@@ -17,6 +17,7 @@
 package admission
 
 import (
+	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	"path"
 	"strings"
 )
@@ -85,4 +86,36 @@ func defaultPodProtocol() Patch {
 		Path:  "/spec/pods/port/protocol",
 		Value: "TCP",
 	}
+}
+
+type backendGroupPatch struct {
+	obj     *lbcfapi.BackendGroup
+	patches []Patch
+}
+
+func (bp *backendGroupPatch) addLabel() {
+	var skip, createLabel, replace bool
+	if bp.obj.Labels != nil {
+		if value, ok := bp.obj.Labels[lbcfapi.LabelLBName]; ok && value == bp.obj.Spec.LBName {
+			skip = true
+		} else if ok {
+			replace = true
+		}
+	}
+	createLabel = bp.obj.Labels == nil || len(bp.obj.Labels) == 0
+	if !skip {
+		bp.patches = append(bp.patches, addLabel(createLabel, replace, lbcfapi.LabelLBName, bp.obj.Spec.LBName))
+	}
+}
+
+func (bp *backendGroupPatch) setDefaultProtocol() {
+	if bp.obj.Spec.Service != nil && bp.obj.Spec.Service.Port.Protocol == "" {
+		bp.patches = append(bp.patches, defaultSvcProtocol())
+	} else if bp.obj.Spec.Pods != nil && bp.obj.Spec.Pods.Port.Protocol == "" {
+		bp.patches = append(bp.patches, defaultPodProtocol())
+	}
+}
+
+func (bp *backendGroupPatch) patch() []Patch {
+	return bp.patches
 }
