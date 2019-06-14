@@ -49,43 +49,43 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 						},
 						{
 							Name: webhooks.CreateLoadBalancer,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.EnsureLoadBalancer,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.DeleteLoadBalancer,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.ValidateBackend,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.GenerateBackendAddr,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.EnsureBackend,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.DeregBackend,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},
@@ -189,7 +189,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								100 * time.Hour,
 							},
 						},
@@ -777,7 +777,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
-							Timeout: &lbcfapi.Duration{
+							Timeout: lbcfapi.Duration{
 								10 * time.Second,
 							},
 						},

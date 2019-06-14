@@ -203,7 +203,7 @@ type LoadBalancerDriverSpec struct {
 type WebhookConfig struct {
 	Name string `json:"name"`
 	// +optional
-	Timeout *Duration `json:"timeout,omitempty"`
+	Timeout Duration `json:"timeout,omitempty"`
 }
 
 type LoadBalancerDriverConditionType string

@@ -31,11 +31,6 @@ import (
 	"k8s.io/klog"
 )
 
-const (
-	// DefaultWebhookTimeout is the default timeout of calling webhooks
-	DefaultWebhookTimeout = 10 * time.Second
-)
-
 // WebhookInvoker is an abstract interface for testability
 type WebhookInvoker interface {
 	CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error)
@@ -143,12 +138,10 @@ func callWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload
 		return e
 	}
 	u.Path = path.Join(webHookName)
-	timeout := DefaultWebhookTimeout
+	var timeout time.Duration
 	for _, h := range driver.Spec.Webhooks {
 		if h.Name == webHookName {
-			if h.Timeout != nil {
-				timeout = h.Timeout.Duration
-			}
+			timeout = h.Timeout.Duration
 			break
 		}
 	}

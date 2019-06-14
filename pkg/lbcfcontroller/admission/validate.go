@@ -165,11 +165,9 @@ func validateDriverWebhooks(raw []lbcfapi.WebhookConfig, path *field.Path) field
 			continue
 		}
 		webhookSet.Insert(wh.Name)
-		if wh.Timeout != nil {
-			if wh.Timeout.Nanoseconds() > (1 * time.Minute).Nanoseconds() {
-				allErrs = append(allErrs, field.Invalid(curPath.Child("timeout"), *wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
-				continue
-			}
+		if wh.Timeout.Nanoseconds() > (1 * time.Minute).Nanoseconds() {
+			allErrs = append(allErrs, field.Invalid(curPath.Child("timeout"), wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
+			continue
 		}
 	}
 	return allErrs

@@ -17,9 +17,11 @@
 package admission
 
 import (
-	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	"path"
 	"strings"
+	"time"
+
+	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 )
 
 const (
@@ -119,3 +121,7 @@ func (bp *backendGroupPatch) setDefaultProtocol() {
 func (bp *backendGroupPatch) patch() []Patch {
 	return bp.patches
 }
+
+const (
+	DefaultWebhookTimeout = 10 * time.Second
+)
