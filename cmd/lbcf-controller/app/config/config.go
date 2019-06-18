@@ -17,7 +17,7 @@
 package config
 
 import (
-	"github.com/spf13/pflag"
+	"flag"
 	"time"
 )
 
@@ -33,7 +33,7 @@ func NewConfig() *Config {
 	return &Config{}
 }
 
-func (o *Config) AddFlags(fs *pflag.FlagSet) {
+func (o *Config) AddFlags(fs *flag.FlagSet) {
 	fs.DurationVar(&o.InformerResyncPeriod, "informer-resync-period", 1*time.Minute, "resync period for informers")
 	fs.DurationVar(&o.MinRetryDelay, "min-retry-delay", 10*time.Second, "minimum retry delay for failed webhook calls")
 	fs.StringVar(&o.KubeConfig, "kubeconfig", "", "Path to kubeconfig file with authorization information")

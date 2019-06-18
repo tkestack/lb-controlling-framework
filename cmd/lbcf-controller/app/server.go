@@ -17,7 +17,10 @@
 package app
 
 import (
+	"flag"
+	"k8s.io/klog"
 	"net/http"
+	"os"
 
 	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/context"
@@ -35,11 +38,11 @@ func NewServer() *cobra.Command {
 		Use: "lbcf-controller",
 
 		Run: func(cmd *cobra.Command, args []string) {
-			context := context.NewContext(cfg)
-			admissionWebhookServer := admission.NewWebhookServer(context, cfg.ServerCrt, cfg.ServerKey)
-			lbcf := lbcfcontroller.NewController(context)
+			ctx := context.NewContext(cfg)
+			admissionWebhookServer := admission.NewWebhookServer(ctx, cfg.ServerCrt, cfg.ServerKey)
+			lbcf := lbcfcontroller.NewController(ctx)
 
-			context.Start()
+			ctx.Start()
 			admissionWebhookServer.Start()
 			lbcf.Start()
 
@@ -52,6 +55,13 @@ func NewServer() *cobra.Command {
 			<-wait.NeverStop
 		},
 	}
-	cfg.AddFlags(cmd.Flags())
+
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	klog.InitFlags(fs)
+	cfg.AddFlags(fs)
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		panic(err)
+	}
+	cmd.Flags().AddGoFlagSet(fs)
 	return cmd
 }

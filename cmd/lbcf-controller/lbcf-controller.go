@@ -17,7 +17,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -28,8 +27,6 @@ import (
 
 func main() {
 	command := app.NewServer()
-	klog.InitFlags(flag.NewFlagSet(os.Args[0], flag.ContinueOnError))
-	flag.Set("logtostderr", "true")
 	defer klog.Flush()
 
 	if err := command.Execute(); err != nil {
