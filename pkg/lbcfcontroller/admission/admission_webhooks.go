@@ -19,6 +19,7 @@ package admission
 import (
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 	lbcflister "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
@@ -275,6 +276,9 @@ func (a *Admitter) ValidateDriverUpdate(ar *admission.AdmissionReview) *admissio
 func (a *Admitter) ValidateDriverDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
 	driver, err := a.driverLister.LoadBalancerDrivers(ar.Request.Namespace).Get(ar.Request.Name)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			return toAdmissionResponse(nil)
+		}
 		return toAdmissionResponse(fmt.Errorf("retrieve LoadBalancerDriver %s/%s failed: %v", ar.Request.Namespace, ar.Request.Name, err))
 	}
 	if !util.IsDriverDraining(driver) {
