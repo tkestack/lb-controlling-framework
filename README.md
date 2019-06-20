@@ -1,3 +1,5 @@
+<a href="http://orange-ci.oa.com/build/log/latest?slug=k8s/lb-controlling-framework"><img src="http://badge.orange-ci.oa.com/k8s/lb-controlling-framework.svg" alt="Build status"></a>
+
 ## Load Balancer Controlling Framework (LBCF)
 
 LBCF是一款部署在Kubernetes内的通用负载均衡控制面框架，旨在降低容器对接负载均衡的实现难度，并提供强大的扩展能力以满足业务方在使用负载均衡时的个性化需求。
