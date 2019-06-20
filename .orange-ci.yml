@@ -1,0 +1,15 @@
+master:
+  merge_request:
+    - docker:
+        image: docker.oa.com:8080/public/golang-revive:1.12
+      stages:
+        - name: format_check
+          script:
+            - build/scripts/run_revive.sh
+        - name: unit_test
+          script:
+            - build/scripts/run_unit_tests.sh
+        - name: build
+          script:
+            - go build git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller
+
