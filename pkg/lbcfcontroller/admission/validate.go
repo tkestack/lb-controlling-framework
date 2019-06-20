@@ -18,6 +18,8 @@ package admission
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"net/url"
 	"reflect"
 	"strings"
@@ -206,6 +208,7 @@ func validateBackends(raw *lbcfapi.BackendGroupSpec, path *field.Path) field.Err
 func validateServiceBackend(raw *lbcfapi.ServiceBackend, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	allErrs = append(allErrs, validatePortSelector(raw.Port, path.Child("port"))...)
+	allErrs = append(allErrs, validateLabelSelector(raw.NodeSelector, path.Child("nodeSelector"))...)
 	return allErrs
 }
 
@@ -217,8 +220,9 @@ func validatePodBackend(raw *lbcfapi.PodBackend, path *field.Path) field.ErrorLi
 			allErrs = append(allErrs, field.Invalid(path.Child("byName"), raw.ByName, "only one of \"byLabel, byName\" is allowed"))
 		}
 		if len(raw.ByLabel.Selector) == 0 {
-			allErrs = append(allErrs, field.Required(path.Child("selector"), "selector must be specified"))
+			allErrs = append(allErrs, field.Required(path.Child("byLabel").Child("selector"), "selector must be specified"))
 		}
+		allErrs = append(allErrs, validateLabelSelector(raw.ByLabel.Selector, path.Child("byLabel").Child("selector"))...)
 		return allErrs
 	}
 
@@ -237,6 +241,17 @@ func validatePortSelector(raw lbcfapi.PortSelector, path *field.Path) field.Erro
 
 	if raw.Protocol != string(v1.ProtocolTCP) && raw.Protocol != string(v1.ProtocolUDP) {
 		allErrs = append(allErrs, field.Invalid(path.Child("protocol"), raw.Protocol, "protocol must be \"TCP\" or \"UDP\""))
+	}
+	return allErrs
+}
+
+func validateLabelSelector(raw map[string]string, path *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	for k, v := range raw {
+		_, err := labels.NewRequirement(k, selection.Equals, []string{v})
+		if err != nil {
+			allErrs = append(allErrs, field.Invalid(path, fmt.Sprintf("%v:%v", k, v), fmt.Sprintf("invalid label: %v", err)))
+		}
 	}
 	return allErrs
 }

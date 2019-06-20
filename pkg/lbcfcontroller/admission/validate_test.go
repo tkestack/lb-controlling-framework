@@ -788,6 +788,64 @@ func TestValidateBackendGroup(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "invalid-pod-backend-invalid-label",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "test-lb",
+					Pods: &lbcfapi.PodBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+							Protocol:   tcp,
+						},
+						ByLabel: &lbcfapi.SelectPodByLabel{
+							Selector: map[string]string{
+								"kayc./-jaj": "kayc./-jaj",
+							},
+							Except: []string{
+								"pod-0",
+							},
+						},
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyAlways,
+						MinPeriod: &lbcfapi.Duration{
+							30 * time.Second,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid-svc-backend-invalid-nodeSelector",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: "test-lb",
+					Service: &lbcfapi.ServiceBackend{
+						Name: "svc-name",
+						Port: lbcfapi.PortSelector{
+							PortNumber: 80,
+							Protocol:   tcp,
+						},
+						NodeSelector: map[string]string{
+							"kayc./-jaj": "kayc./-jaj",
+						},
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyAlways,
+						MinPeriod: &lbcfapi.Duration{
+							30 * time.Second,
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, c := range cases {
 		err := ValidateBackendGroup(c.group)
