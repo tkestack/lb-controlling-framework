@@ -64,7 +64,7 @@ kind: MutatingWebhookConfiguration
 metadata:
   name: lbcf-mutate
 webhooks:
-  - name: lb.lbcf.tke.cloud.tencent.com
+  - name: driver.lbcf.tke.cloud.tencent.com
     rules:
       - apiGroups:
           - "lbcf.tke.cloud.tencent.com"
