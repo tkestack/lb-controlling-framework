@@ -53,8 +53,8 @@ func TestBackendGenerateAddr(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get.Status.BackendAddr == "" {
@@ -100,8 +100,8 @@ func TestBackendGenerateSvcAddr(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get.Status.BackendAddr == "" {
@@ -138,8 +138,8 @@ func TestBackendGenerateStaticAddr(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get.Status.BackendAddr == "" {
@@ -178,7 +178,7 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
-		t.Fatalf("expect failed result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect failed result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get.Status.BackendAddr != "" {
@@ -221,7 +221,7 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
-		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get.Status.BackendAddr != "" {
@@ -263,8 +263,8 @@ func TestBackendGenerateAddrInvalidResponse(t *testing.T) {
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsError() {
-		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFailed() {
+		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get.Status.BackendAddr != "" {
@@ -308,8 +308,8 @@ func TestBackendEnsure(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))
@@ -351,7 +351,7 @@ func TestBackendEnsureFailed(t *testing.T) {
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
-		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))
@@ -406,7 +406,7 @@ func TestBackendEnsureRunning(t *testing.T) {
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
-		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))
@@ -456,7 +456,7 @@ func TestBackendEnsureRerun(t *testing.T) {
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))
@@ -495,8 +495,8 @@ func TestBackendEnsureInvalidResponse(t *testing.T) {
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsError() {
-		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFailed() {
+		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))
@@ -544,8 +544,8 @@ func TestBackendDeregister(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if len(get.Finalizers) != 0 {
@@ -591,7 +591,7 @@ func TestBackendDeregisterFailed(t *testing.T) {
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
-		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if len(get.Finalizers) != 1 {
@@ -644,7 +644,7 @@ func TestBackendDeregisterRunning(t *testing.T) {
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
-		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if len(get.Finalizers) != 1 {
@@ -696,8 +696,8 @@ func TestBackendDeregisterInvalidResponse(t *testing.T) {
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsError() {
-		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFailed() {
+		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if len(get.Finalizers) != 1 {
@@ -748,8 +748,8 @@ func TestBackendDeregisterEmptyAddr(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if len(get.Finalizers) != 0 {
@@ -816,7 +816,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 	key, _ := controller.KeyFunc(oldBackend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
-		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))
@@ -831,7 +831,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 	key, _ = controller.KeyFunc(newBackend)
 	resp = ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
-		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))
@@ -846,16 +846,16 @@ func TestBackendSameAddrOperation(t *testing.T) {
 	ctrl.webhookInvoker = &fakeSuccInvoker{}
 	key, _ = controller.KeyFunc(oldBackend)
 	resp = ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	delete(store, oldBackend.Name)
 
 	// once oldBackend finished, ensureBackend of newBackend starts
 	key, _ = controller.KeyFunc(newBackend)
 	resp = ctrl.syncBackendRecord(key)
-	if !resp.IsSucc() {
-		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetError())
+	if !resp.IsFinished() {
+		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
 	if len(store) != 1 {
 		t.Fatalf("expect 1 event, get %d", len(store))

@@ -1213,7 +1213,7 @@ func TestLBCFControllerProcessNextItemSucc(t *testing.T) {
 	obj := newFakeDriver("", "driver")
 	ctrl.enqueue(obj, q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {
-		return util.SuccResult()
+		return util.FinishedResult()
 	})
 	if q.Len() != 0 || q.LenWaitingForFilter() != 0 {
 		t.Fatalf("expect 0, get %d, %d", q.Len(), q.LenWaitingForFilter())
@@ -1256,7 +1256,7 @@ func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
 
 	ctrl.enqueue(obj, q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {
-		return util.FailResult(500 * time.Millisecond)
+		return util.FailResult(500*time.Millisecond, "")
 	})
 	if get, done := q.Get(); done {
 		t.Fatalf("failed to get queue elements")

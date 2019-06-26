@@ -34,8 +34,8 @@ func TestDriverControllerSyncDriverCreate(t *testing.T) {
 		get: driver,
 	})
 	result := ctrl.syncDriver(key)
-	if !result.IsSucc() {
-		t.Logf("%v", result.GetError())
+	if !result.IsFinished() {
+		t.Logf("%v", result.GetFailReason())
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 }
@@ -55,8 +55,8 @@ func TestDriverControllerSyncDriverAccepted(t *testing.T) {
 		get: driver,
 	})
 	result := ctrl.syncDriver(key)
-	if !result.IsSucc() {
-		t.Logf("%v", result.GetError())
+	if !result.IsFinished() {
+		t.Logf("%v", result.GetFailReason())
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 }
@@ -67,7 +67,7 @@ func TestDriverControllerSyncDriverNotFound(t *testing.T) {
 	key, _ := controller.KeyFunc(driver)
 	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
 	result := ctrl.syncDriver(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %v", result)
 	}
 }
@@ -82,7 +82,7 @@ func TestDriverControllerSyncDriverDeleting(t *testing.T) {
 		get: driver,
 	})
 	result := ctrl.syncDriver(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %v", result)
 	}
 }

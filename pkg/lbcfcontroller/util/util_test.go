@@ -1317,17 +1317,17 @@ func TestCompareBackendRecords(t *testing.T) {
 }
 
 func TestSyncResult(t *testing.T) {
-	succ := SuccResult()
+	succ := FinishedResult()
 	empty := SyncResult{}
 	if *succ != empty {
 		t.Fatalf("expect %+v, get %+v", empty, *succ)
 	}
 
-	if !ErrorResult(fmt.Errorf("fake error")).IsError() {
+	if !ErrorResult(fmt.Errorf("fake error")).IsFailed() {
 		t.Fatalf("expect error")
 	}
 
-	if !FailResult(5 * time.Second).IsFailed() {
+	if !FailResult(5*time.Second, "").IsFailed() {
 		t.Fatalf("expect fail")
 	}
 

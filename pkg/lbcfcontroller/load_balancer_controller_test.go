@@ -44,7 +44,7 @@ func TestLoadBalancerCreate(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
@@ -149,7 +149,7 @@ func TestLoadBalancerCreateInvalid(t *testing.T) {
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsError() {
+	if !result.IsFailed() {
 		t.Fatalf("expect error, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
@@ -169,9 +169,6 @@ func TestLoadBalancerEnsure(t *testing.T) {
 	createdAt := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
-	lb.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
-		Policy: lbcfapi.PolicyAlways,
-	}
 	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
 		{
 			Type:               lbcfapi.LBCreated,
@@ -199,7 +196,7 @@ func TestLoadBalancerEnsure(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
@@ -396,7 +393,7 @@ func TestLoadBalancerEnsureInvalid(t *testing.T) {
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsError() {
+	if !result.IsFailed() {
 		t.Fatalf("expect error, get %+v", result)
 	}
 	if len(store) != 1 {
@@ -429,7 +426,7 @@ func TestLoadBalancerDelete(t *testing.T) {
 		&fakeSuccInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
@@ -533,7 +530,7 @@ func TestLoadBalancerDeleteInvalid(t *testing.T) {
 		&fakeInvalidInvoker{})
 	key, _ := controller.KeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsError() {
+	if !result.IsFailed() {
 		t.Fatalf("expect error, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
