@@ -46,13 +46,13 @@ func (c *driverController) syncDriver(key string) *util.SyncResult {
 	}
 	driver, err := c.lister.LoadBalancerDrivers(namespace).Get(name)
 	if errors.IsNotFound(err) {
-		return util.SuccResult()
+		return util.FinishedResult()
 	} else if err != nil {
 		return util.ErrorResult(err)
 	}
 
 	if driver.DeletionTimestamp != nil {
-		return util.SuccResult()
+		return util.FinishedResult()
 	}
 
 	// create DriverConnector
@@ -70,7 +70,7 @@ func (c *driverController) syncDriver(key string) *util.SyncResult {
 		if err != nil {
 			return util.ErrorResult(err)
 		}
-		return util.SuccResult()
+		return util.FinishedResult()
 	}
-	return util.SuccResult()
+	return util.FinishedResult()
 }

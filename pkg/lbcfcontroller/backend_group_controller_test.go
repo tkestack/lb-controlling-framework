@@ -56,7 +56,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 
@@ -114,7 +114,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 
@@ -167,7 +167,7 @@ func TestBackendGroupCreateRecordByService(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 
@@ -250,7 +250,7 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 		)
 		key, _ := controller.KeyFunc(c.group)
 		result := ctrl.syncBackendGroup(key)
-		if !result.IsSucc() {
+		if !result.IsFinished() {
 			t.Fatalf("expect succ result, get %#v", result)
 		}
 		if get, _ := fakeClient.LbcfV1beta1().BackendGroups(c.group.Namespace).Get(c.group.Name, metav1.GetOptions{}); get == nil {
@@ -291,7 +291,7 @@ func TestBackendGroupCreateRecordByStatic(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 
@@ -345,7 +345,7 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(curGroup)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 
@@ -416,7 +416,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 
@@ -482,7 +482,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
+	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
 	}
 
@@ -539,8 +539,8 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 	)
 	key, _ := controller.KeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
-	if !result.IsSucc() {
-		t.Fatalf("expect succ result, get %#v", result.GetError())
+	if !result.IsFinished() {
+		t.Fatalf("expect succ result, get %#v", result.GetFailReason())
 	}
 
 	if get, _ := fakeClient.LbcfV1beta1().BackendGroups(group.Namespace).Get(group.Name, metav1.GetOptions{}); get == nil {

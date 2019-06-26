@@ -18,13 +18,11 @@ package lbcfcontroller
 
 import (
 	"fmt"
-	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/controller"
 	"strings"
 	"testing"
@@ -1211,40 +1209,32 @@ func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemSucc(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewIntervalRateLimitingQueue(
-		workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
-			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		), "name", time.Second)
+	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	ctrl.enqueue(obj, q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {
-		return util.SuccResult()
+		return util.FinishedResult()
 	})
-	select {
-	case <-time.NewTimer(2 * time.Second).C:
-	case <-func() chan struct{} {
-		ch := make(chan struct{})
-		go func() {
-			q.Get()
-			close(ch)
-		}()
-		return ch
-	}():
-		t.Fatalf("expect get nothing")
+	if q.Len() != 0 || q.LenWaitingForFilter() != 0 {
+		t.Fatalf("expect 0, get %d, %d", q.Len(), q.LenWaitingForFilter())
 	}
+	//select {
+	//case <-time.NewTimer(2 * time.Second).C:
+	//case <-func() chan struct{} {
+	//	ch := make(chan struct{})
+	//	go func() {
+	//		q.Get()
+	//		close(ch)
+	//	}()
+	//	return ch
+	//}():
+	//	t.Fatalf("expect get nothing")
+	//}
 }
 
 func TestLBCFControllerProcessNextItemError(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewIntervalRateLimitingQueue(
-		workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
-			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		), "name", time.Second)
-
+	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	ctrl.enqueue("key", q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {
 		return util.ErrorResult(fmt.Errorf("fake error"))
@@ -1260,19 +1250,13 @@ func TestLBCFControllerProcessNextItemError(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewIntervalRateLimitingQueue(
-		workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
-			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		), "name", time.Second)
-
+	q := util.NewConditionalDelayingQueue(nil, time.Millisecond, time.Millisecond, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	key, _ := controller.KeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {
-		return util.FailResult(500 * time.Millisecond)
+		return util.FailResult(500*time.Millisecond, "")
 	})
 	if get, done := q.Get(); done {
 		t.Fatalf("failed to get queue elements")
@@ -1283,12 +1267,7 @@ func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemRunning(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewIntervalRateLimitingQueue(
-		workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
-			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		), "name", time.Second)
+	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	key, _ := controller.KeyFunc(obj)
 
@@ -1305,12 +1284,7 @@ func TestLBCFControllerProcessNextItemRunning(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemPeriodic(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewIntervalRateLimitingQueue(
-		workqueue.NewMaxOfRateLimiter(
-			workqueue.NewItemExponentialFailureRateLimiter(500*time.Millisecond, 10*time.Minute),
-			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		), "name", time.Second)
+	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	key, _ := controller.KeyFunc(obj)
 
@@ -1508,10 +1482,10 @@ func newFakeLBCFController(driverCtrl *driverController, lbCtrl *loadBalancerCon
 		backendCtrl:      backendCtrl,
 		backendGroupCtrl: bgCtrl,
 
-		driverQueue:       util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "driver-queue", 10*time.Second),
-		loadBalancerQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "lb-queue", 10*time.Second),
-		backendGroupQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backendgroup-queue", 10*time.Second),
-		backendQueue:      util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backend-queue", 10*time.Second),
+		driverQueue:       util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
+		loadBalancerQueue: util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
+		backendGroupQueue: util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
+		backendQueue:      util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
 	}
 }
 

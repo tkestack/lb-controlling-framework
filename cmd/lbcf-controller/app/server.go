@@ -20,6 +20,7 @@ import (
 	"flag"
 	"k8s.io/klog"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/config"

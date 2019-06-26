@@ -25,13 +25,11 @@ import (
 
 	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 
-	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8slabel "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/api/v1/pod"
 )
@@ -43,70 +41,6 @@ const (
 	// DefaultEnsurePeriod is the default minimum interval for ensureLoadBalancer and ensureBackendRecord
 	DefaultEnsurePeriod = 1 * time.Minute
 )
-
-// DefaultControllerRateLimiter creates a RateLimiter with DefaultRetryInterval as it's base delay
-func DefaultControllerRateLimiter() workqueue.RateLimiter {
-	return workqueue.NewMaxOfRateLimiter(
-		workqueue.NewItemExponentialFailureRateLimiter(DefaultRetryInterval, 10*time.Minute),
-		// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-	)
-}
-
-// IntervalRateLimitingInterface limits rate with rate limiter and user specified minimum interval
-type IntervalRateLimitingInterface interface {
-	workqueue.RateLimitingInterface
-
-	// AddIntervalRateLimited adds object in at least minInterval
-	AddIntervalRateLimited(item interface{}, minInterval time.Duration)
-}
-
-// NewIntervalRateLimitingQueue creates a new instance of IntervalRateLimitingInterface,
-// defaultDelay is used as default minimum interval for retries
-func NewIntervalRateLimitingQueue(rateLimiter workqueue.RateLimiter, name string, defaultDelay time.Duration) IntervalRateLimitingInterface {
-	return &IntervalRateLimitingQueue{
-		defaultRetryDelay: defaultDelay,
-		DelayingInterface: workqueue.NewNamedDelayingQueue(name),
-		rateLimiter:       rateLimiter,
-	}
-}
-
-// IntervalRateLimitingQueue is an implementation of IntervalRateLimitingInterface
-type IntervalRateLimitingQueue struct {
-	defaultRetryDelay time.Duration
-
-	workqueue.DelayingInterface
-
-	rateLimiter workqueue.RateLimiter
-}
-
-// AddIntervalRateLimited adds item in at least minInterval
-func (q *IntervalRateLimitingQueue) AddIntervalRateLimited(item interface{}, minInterval time.Duration) {
-	if minInterval.Nanoseconds() == 0 {
-		minInterval = q.defaultRetryDelay
-	}
-	delay := q.rateLimiter.When(item)
-	if minInterval.Nanoseconds() > delay.Nanoseconds() {
-		delay = minInterval
-	}
-	q.DelayingInterface.AddAfter(item, delay)
-}
-
-// AddRateLimited AddAfters the item based on the time when the rate limiter says its ok
-func (q *IntervalRateLimitingQueue) AddRateLimited(item interface{}) {
-	q.DelayingInterface.AddAfter(item, q.rateLimiter.When(item))
-}
-
-// NumRequeues returns back how many failures the item has had
-func (q *IntervalRateLimitingQueue) NumRequeues(item interface{}) int {
-	return q.rateLimiter.NumRequeues(item)
-}
-
-// Forget indicates that an item is finished being retried.  Doesn't matter whether its for perm failing
-// or for success, we'll stop tracking it
-func (q *IntervalRateLimitingQueue) Forget(item interface{}) {
-	q.rateLimiter.Forget(item)
-}
 
 // PodAvailable indicates the given pod is ready to bind to load balancers
 func PodAvailable(obj *v1.Pod) bool {
@@ -587,83 +521,6 @@ func BackendRegistered(backend *lbcfapi.BackendRecord) bool {
 	return false
 }
 
-// SyncResult stores result for sync method of controllers
-type SyncResult struct {
-	err error
-
-	operationFailed   bool
-	asyncOperation    bool
-	periodicOperation bool
-
-	minRetryDelay     time.Duration
-	minReEnsurePeriod time.Duration
-}
-
-// SuccResult returns a new SyncResult that call IsSucc() on it will return true
-func SuccResult() *SyncResult {
-	return &SyncResult{}
-}
-
-// ErrorResult returns a new SyncResult that call IsError() on it will return true
-func ErrorResult(err error) *SyncResult {
-	return &SyncResult{err: err}
-}
-
-// FailResult returns a new SyncResult that call IsFailed() on it will return true
-func FailResult(delay time.Duration) *SyncResult {
-	return &SyncResult{operationFailed: true, minRetryDelay: delay}
-}
-
-// AsyncResult returns a new SyncResult that call IsPeriodic() on it will return true
-func AsyncResult(period time.Duration) *SyncResult {
-	return &SyncResult{asyncOperation: true, minReEnsurePeriod: period}
-}
-
-// PeriodicResult returns a new SyncResult that call IsPeriodic() on it will return true
-func PeriodicResult(period time.Duration) *SyncResult {
-	return &SyncResult{periodicOperation: true, minReEnsurePeriod: period}
-}
-
-// IsSucc indicates the operation is successfully finished
-func (s *SyncResult) IsSucc() bool {
-	return !s.IsError() && !s.IsFailed() && !s.IsRunning()
-}
-
-// IsError indicates an error occurred during operation
-func (s *SyncResult) IsError() bool {
-	return s.err != nil
-}
-
-// IsFailed indicates no error occured during operation, but the operation failed
-func (s *SyncResult) IsFailed() bool {
-	return s.operationFailed
-}
-
-// IsRunning indicates the operation is still in progress
-func (s *SyncResult) IsRunning() bool {
-	return s.asyncOperation
-}
-
-// IsPeriodic indicates the operation successfully finished and should be called periodically
-func (s *SyncResult) IsPeriodic() bool {
-	return s.periodicOperation
-}
-
-// GetError returns the error stored in SyncResult
-func (s *SyncResult) GetError() error {
-	return s.err
-}
-
-// GetRetryDelay returns in how long time the operation should be retried
-func (s *SyncResult) GetRetryDelay() time.Duration {
-	return s.minRetryDelay
-}
-
-// GetReEnsurePeriodic returns in how long time the operation should be taken again
-func (s *SyncResult) GetReEnsurePeriodic() time.Duration {
-	return s.minReEnsurePeriod
-}
-
 // DetermineNeededBackendGroupUpdates compares oldGroups with groups, and returns BackendGroups that should be
 func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatusChanged bool) sets.String {
 	if podStatusChanged {
@@ -700,6 +557,17 @@ func NeedEnqueueBackend(old *lbcfapi.BackendRecord, cur *lbcfapi.BackendRecord) 
 		return true
 	}
 	if old.Status.BackendAddr != cur.Status.BackendAddr {
+		return true
+	}
+	return false
+}
+
+// NeedPeriodicEnsure tests if ensurePolicy is on
+func NeedPeriodicEnsure(cfg *lbcfapi.EnsurePolicyConfig, deleting bool) bool {
+	if deleting {
+		return false
+	}
+	if cfg != nil && cfg.Policy == lbcfapi.PolicyAlways {
 		return true
 	}
 	return false

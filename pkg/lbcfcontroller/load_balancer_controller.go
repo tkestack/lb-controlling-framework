@@ -60,14 +60,14 @@ func (c *loadBalancerController) syncLB(key string) *util.SyncResult {
 	}
 	lb, err := c.lister.LoadBalancers(namespace).Get(name)
 	if errors.IsNotFound(err) {
-		return util.SuccResult()
+		return util.FinishedResult()
 	} else if err != nil {
 		return util.ErrorResult(err)
 	}
 
 	if lb.DeletionTimestamp != nil {
 		if !util.HasFinalizer(lb.Finalizers, lbcfapi.FinalizerDeleteLB) {
-			return util.SuccResult()
+			return util.FinishedResult()
 		}
 		return c.deleteLoadBalancer(lb)
 	}
@@ -124,10 +124,10 @@ func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		if lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
 			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
-		return util.SuccResult()
+		return util.FinishedResult()
 	case webhooks.StatusFail:
 		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedCreateLoadBalancer", "msg: %s", rsp.Msg)
-		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
 		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningCreateLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
@@ -172,7 +172,7 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		if lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
 			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
-		return util.SuccResult()
+		return util.FinishedResult()
 	case webhooks.StatusFail:
 		lb = lb.DeepCopy()
 		util.AddLBCondition(&lb.Status, lbcfapi.LoadBalancerCondition{
@@ -188,7 +188,7 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 			return util.ErrorResult(err)
 		}
 		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedEnsureLoadBalancer", "msg: %s", rsp.Msg)
-		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
 		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningEnsureLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
@@ -221,7 +221,7 @@ func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		return c.removeFinalizer(lb)
 	case webhooks.StatusFail:
 		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedDeleteLoadBalancer", "msg: %s", rsp.Msg)
-		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
 		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningDeleteLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
@@ -239,5 +239,5 @@ func (c *loadBalancerController) removeFinalizer(lb *lbcfapi.LoadBalancer) *util
 	if err != nil {
 		return util.ErrorResult(err)
 	}
-	return util.SuccResult()
+	return util.FinishedResult()
 }

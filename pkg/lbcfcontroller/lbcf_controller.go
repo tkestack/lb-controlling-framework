@@ -28,27 +28,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/controller"
 )
 
 // NewController creates a new LBCF-controller
-func NewController(context *context.Context) *Controller {
+func NewController(ctx *context.Context) *Controller {
 	c := &Controller{
-		context:           context,
-		driverQueue:       util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "driver-queue", context.Cfg.MinRetryDelay),
-		loadBalancerQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "lb-queue", context.Cfg.MinRetryDelay),
-		backendGroupQueue: util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backendgroup-queue", context.Cfg.MinRetryDelay),
-		backendQueue:      util.NewIntervalRateLimitingQueue(util.DefaultControllerRateLimiter(), "backend-queue", context.Cfg.MinRetryDelay),
+		context:           ctx,
+		driverQueue:       util.NewConditionalDelayingQueue(nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		loadBalancerQueue: util.NewConditionalDelayingQueue(util.QueueFilterForLB(ctx.LBInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		backendGroupQueue: util.NewConditionalDelayingQueue(nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		backendQueue:      util.NewConditionalDelayingQueue(util.QueueFilterForBackend(ctx.BRInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 	}
 
 	c.driverCtrl = newDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
-	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.EventRecorder, util.NewWebhookInvoker())
+	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), ctx.LBDriverInformer.Lister(), ctx.EventRecorder, util.NewWebhookInvoker())
 	c.backendCtrl = newBackendController(
 		c.context.LbcfClient,
 		c.context.BRInformer.Lister(),
-		context.LBDriverInformer.Lister(),
+		ctx.LBDriverInformer.Lister(),
 		c.context.PodInformer.Lister(),
 		c.context.SvcInformer.Lister(),
 		c.context.NodeInformer.Lister(),
@@ -118,10 +117,10 @@ type Controller struct {
 	backendCtrl      *backendController
 	backendGroupCtrl *backendGroupController
 
-	driverQueue       util.IntervalRateLimitingInterface
-	loadBalancerQueue util.IntervalRateLimitingInterface
-	backendGroupQueue util.IntervalRateLimitingInterface
-	backendQueue      util.IntervalRateLimitingInterface
+	driverQueue       util.ConditionalRateLimitingInterface
+	loadBalancerQueue util.ConditionalRateLimitingInterface
+	backendGroupQueue util.ConditionalRateLimitingInterface
+	backendQueue      util.ConditionalRateLimitingInterface
 }
 
 // Start starts controller in a new goroutine
@@ -137,7 +136,7 @@ func (c *Controller) run() {
 	go wait.Until(c.backendWorker, time.Second, wait.NeverStop)
 }
 
-func (c *Controller) enqueue(obj interface{}, queue workqueue.RateLimitingInterface) {
+func (c *Controller) enqueue(obj interface{}, queue util.ConditionalRateLimitingInterface) {
 	if _, ok := obj.(string); ok {
 		queue.Add(obj)
 		return
@@ -170,33 +169,36 @@ func (c *Controller) backendWorker() {
 	}
 }
 
-func (c *Controller) processNextItem(queue util.IntervalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
+func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
 	key, quit := queue.Get()
 	if quit {
 		return false
 	}
 
 	go func() {
-		result := syncFunc(key.(string))
 		defer queue.Done(key)
 
-		if result.IsError() {
-			klog.Errorf("sync key %s, err: %v", key, result.GetError())
-			queue.AddRateLimited(key)
-		} else if result.IsFailed() {
-			klog.Infof("sync key %s, failed", key)
-			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
-		} else if result.IsRunning() {
-			klog.Infof("sync key %s, async", key)
-			queue.Forget(key)
-			queue.AddIntervalRateLimited(key, result.GetRetryDelay())
-		} else if result.IsPeriodic() {
-			klog.Infof("sync key %s, period", key)
-			queue.Forget(key)
-			queue.AddIntervalRateLimited(key, result.GetReEnsurePeriodic())
-		} else {
+		klog.V(3).Infof("sync start, key %s", key)
+		startTime := time.Now()
+		result := syncFunc(key.(string))
+
+		if !result.IsFailed() {
 			queue.Forget(key)
 		}
+
+		if result.IsFailed() {
+			klog.Infof("Failed key %s, reason: %v", key, result.GetFailReason())
+			queue.AddAfterMinimumDelay(key, result.GetNextRun())
+		} else if result.IsRunning() {
+			klog.Infof("Async key %s", key)
+			queue.AddAfterMinimumDelay(key, result.GetNextRun())
+		} else if result.IsPeriodic() {
+			klog.Infof("Periodic key %s", key)
+			queue.AddAfterFiltered(key, result.GetNextRun())
+		}
+
+		elapsed := time.Now().Sub(startTime)
+		klog.V(3).Infof("sync finished, key %s, took %s", key, elapsed.String())
 	}()
 	return true
 }
