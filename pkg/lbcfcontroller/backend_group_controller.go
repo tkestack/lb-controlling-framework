@@ -80,14 +80,14 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	}
 	group, err := c.bgLister.BackendGroups(namespace).Get(name)
 	if errors.IsNotFound(err) {
-		return util.SuccResult()
+		return util.FinishedResult()
 	} else if err != nil {
 		return util.ErrorResult(err)
 	}
 
 	if group.DeletionTimestamp != nil {
 		// BackendGroups will be deleted by K8S GC
-		return util.SuccResult()
+		return util.FinishedResult()
 	}
 
 	// compare graph
@@ -102,7 +102,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 		return c.deleteAllBackend(namespace, group.Spec.LBName, group.Name)
 	}
 	if !util.LBCreated(lb) {
-		return util.SuccResult()
+		return util.FinishedResult()
 	}
 
 	var expectedBackends []*lbcfapi.BackendRecord
@@ -228,7 +228,7 @@ func (c *backendGroupController) update(group *lbcfapi.BackendGroup, lb *lbcfapi
 			return util.ErrorResult(err)
 		}
 	}
-	return util.SuccResult()
+	return util.FinishedResult()
 }
 
 func (c *backendGroupController) listRelatedBackendGroupsForPod(pod *v1.Pod) sets.String {
@@ -333,7 +333,7 @@ func (c *backendGroupController) deleteAllBackend(namespace, lbName, groupName s
 		}
 		return util.ErrorResult(fmt.Errorf(strings.Join(msg, "\n")))
 	}
-	return util.SuccResult()
+	return util.FinishedResult()
 }
 
 func (c *backendGroupController) listBackendRecords(namespace string, lbName string, groupName string) ([]*lbcfapi.BackendRecord, error) {

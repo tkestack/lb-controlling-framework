@@ -176,26 +176,29 @@ func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface
 	}
 
 	go func() {
-		result := syncFunc(key.(string))
 		defer queue.Done(key)
 
-		if result.IsError() {
-			klog.Errorf("sync key %s, err: %v", key, result.GetError())
-			queue.AddAfterMinimumDelay(key, 0)
-		} else if result.IsFailed() {
-			klog.Infof("sync key %s, failed", key)
-			queue.AddAfterMinimumDelay(key, result.GetRetryDelay())
-		} else if result.IsRunning() {
-			klog.Infof("sync key %s, async", key)
-			queue.Forget(key)
-			queue.AddAfterMinimumDelay(key, result.GetRetryDelay())
-		} else if result.IsPeriodic() {
-			klog.Infof("sync key %s, period", key)
-			queue.Forget(key)
-			queue.AddAfterFiltered(key, result.GetReEnsurePeriodic())
-		} else {
+		klog.V(3).Infof("sync start, key %s", key)
+		startTime := time.Now()
+		result := syncFunc(key.(string))
+
+		if !result.IsFailed() {
 			queue.Forget(key)
 		}
+
+		if result.IsFailed() {
+			klog.Infof("Failed key %s, reason: %v", key, result.GetFailReason())
+			queue.AddAfterMinimumDelay(key, result.GetNextRun())
+		} else if result.IsRunning() {
+			klog.Infof("Async key %s", key)
+			queue.AddAfterMinimumDelay(key, result.GetNextRun())
+		} else if result.IsPeriodic() {
+			klog.Infof("Periodic key %s", key)
+			queue.AddAfterFiltered(key, result.GetNextRun())
+		}
+
+		elapsed := time.Now().Sub(startTime)
+		klog.V(3).Infof("sync finished, key %s, took %s", key, elapsed.String())
 	}()
 	return true
 }

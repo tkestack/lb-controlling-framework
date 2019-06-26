@@ -70,7 +70,7 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 	backend, err := c.brLister.BackendRecords(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		c.removeDeletingRecordByBackendName(namespace, name)
-		return util.SuccResult()
+		return util.FinishedResult()
 	} else if err != nil {
 		return util.ErrorResult(err)
 	}
@@ -78,7 +78,7 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 	if backend.DeletionTimestamp != nil {
 		if !util.HasFinalizer(backend.Finalizers, lbcfapi.FinalizerDeregisterBackend) {
 			c.removeDeletingRecord(backend)
-			return util.SuccResult()
+			return util.FinishedResult()
 		}
 		return c.deregisterBackend(backend)
 	}
@@ -122,10 +122,10 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 			return util.ErrorResult(err)
 		}
 		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccGenerateAddr", "addr: %s", rsp.BackendAddr)
-		return util.SuccResult()
+		return util.FinishedResult()
 	case webhooks.StatusFail:
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "msg: %s", rsp.Msg)
-		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
 		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningGenerateAddr", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
@@ -134,7 +134,7 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
-	return util.SuccResult()
+	return util.FinishedResult()
 }
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
@@ -183,7 +183,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		if backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
 			return util.PeriodicResult(util.GetDuration(backend.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
-		return util.SuccResult()
+		return util.FinishedResult()
 	case webhooks.StatusFail:
 		backend = backend.DeepCopy()
 		util.AddBackendCondition(&backend.Status, lbcfapi.BackendRecordCondition{
@@ -199,7 +199,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 			return util.ErrorResult(err)
 		}
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "msg: %s", rsp.Msg)
-		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
 		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningEnsureBackend", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
@@ -240,7 +240,7 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		return c.removeFinalizer(backend)
 	case webhooks.StatusFail:
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedDeregister", "msg: %s", rsp.Msg)
-		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds))
+		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
 		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningDeregister", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
@@ -260,7 +260,7 @@ func (c *backendController) removeFinalizer(backend *lbcfapi.BackendRecord) *uti
 	if err != nil {
 		return util.ErrorResult(err)
 	}
-	return util.SuccResult()
+	return util.FinishedResult()
 }
 
 func (c *backendController) storeDeletingBackend(backend *lbcfapi.BackendRecord) {
