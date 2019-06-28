@@ -785,15 +785,13 @@ func TestMakeBackendLabels(t *testing.T) {
 	groupName := "group"
 	podName := "pod-0"
 	svcName := "my-svc"
-	statidAddr := "1.1.1.1"
-	get := MakeBackendLabels(driverName, lbName, groupName, svcName, podName, statidAddr)
+	get := MakeBackendLabels(driverName, lbName, groupName, svcName, podName)
 	expect := map[string]string{
 		lbcfapi.LabelDriverName:  driverName,
 		lbcfapi.LabelLBName:      lbName,
 		lbcfapi.LabelGroupName:   groupName,
 		lbcfapi.LabelPodName:     podName,
 		lbcfapi.LabelServiceName: svcName,
-		lbcfapi.LabelStaticAddr:  statidAddr,
 	}
 	if !reflect.DeepEqual(get, expect) {
 		t.Fatalf("expect %v, get %v", expect, get)

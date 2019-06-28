@@ -246,7 +246,7 @@ func MakeStaticBackendName(lbName, groupName, staticAddr string) string {
 }
 
 // MakeBackendLabels generates labels for BackendRecord
-func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAddr string) map[string]string {
+func MakeBackendLabels(driverName, lbName, groupName, svcName, podName string) map[string]string {
 	ret := make(map[string]string)
 	ret[lbcfapi.LabelDriverName] = driverName
 	ret[lbcfapi.LabelLBName] = lbName
@@ -256,9 +256,6 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName, staticAd
 	}
 	if svcName != "" {
 		ret[lbcfapi.LabelServiceName] = svcName
-	}
-	if staticAddr != "" {
-		ret[lbcfapi.LabelStaticAddr] = staticAddr
 	}
 	return ret
 }
@@ -270,7 +267,7 @@ func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendG
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      MakePodBackendName(lb.Name, group.Name, pod.UID, group.Spec.Pods.Port),
 			Namespace: group.Namespace,
-			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", pod.Name, ""),
+			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", pod.Name),
 			Finalizers: []string{
 				lbcfapi.FinalizerDeregisterBackend,
 			},
@@ -319,7 +316,7 @@ func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.Back
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      MakeServiceBackendName(lb.Name, group.Name, svc.Name, selectedSvcPort.Port, string(selectedSvcPort.Protocol), node.Name),
 			Namespace: group.Namespace,
-			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, svc.Name, "", ""),
+			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, svc.Name, ""),
 			Finalizers: []string{
 				lbcfapi.FinalizerDeregisterBackend,
 			},
@@ -358,7 +355,7 @@ func ConstructStaticBackend(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGrou
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      MakeStaticBackendName(lb.Name, group.Name, staticAddr),
 			Namespace: group.Namespace,
-			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", "", staticAddr),
+			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", ""),
 			Finalizers: []string{
 				lbcfapi.FinalizerDeregisterBackend,
 			},
