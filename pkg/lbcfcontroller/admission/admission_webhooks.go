@@ -339,7 +339,7 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("call webhook error, webhook validateBackend, err: %v", err))
 	} else if !rsp.Succ {
-		return toAdmissionResponse(fmt.Errorf("invalid Backend, err: %v", err))
+		return toAdmissionResponse(fmt.Errorf("invalid Backend, msg: %v", rsp.Msg))
 	}
 
 	return toAdmissionResponse(nil)
@@ -387,7 +387,7 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("call webhook error, webhook validateBackend, err: %v", err))
 	} else if !rsp.Succ {
-		return toAdmissionResponse(fmt.Errorf("invalid Backend, err: %v", err))
+		return toAdmissionResponse(fmt.Errorf("invalid Backend, msg: %v", rsp.Msg))
 	}
 	return toAdmissionResponse(nil)
 }
