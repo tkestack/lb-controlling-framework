@@ -11,7 +11,7 @@ master:
             - build/scripts/run_unit_tests.sh
         - name: build
           script:
-            - go build git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller
+            - go build git.code.oa.com/tkestack/lb-controlling-framework/cmd/lbcf-controller
   push:
     - docker:
         image: docker.oa.com:8080/public/golang-revive:1.12
@@ -24,5 +24,5 @@ master:
             - build/scripts/run_unit_tests.sh
         - name: build
           script:
-            - go build git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller
+            - go build git.code.oa.com/tkestack/lb-controlling-framework/cmd/lbcf-controller
 

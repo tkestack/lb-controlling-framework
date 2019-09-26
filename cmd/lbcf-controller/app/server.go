@@ -23,10 +23,10 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/config"
-	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app/context"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/admission"
+	"git.code.oa.com/tkestack/lb-controlling-framework/cmd/lbcf-controller/app/config"
+	"git.code.oa.com/tkestack/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/admission"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/wait"

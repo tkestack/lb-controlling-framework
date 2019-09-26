@@ -1,4 +1,4 @@
-module git.code.oa.com/k8s/lb-controlling-framework
+module git.code.oa.com/tkestack/lb-controlling-framework
 
 go 1.12
 

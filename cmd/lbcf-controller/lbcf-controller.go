@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"git.code.oa.com/k8s/lb-controlling-framework/cmd/lbcf-controller/app"
+	"git.code.oa.com/tkestack/lb-controlling-framework/cmd/lbcf-controller/app"
 
 	"k8s.io/klog"
 )

@@ -24,8 +24,8 @@ import (
 	"path"
 	"time"
 
-	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	"github.com/parnurzeal/gorequest"
 	"k8s.io/klog"

@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1beta1 "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1"
+	v1beta1 "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tke.cloud.tencent.com/v1beta1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

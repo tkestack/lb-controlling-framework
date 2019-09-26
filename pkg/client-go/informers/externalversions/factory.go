@@ -23,9 +23,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	internalinterfaces "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
-	lbcftkecloudtencentcom "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com"
+	versioned "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	internalinterfaces "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
+	lbcftkecloudtencentcom "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

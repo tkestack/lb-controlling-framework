@@ -19,8 +19,8 @@ limitations under the License.
 package lbcf
 
 import (
-	internalinterfaces "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
-	v1beta1 "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
+	internalinterfaces "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
+	v1beta1 "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
 )
 
 // Interface provides access to each of this group's versions.

@@ -17,9 +17,9 @@
 package lbcfcontroller
 
 import (
-	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/util"
+	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/controller"
 	"testing"

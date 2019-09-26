@@ -28,11 +28,11 @@ import (
 	"testing"
 	"time"
 
-	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
-	lbcflister "git.code.oa.com/k8s/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/util"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
+	lbcflister "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

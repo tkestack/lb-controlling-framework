@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	lbcfapi "git.code.oa.com/k8s/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/k8s/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
