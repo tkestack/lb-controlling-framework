@@ -129,6 +129,9 @@ func (c *backendGroupController) expectedPodBackends(group *lbcfapi.BackendGroup
 			return nil, err
 		}
 		filter := func(p *v1.Pod) bool {
+			if p.Namespace != group.Namespace {
+				return false
+			}
 			except := sets.NewString(group.Spec.Pods.ByLabel.Except...)
 			if !except.Has(p.Name) {
 				return true
