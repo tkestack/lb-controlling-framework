@@ -11,9 +11,9 @@
 
 ## 部署Webhook server
 
-在LBCF中，Webhook server负责调用负载均衡api。由于每种负载均衡都有自己的Webhook server，所以使用LBCF的第一步就是把Webhook server的部署信息告知LBCF，这一操作是通过向K8S中提交[LoadBalancerDriver](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#loadbalancerdriver)对象完成的。
+在LBCF中，Webhook server负责调用负载均衡api。由于每种负载均衡都有自己的Webhook server，所以使用LBCF的第一步就是把Webhook server的部署信息告知LBCF，这一操作是通过向K8S中提交[LoadBalancerDriver](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#loadbalancerdriver)对象完成的。
 
-从[LoadBalancerDriver](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#loadbalancerdriver)的定义可知，其中最重要的信息为Webhook server地址，即`spec.url`部分。
+从[LoadBalancerDriver](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#loadbalancerdriver)的定义可知，其中最重要的信息为Webhook server地址，即`spec.url`部分。
 LBCF对webhook server的部署位置没有限制，既可以作为容器部署在集群内，也可以部署在集群外部的节点上。
 
 [clb-driver](https://git.code.oa.com/ianlang/lbcf-clb-driver)是本人开发的用于对接共有云CLB的webhook server，该项目使用了容器化部署，即使用Deployment部署Webhook server，为Deployment创建Service并将Service地址告知LBCF。
@@ -53,7 +53,7 @@ spec:
 
 ## 定义LoadBalancer
 
-[LoadBalancer](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#loadbalancer)描述了被操作的负载均衡的信息，其中主要包含以下内容：
+[LoadBalancer](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#loadbalancer)描述了被操作的负载均衡的信息，其中主要包含以下内容：
 
 1. 应当由哪个Webhook server执行操作(spec.lbDriver)
 2. 负载均衡在外部系统中的唯一标识是什么(spec.lbSpec)
@@ -82,7 +82,7 @@ spec:
     policy: Always
 ```
 
-向K8S提交LoadBalancer对象后，LBCF在本地对LoadBalancer进行基本校验后，会先后调用Webhook server的[validateLoadBalancer](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#validateloadbalancer)与[createLoadBalancer](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#createloadbalancer)方法。
+向K8S提交LoadBalancer对象后，LBCF在本地对LoadBalancer进行基本校验后，会先后调用Webhook server的[validateLoadBalancer](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#validateloadbalancer)与[createLoadBalancer](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#createloadbalancer)方法。
 
 在validateLoadBalancer中，Webhook server可以校验并拒绝本次LoadBalancer对象的创建。
 
@@ -112,7 +112,7 @@ Error from server: error when creating "lb-not-exist.yaml": admission webhook "l
 
 ## 查看LoadBalancer状态
 
-若validateLoadBalancer校验返回成功，则LoadBalancer对象会被写入K8S集群，此时，LBCF会调用[createLoadBalancer](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#createloadbalancer)进行负载均衡的创建（webhook server可直接返回成功以跳过此流程）
+若validateLoadBalancer校验返回成功，则LoadBalancer对象会被写入K8S集群，此时，LBCF会调用[createLoadBalancer](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#createloadbalancer)进行负载均衡的创建（webhook server可直接返回成功以跳过此流程）
 
 依旧以clb-driver为例，这次我们使用下述YAML临时创建一个新的七层CLB:
 ```yaml
@@ -191,11 +191,11 @@ Events:
 
 当LoadBalancer被删除时，绑定在其下的所有backend都会解绑。
 
-[BackendRecord](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#backendrecord)会被解绑
+[BackendRecord](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#backendrecord)会被解绑
 
 ## 定义BackendGroup
 
-[BackendGroup](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#backendgroup)描述了被绑定backend的信息，主要包含如下内容：
+[BackendGroup](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#backendgroup)描述了被绑定backend的信息，主要包含如下内容：
 
 1. backend需要被绑定在哪个LoadBalancer(spec.lbName)
 2. 哪些backend需要被绑定(spec.service, spec.pods, spec.static)
@@ -244,7 +244,7 @@ spec:
 
 ## 查看BackendRecord
 
-[BackendRecord](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#backendrecord)由LBCF自动创建并管理，其中记录了被绑定的backend的信息（1个backend对应1个BackendRecord），用户应避免手动操作此类对象。
+[BackendRecord](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#backendrecord)由LBCF自动创建并管理，其中记录了被绑定的backend的信息（1个backend对应1个BackendRecord），用户应避免手动操作此类对象。
 
 BackendRecord的Status中记录了backend的当前状态，包括backend地址、是否已完成绑定以及每次调用webhook的结果。
 
@@ -309,9 +309,9 @@ Events:
   Normal  SuccEnsureBackend     46s   lbcf-controller  Successfully ensured backend
 ```
 
-Status中的Backend Addr是被绑定backend的地址，该地址由[generateBackend](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#generatebackendaddr)返回。本例中，我们绑定的是Service Node，但由于[云API](https://cloud.tencent.com/document/api/214/30676)中只能填写instanceID，因此clb-driver通过查询API把节点IP转换为instanceID，并使用instanceID作为backend地址。
+Status中的Backend Addr是被绑定backend的地址，该地址由[generateBackend](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#generatebackendaddr)返回。本例中，我们绑定的是Service Node，但由于[云API](https://cloud.tencent.com/document/api/214/30676)中只能填写instanceID，因此clb-driver通过查询API把节点IP转换为instanceID，并使用instanceID作为backend地址。
 
-与LoadBalancer类似，clb-driver实现[ensureBackend](https://git.code.oa.com/tkestack/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#ensurebackend)也使用了异步操作，所以Events中有2次ensureBackend的调用结果
+与LoadBalancer类似，clb-driver实现[ensureBackend](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-webhook-specification.md#ensurebackend)也使用了异步操作，所以Events中有2次ensureBackend的调用结果
 
 当LoadBalancer或BackendGroup被删除时，BackendRecord会被自动解绑并删除
 

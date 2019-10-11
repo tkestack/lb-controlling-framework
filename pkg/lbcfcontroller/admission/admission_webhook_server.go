@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"git.code.oa.com/tkestack/lb-controlling-framework/cmd/lbcf-controller/app/context"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"github.com/emicklei/go-restful"
 	"k8s.io/api/admission/v1beta1"

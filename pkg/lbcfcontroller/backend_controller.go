@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"sync"
 
-	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcfclient "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/util"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	apicore "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

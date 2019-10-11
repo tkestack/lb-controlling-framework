@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcflister "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/util"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

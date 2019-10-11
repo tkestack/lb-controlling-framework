@@ -19,7 +19,7 @@ limitations under the License.
 package v1beta1
 
 import (
-	internalinterfaces "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
+	internalinterfaces "tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.

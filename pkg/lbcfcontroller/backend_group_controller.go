@@ -21,10 +21,10 @@ import (
 	"strings"
 	"sync"
 
-	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcfclient "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	lbcflister "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/util"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

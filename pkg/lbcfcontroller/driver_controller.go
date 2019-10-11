@@ -17,10 +17,10 @@
 package lbcfcontroller
 
 import (
-	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcfclient "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/lbcfcontroller/util"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"

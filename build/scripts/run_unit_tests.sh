@@ -2,7 +2,7 @@
 
 mkdir -p output
 
-for d in `go list git.code.oa.com/tkestack/lb-controlling-framework/pkg/... | grep -v pkg/apis | grep -v pkg/client-go`
+for d in `go list tkestack.io/lb-controlling-framework/pkg/... | grep -v pkg/apis | grep -v pkg/client-go`
 do
    go test -covermode=atomic -coverprofile=cover.out $d
    if [ $? -ne 0 ]

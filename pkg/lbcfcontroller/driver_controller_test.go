@@ -18,12 +18,12 @@ package lbcfcontroller
 
 import (
 	"fmt"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/controller"
 	"testing"
 
-	lbcfapi "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
 )
 
 func TestDriverControllerSyncDriverCreate(t *testing.T) {

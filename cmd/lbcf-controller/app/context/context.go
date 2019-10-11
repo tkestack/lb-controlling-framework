@@ -17,12 +17,12 @@
 package context
 
 import (
-	"git.code.oa.com/tkestack/lb-controlling-framework/cmd/lbcf-controller/app/config"
-	lbcfv1beta "git.code.oa.com/tkestack/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcfclient "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	lbcfclientset "git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/informers/externalversions"
-	"git.code.oa.com/tkestack/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
+	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/config"
+	lbcfv1beta "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	lbcfclientset "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tke.cloud.tencent.com/v1beta1"
 
 	apicorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
