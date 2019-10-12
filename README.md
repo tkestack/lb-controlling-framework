@@ -1,5 +1,3 @@
-<a href="http://orange-ci.oa.com/build/log/latest?slug=k8s/lb-controlling-framework"><img src="http://badge.orange-ci.oa.com/k8s/lb-controlling-framework.svg" alt="Build status"></a>
-
 ## Load Balancer Controlling Framework (LBCF)
 
 LBCF是一款部署在Kubernetes内的通用负载均衡控制面框架，旨在降低容器对接负载均衡的实现难度，并提供强大的扩展能力以满足业务方在使用负载均衡时的个性化需求。
@@ -64,35 +62,4 @@ make image
 LBCF为所有负载均衡提供了统一的控制面，开发人员在对接负载均衡时需要按照[LBCF Webhook规范](docs/design/lbcf-webhook-specification.md)的要求实现Webhook服务器。
 
 Webhook服务器的实现可参考[最佳实践](#best_practice)中的项目。
-
-## <a name="best_practice"></a> 最佳实践
-
-* [公有云CLB](https://git.code.oa.com/ianlang/lbcf-clb-driver)
-  
-  关键词：
-  
-  * 支持绑定NodePort
-  * 支持Pod直通CLB
-  * 支持创建四/七层CLB
-  * 支持权重调整
-
-* [CL5/织云L5](https://git.code.oa.com/ianlang/lbcf-l5-driver)
-
-  关键词：  
-  
-  * 支持CL5、织云L5
-  * 将PodIP注册至已有Sid
-  * 调整Pod权重
-
-* [God游戏](https://git.code.oa.com/ianlang/lbcf-driver-ieg-god)
-  
-  关键词：
-  
-  * 公有云
-  * CLB
-  * 游戏
-  * 数据面：Pod使用弹性网卡，并直接绑定至CLB（不通过service）
-  * 控制面：每个Pod端口独占一个CLB监听器，监听器端口号为`10000 +（pod名后缀[0, n-1] * 10）+ (pod的端口%10)`
-
-  
 

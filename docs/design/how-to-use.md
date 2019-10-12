@@ -16,9 +16,9 @@
 从[LoadBalancerDriver](https://tkestack.io/lb-controlling-framework/blob/master/docs/design/lbcf-crd.md#loadbalancerdriver)的定义可知，其中最重要的信息为Webhook server地址，即`spec.url`部分。
 LBCF对webhook server的部署位置没有限制，既可以作为容器部署在集群内，也可以部署在集群外部的节点上。
 
-[clb-driver](https://git.code.oa.com/ianlang/lbcf-clb-driver)是本人开发的用于对接共有云CLB的webhook server，该项目使用了容器化部署，即使用Deployment部署Webhook server，为Deployment创建Service并将Service地址告知LBCF。
+clb-driver是本人开发的用于对接共有云CLB的webhook server，该项目使用了容器化部署，即使用Deployment部署Webhook server，为Deployment创建Service并将Service地址告知LBCF。
 
-下述YAML为部署[clb-driver](https://git.code.oa.com/ianlang/lbcf-clb-driver)使用的Service，Service的80端口即webhook server用来提供服务的端口
+下述YAML为部署clb-driver使用的Service，Service的80端口即webhook server用来提供服务的端口
 
 ```yaml
 apiVersion: v1
@@ -61,7 +61,7 @@ spec:
 
 一旦LoadBalancer对象创建成功，1和2中的内容就会被禁止修改，只有3中的内容可以被随时修改。
 
-LBCF作为一个开放框架，没有对2和3中的内容进行限制，其中的信息完全由Webhook server定义和解析，下述YAML展示了[clb-driver](https://git.code.oa.com/ianlang/lbcf-clb-driver)定义的部分参数:
+LBCF作为一个开放框架，没有对2和3中的内容进行限制，其中的信息完全由Webhook server定义和解析，下述YAML展示了clb-driver定义的部分参数:
 
 ```yaml
 apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
@@ -201,7 +201,7 @@ Events:
 2. 哪些backend需要被绑定(spec.service, spec.pods, spec.static)
 3. 绑定backend时需要使用哪些参数(spec.parameters)
 
-与LoadBalancer类似，3中的内容也是完全由webhook server自定义的，下述YAML展示了[clb-driver](https://git.code.oa.com/ianlang/lbcf-clb-driver)对权重的支持：
+与LoadBalancer类似，3中的内容也是完全由webhook server自定义的，下述YAML展示了clb-driver对权重的支持：
 
 ```yaml
 apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
