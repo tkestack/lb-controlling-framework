@@ -134,7 +134,6 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
-	return util.FinishedResult()
 }
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
