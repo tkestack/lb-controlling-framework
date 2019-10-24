@@ -32,10 +32,13 @@ import (
 // NewWebhookServer creates a new Server
 func NewWebhookServer(context *context.Context, crtFile string, keyFile string) *Server {
 	s := &Server{
-		context:      context,
-		admitWebhook: NewAdmitter(context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.BRInformer.Lister(), util.NewWebhookInvoker()),
-		crtFile:      crtFile,
-		keyFile:      keyFile,
+		context: context,
+		admitWebhook: NewAdmitter(context.LBInformer.Lister(),
+			context.LBDriverInformer.Lister(),
+			context.BRInformer.Lister(),
+			util.NewWebhookInvoker()),
+		crtFile: crtFile,
+		keyFile: keyFile,
 	}
 	return s
 }
@@ -77,17 +80,26 @@ func (s *Server) Start() {
 
 // ValidateAdmitLoadBalancer implements ValidatingWebHook for LoadBalancer
 func (s *Server) ValidateAdmitLoadBalancer(req *restful.Request, rsp *restful.Response) {
-	serveValidate(req, rsp, s.admitWebhook.ValidateLoadBalancerCreate, s.admitWebhook.ValidateLoadBalancerUpdate, s.admitWebhook.ValidateLoadBalancerDelete)
+	serveValidate(req, rsp,
+		s.admitWebhook.ValidateLoadBalancerCreate,
+		s.admitWebhook.ValidateLoadBalancerUpdate,
+		s.admitWebhook.ValidateLoadBalancerDelete)
 }
 
 // ValidateAdmitLoadBalancerDriver implements ValidatingWebHook for LoadBalancerDriver
 func (s *Server) ValidateAdmitLoadBalancerDriver(req *restful.Request, rsp *restful.Response) {
-	serveValidate(req, rsp, s.admitWebhook.ValidateDriverCreate, s.admitWebhook.ValidateDriverUpdate, s.admitWebhook.ValidateDriverDelete)
+	serveValidate(req, rsp,
+		s.admitWebhook.ValidateDriverCreate,
+		s.admitWebhook.ValidateDriverUpdate,
+		s.admitWebhook.ValidateDriverDelete)
 }
 
 // ValidateAdmitBackendGroup implements ValidatingWebHook for BackendGroup
 func (s *Server) ValidateAdmitBackendGroup(req *restful.Request, rsp *restful.Response) {
-	serveValidate(req, rsp, s.admitWebhook.ValidateBackendGroupCreate, s.admitWebhook.ValidateBackendGroupUpdate, s.admitWebhook.ValidateBackendGroupDelete)
+	serveValidate(req, rsp,
+		s.admitWebhook.ValidateBackendGroupCreate,
+		s.admitWebhook.ValidateBackendGroupUpdate,
+		s.admitWebhook.ValidateBackendGroupDelete)
 }
 
 // MutateAdmitLoadBalancer implements MutatingWebHook for LoadBalancer
@@ -128,7 +140,11 @@ func responseAndLog(ar *v1beta1.AdmissionReview, rsp *restful.Response) {
 	}
 }
 
-func serveValidate(req *restful.Request, rsp *restful.Response, createFunc admitFunc, updateFunc admitFunc, deleteFunc admitFunc) {
+func serveValidate(req *restful.Request,
+	rsp *restful.Response,
+	createFunc admitFunc,
+	updateFunc admitFunc,
+	deleteFunc admitFunc) {
 	ar := parseAdmissionReview(req, rsp)
 	if ar == nil {
 		return
@@ -146,7 +162,10 @@ func serveMutate(req *restful.Request, rsp *restful.Response, mutateFunc admitFu
 
 type admitFunc func(*v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
 
-func validate(requestAdmissionReview *v1beta1.AdmissionReview, createFunc admitFunc, updateFunc admitFunc, deleteFunc admitFunc) *v1beta1.AdmissionReview {
+func validate(requestAdmissionReview *v1beta1.AdmissionReview,
+	createFunc admitFunc,
+	updateFunc admitFunc,
+	deleteFunc admitFunc) *v1beta1.AdmissionReview {
 	responseAdmissionReview := &v1beta1.AdmissionReview{}
 	switch requestAdmissionReview.Request.Operation {
 	case v1beta1.Create:

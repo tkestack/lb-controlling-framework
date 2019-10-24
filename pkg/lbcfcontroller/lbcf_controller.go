@@ -35,15 +35,20 @@ import (
 // NewController creates a new LBCF-controller
 func NewController(ctx *context.Context) *Controller {
 	c := &Controller{
-		context:           ctx,
-		driverQueue:       util.NewConditionalDelayingQueue(nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
-		loadBalancerQueue: util.NewConditionalDelayingQueue(util.QueueFilterForLB(ctx.LBInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
-		backendGroupQueue: util.NewConditionalDelayingQueue(nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
-		backendQueue:      util.NewConditionalDelayingQueue(util.QueueFilterForBackend(ctx.BRInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		context: ctx,
+		driverQueue: util.NewConditionalDelayingQueue(nil,
+			ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		loadBalancerQueue: util.NewConditionalDelayingQueue(util.QueueFilterForLB(ctx.LBInformer.Lister()),
+			ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		backendGroupQueue: util.NewConditionalDelayingQueue(nil,
+			ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		backendQueue: util.NewConditionalDelayingQueue(util.QueueFilterForBackend(ctx.BRInformer.Lister()),
+			ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 	}
 
 	c.driverCtrl = newDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
-	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), ctx.LBDriverInformer.Lister(), ctx.EventRecorder, util.NewWebhookInvoker())
+	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient,
+		c.context.LBInformer.Lister(), ctx.LBDriverInformer.Lister(), ctx.EventRecorder, util.NewWebhookInvoker())
 	c.backendCtrl = newBackendController(
 		c.context.LbcfClient,
 		c.context.BRInformer.Lister(),
@@ -169,7 +174,8 @@ func (c *Controller) backendWorker() {
 	}
 }
 
-func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
+func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface,
+	syncFunc func(string) *util.SyncResult) bool {
 	key, quit := queue.Get()
 	if quit {
 		return false

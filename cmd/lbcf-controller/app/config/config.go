@@ -36,11 +36,18 @@ func NewConfig() *Config {
 }
 
 func (o *Config) AddFlags(fs *flag.FlagSet) {
-	fs.DurationVar(&o.InformerResyncPeriod, "informer-resync-period", 1*time.Minute, "resync period for informers")
-	fs.DurationVar(&o.MinRetryDelay, "min-retry-delay", 5*time.Second, "minimum retry delay for failed webhook calls")
-	fs.DurationVar(&o.RetryDelayStep, "retry-delay-step", 10*time.Second, "the value added to retry delay for each webhook failure")
-	fs.DurationVar(&o.MaxRetryDelay, "max-retry-delay", 2*time.Minute, "maximum retry delay for failed webhook calls")
-	fs.StringVar(&o.KubeConfig, "kubeconfig", "", "Path to kubeconfig file with authorization information")
-	fs.StringVar(&o.ServerCrt, "server-crt", "/etc/lbcf/server.crt", "Path to crt file for admit webhook server")
-	fs.StringVar(&o.ServerKey, "server-key", "/etc/lbcf/server.key", "Path to key file for admit webhook server")
+	fs.DurationVar(&o.InformerResyncPeriod,
+		"informer-resync-period", 1*time.Minute, "resync period for informers")
+	fs.DurationVar(&o.MinRetryDelay,
+		"min-retry-delay", 5*time.Second, "minimum retry delay for failed webhook calls")
+	fs.DurationVar(&o.RetryDelayStep,
+		"retry-delay-step", 10*time.Second, "the value added to retry delay for each webhook failure")
+	fs.DurationVar(&o.MaxRetryDelay,
+		"max-retry-delay", 2*time.Minute, "maximum retry delay for failed webhook calls")
+	fs.StringVar(&o.KubeConfig,
+		"kubeconfig", "", "Path to kubeconfig file with authorization information")
+	fs.StringVar(&o.ServerCrt,
+		"server-crt", "/etc/lbcf/server.crt", "Path to crt file for admit webhook server")
+	fs.StringVar(&o.ServerKey,
+		"server-key", "/etc/lbcf/server.key", "Path to key file for admit webhook server")
 }
