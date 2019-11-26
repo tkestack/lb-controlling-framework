@@ -36,14 +36,7 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
-func newBackendController(client lbcfclient.Interface,
-	brLister v1beta1.BackendRecordLister,
-	driverLister v1beta1.LoadBalancerDriverLister,
-	podLister corev1.PodLister,
-	svcLister corev1.ServiceLister,
-	nodeLister corev1.NodeLister,
-	recorder record.EventRecorder,
-	invoker util.WebhookInvoker) *backendController {
+func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, svcLister corev1.ServiceLister, nodeLister corev1.NodeLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *backendController {
 	return &backendController{
 		client:             client,
 		brLister:           brLister,
@@ -98,12 +91,9 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 }
 
 func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {
-	driver, err := c.driverLister.LoadBalancerDrivers(
-		util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(
-			fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v",
-				backend.Spec.LBDriver, backend.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
 
 	var rsp *webhooks.GenerateBackendAddrResponse
@@ -129,60 +119,33 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		cpy.Status.BackendAddr = rsp.BackendAddr
 		_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
 		if err != nil {
-			c.eventRecorder.Eventf(backend,
-				apicore.EventTypeWarning,
-				"FailedGenerateAddr",
-				"update status failed: %v", err)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "update status failed: %v", err)
 			return util.ErrorResult(err)
 		}
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeNormal,
-			"SuccGenerateAddr",
-			"addr: %s",
-			rsp.BackendAddr)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccGenerateAddr", "addr: %s", rsp.BackendAddr)
 		return util.FinishedResult()
 	case webhooks.StatusFail:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeWarning,
-			"FailedGenerateAddr",
-			"msg: %s",
-			rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeNormal,
-			"RunningGenerateAddr",
-			"msg: %s",
-			rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningGenerateAddr", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeWarning,
-			"InvalidGenerateAddr",
-			"unsupported status: %s, msg: %s",
-			rsp.Status,
-			rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidGenerateAddr", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
 	if name, deleting := c.sameAddrDeleting(backend); deleting {
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeNormal,
-			"DelayedEnsureBackend",
-			"ensureBackend will start once %s is finished",
-			name)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "DelayedEnsureBackend", "ensureBackend will start once %s is finished", name)
 		return util.AsyncResult(util.CalculateRetryInterval(0))
 	}
 
-	driver, err := c.driverLister.LoadBalancerDrivers(
-		util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(
-			fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v",
-				backend.Spec.LBDriver, backend.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
 
 	req := &webhooks.BackendOperationRequest{
@@ -213,16 +176,10 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		})
 		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
 		if err != nil {
-			c.eventRecorder.Eventf(backend,
-				apicore.EventTypeWarning,
-				"FailedEnsureBackend",
-				"update status failed: %v", err)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
 			return util.ErrorResult(err)
 		}
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeNormal,
-			"SuccEnsureBackend",
-			"Successfully ensured backend")
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "SuccEnsureBackend", "Successfully ensured backend")
 		if backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
 			return util.PeriodicResult(util.GetDuration(backend.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
@@ -238,29 +195,17 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		})
 		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
 		if err != nil {
-			c.eventRecorder.Eventf(backend,
-				apicore.EventTypeWarning,
-				"FailedEnsureBackend",
-				"update status failed: %v", err)
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
 			return util.ErrorResult(err)
 		}
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeWarning,
-			"FailedEnsureBackend",
-			"msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeNormal,
-			"RunningEnsureBackend",
-			"msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningEnsureBackend", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeWarning,
-			"InvalidEnsureBackend",
-			"unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidEnsureBackend", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
@@ -272,12 +217,9 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		return c.removeFinalizer(backend)
 	}
 
-	driver, err := c.driverLister.LoadBalancerDrivers(
-		util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(
-			fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v",
-				backend.Spec.LBDriver, backend.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
 	req := &webhooks.BackendOperationRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -297,23 +239,14 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	case webhooks.StatusSucc:
 		return c.removeFinalizer(backend)
 	case webhooks.StatusFail:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeWarning,
-			"FailedDeregister",
-			"msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedDeregister", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeNormal,
-			"RunningDeregister",
-			"msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "RunningDeregister", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(backend,
-			apicore.EventTypeWarning,
-			"InvalidDeregister",
-			"unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
+		c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "InvalidDeregister", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
@@ -367,8 +300,7 @@ func (c *backendController) sameAddrDeleting(backend *lbcfapi.BackendRecord) (st
 	return "", ok
 }
 
-func (c *backendController) generatePodAddr(backend *lbcfapi.BackendRecord,
-	driver *lbcfapi.LoadBalancerDriver) (*webhooks.GenerateBackendAddrResponse, error) {
+func (c *backendController) generatePodAddr(backend *lbcfapi.BackendRecord, driver *lbcfapi.LoadBalancerDriver) (*webhooks.GenerateBackendAddrResponse, error) {
 	pod, err := c.podLister.Pods(backend.Namespace).Get(backend.Spec.PodBackendInfo.Name)
 	if err != nil {
 		return nil, err
@@ -388,8 +320,7 @@ func (c *backendController) generatePodAddr(backend *lbcfapi.BackendRecord,
 	return c.webhookInvoker.CallGenerateBackendAddr(driver, req)
 }
 
-func (c *backendController) generateServiceAddr(backend *lbcfapi.BackendRecord,
-	driver *lbcfapi.LoadBalancerDriver) (*webhooks.GenerateBackendAddrResponse, error) {
+func (c *backendController) generateServiceAddr(backend *lbcfapi.BackendRecord, driver *lbcfapi.LoadBalancerDriver) (*webhooks.GenerateBackendAddrResponse, error) {
 	node, err := c.nodeLister.Get(backend.Spec.ServiceBackendInfo.NodeName)
 	if err != nil {
 		return nil, err
@@ -415,8 +346,7 @@ func (c *backendController) generateServiceAddr(backend *lbcfapi.BackendRecord,
 	return c.webhookInvoker.CallGenerateBackendAddr(driver, req)
 }
 
-func (c *backendController) generateStaticAddr(backend *lbcfapi.BackendRecord) (*webhooks.GenerateBackendAddrResponse,
-	error) {
+func (c *backendController) generateStaticAddr(backend *lbcfapi.BackendRecord) (*webhooks.GenerateBackendAddrResponse, error) {
 	rsp := &webhooks.GenerateBackendAddrResponse{}
 	rsp.Status = webhooks.StatusSucc
 	rsp.BackendAddr = *backend.Spec.StaticAddr

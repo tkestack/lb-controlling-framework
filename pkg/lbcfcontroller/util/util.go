@@ -67,8 +67,7 @@ func LBEnsured(lb *lbcfapi.LoadBalancer) bool {
 }
 
 // GetLBCondition is an helper function to get specific LoadBalancer condition
-func GetLBCondition(status *lbcfapi.LoadBalancerStatus,
-	conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
+func GetLBCondition(status *lbcfapi.LoadBalancerStatus, conditionType lbcfapi.LoadBalancerConditionType) *lbcfapi.LoadBalancerCondition {
 	for i := range status.Conditions {
 		if status.Conditions[i].Type == conditionType {
 			return &status.Conditions[i]
@@ -78,8 +77,7 @@ func GetLBCondition(status *lbcfapi.LoadBalancerStatus,
 }
 
 // AddLBCondition is an helper function to add specific LoadBalancer condition into LoadBalancer.status.
-// If a condition with same type exists, the existing one will be overwritten,
-// otherwise, a new condition will be inserted.
+// If a condition with same type exists, the existing one will be overwritten, otherwise, a new condition will be inserted.
 func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfapi.LoadBalancerCondition) {
 	found := false
 	for i := range lbStatus.Conditions {
@@ -95,8 +93,7 @@ func AddLBCondition(lbStatus *lbcfapi.LoadBalancerStatus, expectCondition lbcfap
 }
 
 // GetBackendRecordCondition is an helper function to get specific BackendRecord condition
-func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus,
-	conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {
+func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus, conditionType lbcfapi.BackendRecordConditionType) *lbcfapi.BackendRecordCondition {
 	for i := range status.Conditions {
 		if status.Conditions[i].Type == conditionType {
 			return &status.Conditions[i]
@@ -106,8 +103,7 @@ func GetBackendRecordCondition(status *lbcfapi.BackendRecordStatus,
 }
 
 // AddBackendCondition is an helper function to add specific BackendRecord condition into BackendRecord.status.
-// If a condition with same type exists, the existing one will be overwritten,
-// otherwise, a new condition will be inserted.
+// If a condition with same type exists, the existing one will be overwritten, otherwise, a new condition will be inserted.
 func AddBackendCondition(beStatus *lbcfapi.BackendRecordStatus, expectCondition lbcfapi.BackendRecordCondition) {
 	found := false
 	for i := range beStatus.Conditions {
@@ -237,8 +233,7 @@ func MakePodBackendName(lbName, groupName string, podUID types.UID, port lbcfapi
 }
 
 // MakeServiceBackendName generates a name for BackendRecord of service type
-func MakeServiceBackendName(lbName, groupName, svcName string,
-	nodePort int32, nodePortProtocol string, nodeName string) string {
+func MakeServiceBackendName(lbName, groupName, svcName string, nodePort int32, nodePortProtocol string, nodeName string) string {
 	raw := fmt.Sprintf("%s_%s_%s_%d_%s_%s", lbName, groupName, svcName, nodePort, nodePortProtocol, nodeName)
 	h := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", h)
@@ -267,8 +262,7 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName string) m
 }
 
 // ConstructPodBackendRecord constructs a new BackendRecord
-func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer,
-	group *lbcfapi.BackendGroup, pod *v1.Pod) *lbcfapi.BackendRecord {
+func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, pod *v1.Pod) *lbcfapi.BackendRecord {
 	valueTrue := true
 	return &lbcfapi.BackendRecord{
 		ObjectMeta: metav1.ObjectMeta{
@@ -305,8 +299,7 @@ func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer,
 }
 
 // ConstructServiceBackendRecord constructs a new BackendRecord of type service
-func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer,
-	group *lbcfapi.BackendGroup, svc *v1.Service, node *v1.Node) *lbcfapi.BackendRecord {
+func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, svc *v1.Service, node *v1.Node) *lbcfapi.BackendRecord {
 	var selectedSvcPort *v1.ServicePort
 	wantedPort := group.Spec.Service.Port
 	for i, svcPort := range svc.Spec.Ports {
@@ -322,8 +315,7 @@ func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer,
 	valueTrue := true
 	return &lbcfapi.BackendRecord{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: MakeServiceBackendName(lb.Name, group.Name, svc.Name, selectedSvcPort.Port,
-				string(selectedSvcPort.Protocol), node.Name),
+			Name:      MakeServiceBackendName(lb.Name, group.Name, svc.Name, selectedSvcPort.Port, string(selectedSvcPort.Protocol), node.Name),
 			Namespace: group.Namespace,
 			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, svc.Name, ""),
 			Finalizers: []string{
@@ -358,8 +350,7 @@ func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer,
 }
 
 // ConstructStaticBackend constructs BackendRecords of type service
-func ConstructStaticBackend(lb *lbcfapi.LoadBalancer,
-	group *lbcfapi.BackendGroup, staticAddr string) *lbcfapi.BackendRecord {
+func ConstructStaticBackend(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, staticAddr string) *lbcfapi.BackendRecord {
 	valueTrue := true
 	return &lbcfapi.BackendRecord{
 		ObjectMeta: metav1.ObjectMeta{
@@ -490,8 +481,7 @@ func IsSvcMatchBackendGroup(group *lbcfapi.BackendGroup, svc *v1.Service) bool {
 // needUpdate: BackendsReocrds in this slice already exist in K8S and should be update to k8s
 //
 // needDelete: BackendsRecords in this slice should be deleted from k8s
-func CompareBackendRecords(expect []*lbcfapi.BackendRecord,
-	have []*lbcfapi.BackendRecord) (needCreate, needUpdate, needDelete []*lbcfapi.BackendRecord) {
+func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.BackendRecord) (needCreate, needUpdate, needDelete []*lbcfapi.BackendRecord) {
 	expectedRecords := make(map[string]*lbcfapi.BackendRecord)
 	for _, e := range expect {
 		expectedRecords[e.Name] = e

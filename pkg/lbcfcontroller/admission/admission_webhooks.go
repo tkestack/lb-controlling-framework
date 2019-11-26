@@ -62,10 +62,7 @@ type MutatingAdmissionWebhook interface {
 }
 
 // NewAdmitter creates a new instance of Webhook
-func NewAdmitter(lbLister lbcflister.LoadBalancerLister,
-	driverLister lbcflister.LoadBalancerDriverLister,
-	backendLister lbcflister.BackendRecordLister,
-	invoker util.WebhookInvoker) Webhook {
+func NewAdmitter(lbLister lbcflister.LoadBalancerLister, driverLister lbcflister.LoadBalancerDriverLister, backendLister lbcflister.BackendRecordLister, invoker util.WebhookInvoker) Webhook {
 	return &Admitter{
 		lbLister:       lbLister,
 		driverLister:   driverLister,
@@ -169,17 +166,12 @@ func (a *Admitter) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *ad
 	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)
 	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return toAdmissionResponse(
-			fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
+		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
 	}
 	if util.IsDriverDraining(driver) {
-		return toAdmissionResponse(
-			fmt.Errorf("driver %q is draining, all LoadBalancer creating operation for that dirver is denied",
-				lb.Spec.LBDriver))
+		return toAdmissionResponse(fmt.Errorf("driver %q is draining, all LoadBalancer creating operation for that dirver is denied", lb.Spec.LBDriver))
 	} else if driver.DeletionTimestamp != nil {
-		return toAdmissionResponse(
-			fmt.Errorf("driver %q is deleting, all LoadBalancer creating operation for that dirver is denied",
-				lb.Spec.LBDriver))
+		return toAdmissionResponse(fmt.Errorf("driver %q is deleting, all LoadBalancer creating operation for that dirver is denied", lb.Spec.LBDriver))
 	}
 	req := &webhooks.ValidateLoadBalancerRequest{
 		LBSpec:     lb.Spec.LBSpec,
@@ -219,8 +211,7 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 	driverNamespace := util.GetDriverNamespace(curObj.Spec.LBDriver, curObj.Namespace)
 	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(curObj.Spec.LBDriver)
 	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v",
-			driverNamespace, curObj.Spec.LBDriver, err))
+		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, curObj.Spec.LBDriver, err))
 	}
 
 	req := &webhooks.ValidateLoadBalancerRequest{
@@ -289,12 +280,10 @@ func (a *Admitter) ValidateDriverDelete(ar *admission.AdmissionReview) *admissio
 		if errors.IsNotFound(err) {
 			return toAdmissionResponse(nil)
 		}
-		return toAdmissionResponse(fmt.Errorf("retrieve LoadBalancerDriver %s/%s failed: %v",
-			ar.Request.Namespace, ar.Request.Name, err))
+		return toAdmissionResponse(fmt.Errorf("retrieve LoadBalancerDriver %s/%s failed: %v", ar.Request.Namespace, ar.Request.Name, err))
 	}
 	if !util.IsDriverDraining(driver) {
-		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete",
-			lbcfapi.DriverDrainingLabel))
+		return toAdmissionResponse(fmt.Errorf("LoadBalancerDriver must be label with %s:\"true\" before delete", lbcfapi.DriverDrainingLabel))
 	}
 
 	lbList, err := a.listLoadBalancerByDriver(ar.Request.Name, ar.Request.Namespace)
@@ -306,11 +295,9 @@ func (a *Admitter) ValidateDriverDelete(ar *admission.AdmissionReview) *admissio
 
 	beList, err := a.listBackendByDriver(ar.Request.Name, ar.Request.Namespace)
 	if err != nil {
-		return toAdmissionResponse(
-			fmt.Errorf("unable to list BackendRecords for driver, err: %v", err))
+		return toAdmissionResponse(fmt.Errorf("unable to list BackendRecords for driver, err: %v", err))
 	} else if len(beList) > 0 {
-		return toAdmissionResponse(
-			fmt.Errorf("all BackendRecord must be deregistered, %d remaining", len(beList)))
+		return toAdmissionResponse(fmt.Errorf("all BackendRecord must be deregistered, %d remaining", len(beList)))
 	}
 	return toAdmissionResponse(nil)
 }
@@ -328,8 +315,7 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 
 	lb, err := a.lbLister.LoadBalancers(bg.Namespace).Get(bg.Spec.LBName)
 	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, " +
-			"LoadBalancer must be created before BackendGroup"))
+		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
 	}
 	if lb.DeletionTimestamp != nil {
 		return toAdmissionResponse(fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name))
@@ -337,17 +323,12 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, bg.Namespace)
 	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return toAdmissionResponse(
-			fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
+		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
 	}
 	if util.IsDriverDraining(driver) {
-		return toAdmissionResponse(
-			fmt.Errorf("driver %q is draining, all BackendGroup creating operation for that dirver is denied",
-				lb.Spec.LBDriver))
+		return toAdmissionResponse(fmt.Errorf("driver %q is draining, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver))
 	} else if driver.DeletionTimestamp != nil {
-		return toAdmissionResponse(
-			fmt.Errorf("driver %q is deleting, all BackendGroup creating operation for that dirver is denied",
-				lb.Spec.LBDriver))
+		return toAdmissionResponse(fmt.Errorf("driver %q is deleting, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver))
 	}
 	req := &webhooks.ValidateBackendRequest{
 		BackendType: string(util.GetBackendType(bg)),
@@ -388,14 +369,12 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 
 	lb, err := a.lbLister.LoadBalancers(curObj.Namespace).Get(curObj.Spec.LBName)
 	if err != nil {
-		return toAdmissionResponse(
-			fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
+		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
 	}
 	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, curObj.Namespace)
 	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return toAdmissionResponse(
-			fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
+		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
 	}
 
 	req := &webhooks.ValidateBackendRequest{
@@ -419,8 +398,7 @@ func (a *Admitter) ValidateBackendGroupDelete(*admission.AdmissionReview) *admis
 	return toAdmissionResponse(nil)
 }
 
-func (a *Admitter) listLoadBalancerByDriver(driverName string,
-	driverNamespace string) ([]*lbcfapi.LoadBalancer, error) {
+func (a *Admitter) listLoadBalancerByDriver(driverName string, driverNamespace string) ([]*lbcfapi.LoadBalancer, error) {
 	lbList, err := a.lbLister.List(labels.Everything())
 	if err != nil {
 		return nil, err

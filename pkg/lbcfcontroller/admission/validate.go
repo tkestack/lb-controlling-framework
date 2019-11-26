@@ -39,14 +39,10 @@ import (
 func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	allErrs = append(allErrs,
-		validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
-	allErrs = append(allErrs,
-		validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
-	allErrs = append(allErrs,
-		validateDriverURL(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
-	allErrs = append(allErrs,
-		validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec").Child("webhooks"))...)
+	allErrs = append(allErrs, validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
+	allErrs = append(allErrs, validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
+	allErrs = append(allErrs, validateDriverURL(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
+	allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec").Child("webhooks"))...)
 	return allErrs
 }
 
@@ -54,12 +50,10 @@ func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList
 func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if raw.Spec.LBDriver == "" {
-		allErrs = append(allErrs,
-			field.Required(field.NewPath("spec").Child("lbDriver"), "lbDriver must be specified"))
+		allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("lbDriver"), "lbDriver must be specified"))
 	}
 	if raw.Spec.EnsurePolicy != nil {
-		allErrs = append(allErrs,
-			validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
+		allErrs = append(allErrs, validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
 	}
 	return allErrs
 }
@@ -68,8 +62,7 @@ func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
 func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if raw.Spec.EnsurePolicy != nil {
-		allErrs = append(allErrs,
-			validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
+		allErrs = append(allErrs, validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
 	}
 	allErrs = append(allErrs, validateBackends(&raw.Spec, field.NewPath("spec"))...)
 	return allErrs
@@ -113,15 +106,12 @@ func validateEnsurePolicy(raw lbcfapi.EnsurePolicyConfig, path *field.Path) fiel
 	switch raw.Policy {
 	case lbcfapi.PolicyIfNotSucc:
 		if raw.MinPeriod != nil {
-			allErrs = append(allErrs, field.Forbidden(path.Child("minPeriod"),
-				fmt.Sprintf("minPeriod is not supported when policy is %q", string(lbcfapi.PolicyIfNotSucc))))
+			allErrs = append(allErrs, field.Forbidden(path.Child("minPeriod"), fmt.Sprintf("minPeriod is not supported when policy is %q", string(lbcfapi.PolicyIfNotSucc))))
 		}
 	case lbcfapi.PolicyAlways:
 		if raw.MinPeriod != nil {
 			if raw.MinPeriod.Nanoseconds() < 30*time.Second.Nanoseconds() {
-				allErrs = append(allErrs,
-					field.Invalid(path.Child("minPeriod"), raw.MinPeriod,
-						"minPeriod must be greater or equal to 30s"))
+				allErrs = append(allErrs, field.Invalid(path.Child("minPeriod"), raw.MinPeriod, "minPeriod must be greater or equal to 30s"))
 			}
 		}
 	}
@@ -132,16 +122,12 @@ func validateDriverName(name string, namespace string, path *field.Path) field.E
 	allErrs := field.ErrorList{}
 	if namespace == metav1.NamespaceSystem {
 		if !strings.HasPrefix(name, lbcfapi.SystemDriverPrefix) {
-			allErrs = append(allErrs, field.Invalid(path, name,
-				fmt.Sprintf("metadata.name must start with %q for drivers in namespace %q",
-					lbcfapi.SystemDriverPrefix, metav1.NamespaceSystem)))
+			allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metadata.name must start with %q for drivers in namespace %q", lbcfapi.SystemDriverPrefix, metav1.NamespaceSystem)))
 		}
 		return allErrs
 	}
 	if strings.HasPrefix(name, lbcfapi.SystemDriverPrefix) {
-		allErrs = append(allErrs, field.Invalid(path, name,
-			fmt.Sprintf("metaname.name must not start with %q for drivers not in namespace %q",
-				lbcfapi.SystemDriverPrefix, metav1.NamespaceSystem)))
+		allErrs = append(allErrs, field.Invalid(path, name, fmt.Sprintf("metaname.name must not start with %q for drivers not in namespace %q", lbcfapi.SystemDriverPrefix, metav1.NamespaceSystem)))
 	}
 	return allErrs
 }
@@ -149,8 +135,7 @@ func validateDriverName(name string, namespace string, path *field.Path) field.E
 func validateDriverType(raw string, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if raw != string(lbcfapi.WebhookDriver) {
-		allErrs = append(allErrs, field.Invalid(path, raw,
-			fmt.Sprintf("driverType must be %v", lbcfapi.WebhookDriver)))
+		allErrs = append(allErrs, field.Invalid(path, raw, fmt.Sprintf("driverType must be %v", lbcfapi.WebhookDriver)))
 	}
 	return allErrs
 }
@@ -184,16 +169,13 @@ func validateDriverWebhooks(raw []lbcfapi.WebhookConfig, path *field.Path) field
 	for known := range webhooks.KnownWebhooks {
 		wh, ok := hasWebhook[known]
 		if !ok {
-			allErrs = append(allErrs, field.Required(path.Child(known),
-				fmt.Sprintf("webhook %s must be configured", known)))
+			allErrs = append(allErrs, field.Required(path.Child(known), fmt.Sprintf("webhook %s must be configured", known)))
 			continue
 		}
 		if wh.Timeout.Nanoseconds() > (1 * time.Minute).Nanoseconds() {
-			allErrs = append(allErrs, field.Invalid(path.Child(known).Child("timeout"), wh.Timeout,
-				fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
+			allErrs = append(allErrs, field.Invalid(path.Child(known).Child("timeout"), wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be less than or equal to 1m", wh.Name)))
 		} else if wh.Timeout.Duration == 0 {
-			allErrs = append(allErrs, field.Invalid(path.Child(known).Child("timeout"), wh.Timeout,
-				fmt.Sprintf("webhook %s invalid, timeout of must be specified", wh.Name)))
+			allErrs = append(allErrs, field.Invalid(path.Child(known).Child("timeout"), wh.Timeout, fmt.Sprintf("webhook %s invalid, timeout of must be specified", wh.Name)))
 		}
 	}
 	return allErrs
@@ -204,13 +186,9 @@ func validateBackends(raw *lbcfapi.BackendGroupSpec, path *field.Path) field.Err
 
 	if raw.Service != nil {
 		if raw.Pods != nil {
-			allErrs = append(allErrs,
-				field.Invalid(path.Child("pods"), raw.Pods,
-					"only one of \"service, pods, static\" is allowed"))
+			allErrs = append(allErrs, field.Invalid(path.Child("pods"), raw.Pods, "only one of \"service, pods, static\" is allowed"))
 		} else if raw.Static != nil {
-			allErrs = append(allErrs,
-				field.Invalid(path.Child("static"), raw.Pods,
-					"only one of \"service, pods, static\" is allowed"))
+			allErrs = append(allErrs, field.Invalid(path.Child("static"), raw.Pods, "only one of \"service, pods, static\" is allowed"))
 		} else {
 			allErrs = append(allErrs, validateServiceBackend(raw.Service, path.Child("service"))...)
 		}
@@ -219,9 +197,7 @@ func validateBackends(raw *lbcfapi.BackendGroupSpec, path *field.Path) field.Err
 
 	if raw.Pods != nil {
 		if raw.Static != nil {
-			allErrs = append(allErrs,
-				field.Invalid(path.Child("static"), raw.Pods,
-					"only one of \"service, pods, static\" is allowed"))
+			allErrs = append(allErrs, field.Invalid(path.Child("static"), raw.Pods, "only one of \"service, pods, static\" is allowed"))
 		} else {
 			allErrs = append(allErrs, validatePodBackend(raw.Pods, path.Child("pods"))...)
 		}
@@ -242,22 +218,17 @@ func validatePodBackend(raw *lbcfapi.PodBackend, path *field.Path) field.ErrorLi
 	allErrs = append(allErrs, validatePortSelector(raw.Port, path.Child("port"))...)
 	if raw.ByLabel != nil {
 		if raw.ByName != nil {
-			allErrs = append(allErrs,
-				field.Invalid(path.Child("byName"), raw.ByName,
-					"only one of \"byLabel, byName\" is allowed"))
+			allErrs = append(allErrs, field.Invalid(path.Child("byName"), raw.ByName, "only one of \"byLabel, byName\" is allowed"))
 		}
 		if len(raw.ByLabel.Selector) == 0 {
-			allErrs = append(allErrs,
-				field.Required(path.Child("byLabel").Child("selector"), "selector must be specified"))
+			allErrs = append(allErrs, field.Required(path.Child("byLabel").Child("selector"), "selector must be specified"))
 		}
-		allErrs = append(allErrs,
-			validateLabelSelector(raw.ByLabel.Selector, path.Child("byLabel").Child("selector"))...)
+		allErrs = append(allErrs, validateLabelSelector(raw.ByLabel.Selector, path.Child("byLabel").Child("selector"))...)
 		return allErrs
 	}
 
 	if raw.ByName == nil {
-		allErrs = append(allErrs,
-			field.Required(path.Child("byLabel/byName"), "one of \"byLabel, byName\" must be specified"))
+		allErrs = append(allErrs, field.Required(path.Child("byLabel/byName"), "one of \"byLabel, byName\" must be specified"))
 	}
 	return allErrs
 }
@@ -266,14 +237,11 @@ func validatePortSelector(raw lbcfapi.PortSelector, path *field.Path) field.Erro
 	allErrs := field.ErrorList{}
 
 	if raw.PortNumber <= 0 || raw.PortNumber > 65535 {
-		allErrs = append(allErrs,
-			field.Invalid(path.Child("portNumber"), raw.PortNumber,
-				"portNumber must be greater than 0 and less than 65536"))
+		allErrs = append(allErrs, field.Invalid(path.Child("portNumber"), raw.PortNumber, "portNumber must be greater than 0 and less than 65536"))
 	}
 
 	if raw.Protocol != string(v1.ProtocolTCP) && raw.Protocol != string(v1.ProtocolUDP) {
-		allErrs = append(allErrs,
-			field.Invalid(path.Child("protocol"), raw.Protocol, "protocol must be \"TCP\" or \"UDP\""))
+		allErrs = append(allErrs, field.Invalid(path.Child("protocol"), raw.Protocol, "protocol must be \"TCP\" or \"UDP\""))
 	}
 	return allErrs
 }
@@ -283,8 +251,7 @@ func validateLabelSelector(raw map[string]string, path *field.Path) field.ErrorL
 	for k, v := range raw {
 		_, err := labels.NewRequirement(k, selection.Equals, []string{v})
 		if err != nil {
-			allErrs = append(allErrs,
-				field.Invalid(path, fmt.Sprintf("%v:%v", k, v), fmt.Sprintf("invalid label: %v", err)))
+			allErrs = append(allErrs, field.Invalid(path, fmt.Sprintf("%v:%v", k, v), fmt.Sprintf("invalid label: %v", err)))
 		}
 	}
 	return allErrs
