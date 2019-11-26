@@ -34,29 +34,21 @@ import (
 
 // WebhookInvoker is an abstract interface for testability
 type WebhookInvoker interface {
-	CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error)
+	CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error)
 
-	CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error)
+	CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error)
 
-	CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error)
+	CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error)
 
-	CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error)
+	CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error)
 
-	CallValidateBackend(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error)
+	CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error)
 
-	CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error)
+	CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error)
 
-	CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error)
+	CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error)
 
-	CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver,
-		req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error)
+	CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error)
 }
 
 // NewWebhookInvoker creates a new instance of WebhookInvoker
@@ -68,8 +60,7 @@ func NewWebhookInvoker() WebhookInvoker {
 type WebhookInvokerImpl struct{}
 
 // CallValidateLoadBalancer calls webhook validateLoadBalancer on driver
-func (w *WebhookInvokerImpl) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
+func (w *WebhookInvokerImpl) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
 	rsp := &webhooks.ValidateLoadBalancerResponse{}
 	if err := callWebhook(driver, webhooks.ValidateLoadBalancer, req, rsp); err != nil {
 		return nil, err
@@ -78,8 +69,7 @@ func (w *WebhookInvokerImpl) CallValidateLoadBalancer(driver *lbcfapi.LoadBalanc
 }
 
 // CallCreateLoadBalancer calls webhook createLoadBalancer on driver
-func (w *WebhookInvokerImpl) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
+func (w *WebhookInvokerImpl) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
 	rsp := &webhooks.CreateLoadBalancerResponse{}
 	if err := callWebhook(driver, webhooks.CreateLoadBalancer, req, rsp); err != nil {
 		return nil, err
@@ -88,8 +78,7 @@ func (w *WebhookInvokerImpl) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancer
 }
 
 // CallEnsureLoadBalancer calls webhook ensureLoadBalancer on driver
-func (w *WebhookInvokerImpl) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
+func (w *WebhookInvokerImpl) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
 	rsp := &webhooks.EnsureLoadBalancerResponse{}
 	if err := callWebhook(driver, webhooks.EnsureLoadBalancer, req, rsp); err != nil {
 		return nil, err
@@ -98,8 +87,7 @@ func (w *WebhookInvokerImpl) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancer
 }
 
 // CallDeleteLoadBalancer calls webhook deleteLoadBalancer on driver
-func (w *WebhookInvokerImpl) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
+func (w *WebhookInvokerImpl) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
 	rsp := &webhooks.DeleteLoadBalancerResponse{}
 	if err := callWebhook(driver, webhooks.DeleteLoadBalancer, req, rsp); err != nil {
 		return nil, err
@@ -108,8 +96,7 @@ func (w *WebhookInvokerImpl) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancer
 }
 
 // CallValidateBackend calls webhook validateBackend on driver
-func (w *WebhookInvokerImpl) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
+func (w *WebhookInvokerImpl) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
 	rsp := &webhooks.ValidateBackendResponse{}
 	if err := callWebhook(driver, webhooks.ValidateBackend, req, rsp); err != nil {
 		return nil, err
@@ -118,8 +105,7 @@ func (w *WebhookInvokerImpl) CallValidateBackend(driver *lbcfapi.LoadBalancerDri
 }
 
 // CallGenerateBackendAddr calls webhook generateBackendAddr on driver
-func (w *WebhookInvokerImpl) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
+func (w *WebhookInvokerImpl) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
 	rsp := &webhooks.GenerateBackendAddrResponse{}
 	if err := callWebhook(driver, webhooks.GenerateBackendAddr, req, rsp); err != nil {
 		return nil, err
@@ -128,8 +114,7 @@ func (w *WebhookInvokerImpl) CallGenerateBackendAddr(driver *lbcfapi.LoadBalance
 }
 
 // CallEnsureBackend calls webhook ensureBackend on driver
-func (w *WebhookInvokerImpl) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+func (w *WebhookInvokerImpl) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
 	rsp := &webhooks.BackendOperationResponse{}
 	if err := callWebhook(driver, webhooks.EnsureBackend, req, rsp); err != nil {
 		return nil, err
@@ -138,8 +123,7 @@ func (w *WebhookInvokerImpl) CallEnsureBackend(driver *lbcfapi.LoadBalancerDrive
 }
 
 // CallDeregisterBackend calls webhook deregisterBackend on driver
-func (w *WebhookInvokerImpl) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver,
-	req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+func (w *WebhookInvokerImpl) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
 	rsp := &webhooks.BackendOperationResponse{}
 	if err := callWebhook(driver, webhooks.DeregBackend, req, rsp); err != nil {
 		return nil, err

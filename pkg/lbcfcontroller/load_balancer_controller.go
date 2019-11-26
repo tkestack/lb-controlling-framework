@@ -34,10 +34,7 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
-func newLoadBalancerController(client lbcfclient.Interface,
-	lbLister v1beta1.LoadBalancerLister,
-	driverLister v1beta1.LoadBalancerDriverLister,
-	recorder record.EventRecorder, invoker util.WebhookInvoker) *loadBalancerController {
+func newLoadBalancerController(client lbcfclient.Interface, lbLister v1beta1.LoadBalancerLister, driverLister v1beta1.LoadBalancerDriverLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *loadBalancerController {
 	return &loadBalancerController{
 		lbcfClient:     client,
 		lister:         lbLister,
@@ -83,11 +80,9 @@ func (c *loadBalancerController) syncLB(key string) *util.SyncResult {
 }
 
 func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, err := c.driverLister.LoadBalancerDrivers(
-		util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(
-			fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
 	req := &webhooks.CreateLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -123,40 +118,31 @@ func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		})
 		_, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).UpdateStatus(lb)
 		if err != nil {
-			c.eventRecorder.Eventf(lb,
-				apicore.EventTypeWarning,
-				"FailedCreateLoadBalancer", "update status failed: %v", err)
+			c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedCreateLoadBalancer", "update status failed: %v", err)
 			return util.ErrorResult(err)
 		}
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeNormal, "SuccCreateLoadBalancer", "Successfully created load balancer")
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "SuccCreateLoadBalancer", "Successfully created load balancer")
 		if lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
 			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
 		return util.FinishedResult()
 	case webhooks.StatusFail:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeWarning, "FailedCreateLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedCreateLoadBalancer", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeNormal, "RunningCreateLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningCreateLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeWarning,
-			"InvalidCreateLoadBalancer", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "InvalidCreateLoadBalancer", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
 
 func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, err := c.driverLister.LoadBalancerDrivers(
-		util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(
-			fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
 	req := &webhooks.EnsureLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -180,13 +166,10 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		})
 		_, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).UpdateStatus(lb)
 		if err != nil {
-			c.eventRecorder.Eventf(lb,
-				apicore.EventTypeWarning, "FailedEnsureLoadBalancer", "update status failed: %v", err)
+			c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedEnsureLoadBalancer", "update status failed: %v", err)
 			return util.ErrorResult(err)
 		}
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeNormal,
-			"SuccEnsureLoadBalancer", "Successfully ensured load balancer attributes")
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "SuccEnsureLoadBalancer", "Successfully ensured load balancer attributes")
 		if lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways {
 			return util.PeriodicResult(util.GetDuration(lb.Spec.EnsurePolicy.MinPeriod, util.DefaultEnsurePeriod))
 		}
@@ -202,33 +185,25 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		})
 		_, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).UpdateStatus(lb)
 		if err != nil {
-			c.eventRecorder.Eventf(lb,
-				apicore.EventTypeWarning,
-				"FailedEnsureLoadBalancer", "update status failed: %v", err)
+			c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedEnsureLoadBalancer", "update status failed: %v", err)
 			return util.ErrorResult(err)
 		}
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeWarning, "FailedEnsureLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedEnsureLoadBalancer", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeNormal, "RunningEnsureLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningEnsureLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeWarning,
-			"InvalidEnsureLoadBalancer", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "InvalidEnsureLoadBalancer", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }
 
 func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, err := c.driverLister.LoadBalancerDrivers(
-		util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
-		return util.ErrorResult(
-			fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
+		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
 	req := &webhooks.DeleteLoadBalancerRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
@@ -246,18 +221,14 @@ func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 	case webhooks.StatusSucc:
 		return c.removeFinalizer(lb)
 	case webhooks.StatusFail:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeWarning, "FailedDeleteLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "FailedDeleteLoadBalancer", "msg: %s", rsp.Msg)
 		return util.FailResult(util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds), rsp.Msg)
 	case webhooks.StatusRunning:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeNormal, "RunningDeleteLoadBalancer", "msg: %s", rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeNormal, "RunningDeleteLoadBalancer", "msg: %s", rsp.Msg)
 		delay := util.CalculateRetryInterval(rsp.MinRetryDelayInSeconds)
 		return util.AsyncResult(delay)
 	default:
-		c.eventRecorder.Eventf(lb,
-			apicore.EventTypeWarning, "InvalidDeleteLoadBalancer",
-			"unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
+		c.eventRecorder.Eventf(lb, apicore.EventTypeWarning, "InvalidDeleteLoadBalancer", "unsupported status: %s, msg: %s", rsp.Status, rsp.Msg)
 		return util.ErrorResult(fmt.Errorf("unknown status %q", rsp.Status))
 	}
 }

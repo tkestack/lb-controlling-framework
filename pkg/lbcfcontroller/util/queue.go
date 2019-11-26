@@ -18,11 +18,11 @@
 package util
 
 import (
+	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 	"time"
-	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
 
 	"golang.org/x/time/rate"
 	"k8s.io/client-go/util/workqueue"
@@ -37,10 +37,8 @@ type ConditionalRateLimitingInterface interface {
 	LenWaitingForFilter() int
 }
 
-// NewConditionalDelayingQueue returns a new instance of ConditionalRateLimitingInterface.
-// If minDelay is less than step, the real minimum delay is step.
-func NewConditionalDelayingQueue(filter QueueFilter,
-	minDelay time.Duration, step time.Duration, maxDelay time.Duration) ConditionalRateLimitingInterface {
+// NewConditionalDelayingQueue returns a new instance of ConditionalRateLimitingInterface. If minDelay is less than step, the real minimum delay is step.
+func NewConditionalDelayingQueue(filter QueueFilter, minDelay time.Duration, step time.Duration, maxDelay time.Duration) ConditionalRateLimitingInterface {
 	rateLimiter := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(step, maxDelay),
 		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
