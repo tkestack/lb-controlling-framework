@@ -33,7 +33,7 @@ spec:
       port: 80
       targetPort: 80
   selector:
-    lbcf.tke.cloud.tencent.com/component: lbcf-clb-driver
+    lbcf.tkestack.io/component: lbcf-clb-driver
   sessionAffinity: None
   type: ClusterIP
 ```
@@ -41,7 +41,7 @@ spec:
 从下面的LoadBalancerDriver中可以看到，Webhook server的地址为Service地址，该地址可以被K8S集群内部DNS（kube-dns或core-dns）解析
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: LoadBalancerDriver
 metadata:
   name: lbcf-clb-driver
@@ -64,7 +64,7 @@ spec:
 LBCF作为一个开放框架，没有对2和3中的内容进行限制，其中的信息完全由Webhook server定义和解析，下述YAML展示了clb-driver定义的部分参数:
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: LoadBalancer
 metadata:
   name: test-clb-load-balancer
@@ -89,7 +89,7 @@ spec:
 例如，clb-driver支持使用已有的CLB实例，当LoadBalancer中指定的CLB不存在时，clb-driver会拒绝该次创建。
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: LoadBalancer
 metadata:
   name: a-lb-that-not-exist
@@ -107,7 +107,7 @@ spec:
 
 ```bash
 kubectl apply -f lb-not-exist.yaml
-Error from server: error when creating "lb-not-exist.yaml": admission webhook "lb.lbcf.tke.cloud.tencent.com" denied the request: invalid LoadBalancer: clb instance lb-notexist not found
+Error from server: error when creating "lb-not-exist.yaml": admission webhook "lb.lbcf.tkestack.io" denied the request: invalid LoadBalancer: clb instance lb-notexist not found
 ```
 
 ## 查看LoadBalancer状态
@@ -116,7 +116,7 @@ Error from server: error when creating "lb-not-exist.yaml": admission webhook "l
 
 依旧以clb-driver为例，这次我们使用下述YAML临时创建一个新的七层CLB:
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: LoadBalancer
 metadata:
   name: test-clb-load-balancer
@@ -139,16 +139,16 @@ Name:         test-clb-load-balancer
 Namespace:    kube-system
 Labels:       <none>
 Annotations:  kubectl.kubernetes.io/last-applied-configuration:
-                {"apiVersion":"lbcf.tke.cloud.tencent.com/v1beta1","kind":"LoadBalancer","metadata":{"annotations":{},"name":"test-clb-load-balancer","nam...
-API Version:  lbcf.tke.cloud.tencent.com/v1beta1
+                {"apiVersion":"lbcf.tkestack.io/v1beta1","kind":"LoadBalancer","metadata":{"annotations":{},"name":"test-clb-load-balancer","nam...
+API Version:  lbcf.tkestack.io/v1beta1
 Kind:         LoadBalancer
 Metadata:
   Creation Timestamp:  2019-06-13T12:48:44Z
   Finalizers:
-    lbcf.tke.cloud.tencent.com/delete-load-loadbalancer
+    lbcf.tkestack.io/delete-load-loadbalancer
   Generation:        1
   Resource Version:  8574359
-  Self Link:         /apis/lbcf.tke.cloud.tencent.com/v1beta1/namespaces/kube-system/loadbalancers/test-clb-load-balancer
+  Self Link:         /apis/lbcf.tkestack.io/v1beta1/namespaces/kube-system/loadbalancers/test-clb-load-balancer
   UID:               94518f90-8dd9-11e9-b3e1-525400d96a00
 Spec:
   Ensure Policy:
@@ -204,7 +204,7 @@ Events:
 与LoadBalancer类似，3中的内容也是完全由webhook server自定义的，下述YAML展示了clb-driver对权重的支持：
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: BackendGroup
 metadata:
   name: web-svc-backend-group
@@ -223,13 +223,13 @@ spec:
 BackendGroup目前支持了3种backend类型，除上面YAML使用的service类型外，还有pods与static类型。如果是pods类型，LBCF会将Pod直接绑定至CLB（数据面由网络自行保证），下面的YAML为clb-driver项目支持的pod类型BackendGroup：
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: BackendGroup
 metadata:
   name: web-pod-backend-group
   namespace: kube-system
   labels:
-    lbcf.tke.cloud.tencent.com/lb-name: test-clb-load-balancer
+    lbcf.tkestack.io/lb-name: test-clb-load-balancer
 spec:
   lbName: test-clb-load-balancer
   pods:
@@ -252,27 +252,27 @@ BackendRecord的Status中记录了backend的当前状态，包括backend地址�
 [root@10-0-3-16 clb-driver]# kubectl describe backendrecord -n kube-system
 Name:         dea99df137c5b3d94d5e858a7c3ca778
 Namespace:    kube-system
-Labels:       lbcf.tke.cloud.tencent.com/backend-group=web-svc-backend-group
-              lbcf.tke.cloud.tencent.com/backend-service=svc-test
-              lbcf.tke.cloud.tencent.com/lb-driver=lbcf-clb-driver
-              lbcf.tke.cloud.tencent.com/lb-name=test-clb-load-balancer
+Labels:       lbcf.tkestack.io/backend-group=web-svc-backend-group
+              lbcf.tkestack.io/backend-service=svc-test
+              lbcf.tkestack.io/lb-driver=lbcf-clb-driver
+              lbcf.tkestack.io/lb-name=test-clb-load-balancer
 Annotations:  <none>
-API Version:  lbcf.tke.cloud.tencent.com/v1beta1
+API Version:  lbcf.tkestack.io/v1beta1
 Kind:         BackendRecord
 Metadata:
   Creation Timestamp:  2019-06-13T13:23:05Z
   Finalizers:
-    lbcf.tke.cloud.tencent.com/deregister-backend
+    lbcf.tkestack.io/deregister-backend
   Generation:  1
   Owner References:
-    API Version:           lbcf.tke.cloud.tencent.com/v1beta1
+    API Version:           lbcf.tkestack.io/v1beta1
     Block Owner Deletion:  true
     Controller:            true
     Kind:                  BackendGroup
     Name:                  web-svc-backend-group
     UID:                   46f7f7b5-8daf-11e9-b3e1-525400d96a00
   Resource Version:        8580045
-  Self Link:               /apis/lbcf.tke.cloud.tencent.com/v1beta1/namespaces/kube-system/backendrecords/dea99df137c5b3d94d5e858a7c3ca778
+  Self Link:               /apis/lbcf.tkestack.io/v1beta1/namespaces/kube-system/backendrecords/dea99df137c5b3d94d5e858a7c3ca778
   UID:                     60aee0ff-8dde-11e9-b409-525400b94ff4
 Spec:
   Lb Attributes:  <nil>
@@ -321,5 +321,5 @@ Status中的Backend Addr是被绑定backend的地址，该地址由[generateBack
 
 若需强制删除BackendRecord，需按下述步骤进行操作：
 
-1. 删除所有BackendRecord中的Finalizer `lbcf.tke.cloud.tencent.com/deregister-backend`
+1. 删除所有BackendRecord中的Finalizer `lbcf.tkestack.io/deregister-backend`
 2. 删除BackendGroup或LoadBalancer

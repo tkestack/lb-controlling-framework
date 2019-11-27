@@ -18,11 +18,11 @@
 package util
 
 import (
-	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 	"time"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 
 	"golang.org/x/time/rate"
 	"k8s.io/client-go/util/workqueue"

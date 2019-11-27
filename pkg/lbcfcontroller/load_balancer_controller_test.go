@@ -17,13 +17,13 @@
 package lbcfcontroller
 
 import (
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
-	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/controller"
 	"testing"
 	"time"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 )
 
 func TestLoadBalancerCreate(t *testing.T) {

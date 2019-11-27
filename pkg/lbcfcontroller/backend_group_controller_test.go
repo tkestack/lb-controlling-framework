@@ -17,11 +17,11 @@
 package lbcfcontroller
 
 import (
-	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"reflect"
 	"testing"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 
 	"k8s.io/api/core/v1"

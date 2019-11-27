@@ -19,7 +19,7 @@ rules:
     verbs:
       - '*'
   - apiGroups:
-      - lbcf.tke.cloud.tencent.com
+      - lbcf.tkestack.io
     resources:
       - '*'
     verbs:

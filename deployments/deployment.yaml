@@ -7,11 +7,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      lbcf.tke.cloud.tencent.com/component: lbcf-controller
+      lbcf.tkestack.io/component: lbcf-controller
   template:
     metadata:
       labels:
-        lbcf.tke.cloud.tencent.com/component: lbcf-controller
+        lbcf.tkestack.io/component: lbcf-controller
     spec:
       priorityClassName: "system-node-critical"
       serviceAccountName: lbcf-controller
