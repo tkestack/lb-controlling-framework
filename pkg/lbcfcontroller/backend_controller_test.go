@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 

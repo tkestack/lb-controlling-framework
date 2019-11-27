@@ -3,10 +3,10 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: lbcf-validate
 webhooks:
-  - name: driver.lbcf.tke.cloud.tencent.com
+  - name: driver.lbcf.tkestack.io
     rules:
       - apiGroups:
-          - "lbcf.tke.cloud.tencent.com"
+          - "lbcf.tkestack.io"
         apiVersions:
           - v1beta1
         operations:
@@ -22,10 +22,10 @@ webhooks:
         namespace: kube-system
         path: "/validate-load-balancer-driver"
     failurePolicy: Fail
-  - name: lb.lbcf.tke.cloud.tencent.com
+  - name: lb.lbcf.tkestack.io
     rules:
       - apiGroups:
-          - "lbcf.tke.cloud.tencent.com"
+          - "lbcf.tkestack.io"
         apiVersions:
           - v1beta1
         operations:
@@ -40,10 +40,10 @@ webhooks:
         namespace: kube-system
         path: "/validate-load-balancer"
     failurePolicy: Fail
-  - name: backendgroup.lbcf.tke.cloud.tencent.com
+  - name: backendgroup.lbcf.tkestack.io
     rules:
       - apiGroups:
-          - "lbcf.tke.cloud.tencent.com"
+          - "lbcf.tkestack.io"
         apiVersions:
           - v1beta1
         operations:
@@ -64,10 +64,10 @@ kind: MutatingWebhookConfiguration
 metadata:
   name: lbcf-mutate
 webhooks:
-  - name: driver.lbcf.tke.cloud.tencent.com
+  - name: driver.lbcf.tkestack.io
     rules:
       - apiGroups:
-          - "lbcf.tke.cloud.tencent.com"
+          - "lbcf.tkestack.io"
         apiVersions:
           - v1beta1
         operations:
@@ -81,10 +81,10 @@ webhooks:
         namespace: kube-system
         path: "/mutate-load-balancer-driver"
     failurePolicy: Fail
-  - name: lb.lbcf.tke.cloud.tencent.com
+  - name: lb.lbcf.tkestack.io
     rules:
       - apiGroups:
-          - "lbcf.tke.cloud.tencent.com"
+          - "lbcf.tkestack.io"
         apiVersions:
           - v1beta1
         operations:
@@ -98,10 +98,10 @@ webhooks:
         namespace: kube-system
         path: "/mutate-load-balancer"
     failurePolicy: Fail
-  - name: backendgroup.lbcf.tke.cloud.tencent.com
+  - name: backendgroup.lbcf.tkestack.io
     rules:
       - apiGroups:
-          - "lbcf.tke.cloud.tencent.com"
+          - "lbcf.tkestack.io"
         apiVersions:
           - v1beta1
         operations:

@@ -18,8 +18,6 @@ package util
 
 import (
 	"fmt"
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +26,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"testing"
 	"time"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 )
 
 func TestConditionalRateLimitingQueueAddAfterMinimumDelay(t *testing.T) {
@@ -250,7 +250,7 @@ func (l *fakeLBListerWithStore) Get(name string) (*lbcfapi.LoadBalancer, error) 
 	lb, ok := l.store[name]
 	if !ok {
 		return nil, errors.NewNotFound(schema.GroupResource{
-			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Group:    "lbcf.tkestack.io/v1beta1",
 			Resource: "LoadBalancer",
 		}, name)
 	}
@@ -277,7 +277,7 @@ func (l *fakeBackendListerWithStore) Get(name string) (*lbcfapi.BackendRecord, e
 	backend, ok := l.store[name]
 	if !ok {
 		return nil, errors.NewNotFound(schema.GroupResource{
-			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Group:    "lbcf.tkestack.io/v1beta1",
 			Resource: "BackendRecord",
 		}, name)
 	}

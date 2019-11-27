@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
-	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
@@ -1520,7 +1520,7 @@ type fakeLBLister struct {
 func (l *fakeLBLister) Get(name string) (*lbcfapi.LoadBalancer, error) {
 	if l.get == nil {
 		return nil, errors.NewNotFound(schema.GroupResource{
-			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Group:    "lbcf.tkestack.io/v1beta1",
 			Resource: "LoadBalancer",
 		}, name)
 	}
@@ -1543,7 +1543,7 @@ type fakeDriverLister struct {
 func (l *fakeDriverLister) Get(name string) (*lbcfapi.LoadBalancerDriver, error) {
 	if l.get == nil {
 		return nil, errors.NewNotFound(schema.GroupResource{
-			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Group:    "lbcf.tkestack.io/v1beta1",
 			Resource: "LoadBalancerDriver",
 		}, name)
 	}
@@ -1566,7 +1566,7 @@ type fakeBackendGroupLister struct {
 func (l *fakeBackendGroupLister) Get(name string) (*lbcfapi.BackendGroup, error) {
 	if l.get == nil {
 		return nil, errors.NewNotFound(schema.GroupResource{
-			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Group:    "lbcf.tkestack.io/v1beta1",
 			Resource: "BackendGroup",
 		}, name)
 	}
@@ -1589,7 +1589,7 @@ type fakeBackendLister struct {
 func (l *fakeBackendLister) Get(name string) (*lbcfapi.BackendRecord, error) {
 	if l.get == nil {
 		return nil, errors.NewNotFound(schema.GroupResource{
-			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Group:    "lbcf.tkestack.io/v1beta1",
 			Resource: "BackendRecord",
 		}, name)
 	}
@@ -1619,7 +1619,7 @@ func (l *fakeBackendListerWithStore) Get(name string) (*lbcfapi.BackendRecord, e
 	backend, ok := l.store[name]
 	if !ok {
 		return nil, errors.NewNotFound(schema.GroupResource{
-			Group:    "lbcf.tke.cloud.tencent.com/v1beta1",
+			Group:    "lbcf.tkestack.io/v1beta1",
 			Resource: "BackendRecord",
 		}, name)
 	}

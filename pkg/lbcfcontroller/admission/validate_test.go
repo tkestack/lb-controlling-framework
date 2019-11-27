@@ -17,11 +17,11 @@
 package admission
 
 import (
-	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 	"testing"
 	"time"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

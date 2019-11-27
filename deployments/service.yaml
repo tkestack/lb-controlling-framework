@@ -12,6 +12,6 @@ spec:
       port: 11029
       targetPort: 11029
   selector:
-    lbcf.tke.cloud.tencent.com/component: lbcf-controller
+    lbcf.tkestack.io/component: lbcf-controller
   sessionAffinity: None
   type: ClusterIP

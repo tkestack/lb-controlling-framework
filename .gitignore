@@ -22,6 +22,7 @@ Desktop.ini
 .vscode
 
 # This is where the result of the go build goes
+/_output/
 /output/
 /debug/
 /vendor/

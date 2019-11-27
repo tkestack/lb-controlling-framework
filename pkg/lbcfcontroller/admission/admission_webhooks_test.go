@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tke.cloud.tencent.com/v1beta1"
-	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tke.cloud.tencent.com/v1beta1"
+	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
+	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	"github.com/evanphx/json-patch"
@@ -54,7 +54,7 @@ func TestAdmitter_MutateLB(t *testing.T) {
 	rsp := a.MutateLB(ar)
 	if !rsp.Allowed {
 		t.Fatalf("expect allow")
-	} else if string(rsp.Patch) != `[{"op":"add","path":"/metadata/finalizers","value":["lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"]}]` {
+	} else if string(rsp.Patch) != `[{"op":"add","path":"/metadata/finalizers","value":["lbcf.tkestack.io/delete-load-loadbalancer"]}]` {
 		t.Fatalf("wrong patch")
 	}
 
@@ -77,7 +77,7 @@ func TestAdmitter_MutateLB(t *testing.T) {
 	rsp = a.MutateLB(ar)
 	if !rsp.Allowed {
 		t.Fatalf("expect allow")
-	} else if string(rsp.Patch) != `[{"op":"add","path":"/metadata/finalizers/-","value":"lbcf.tke.cloud.tencent.com/delete-load-loadbalancer"}]` {
+	} else if string(rsp.Patch) != `[{"op":"add","path":"/metadata/finalizers/-","value":"lbcf.tkestack.io/delete-load-loadbalancer"}]` {
 		t.Fatalf("wrong patch")
 	}
 

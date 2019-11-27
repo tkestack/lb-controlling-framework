@@ -28,7 +28,7 @@ ValidatingAdmissionWebhook的使用：
 3.	创建后，只允许修改webhook的timeout
 4.	若要删除LoadBalancerDriver，需满足以下条件：
 
-* driver上存在label `lbcf.tke.cloud.tencent.com/driver-draining:"true"`
+* driver上存在label `lbcf.tkestack.io/driver-draining:"true"`
 * 所有使用该LoadBalancerDriver的LoadBalancer、BackendGroup以及BackendRecord都已删除
 
 MutatingAdmissionWebhook的使用：未使用
@@ -50,7 +50,7 @@ MutatingAdmissionWebhook的使用：未使用
 
 **样例**
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: LoadBalancerDriver
 metadata: 
   name: lbcf-clb-application 
@@ -89,7 +89,7 @@ ValidatingAdmissionWebhook的使用：
 
 1. 触发条件：Create、Update
 2.	校验基本格式
-3.	使用的LoadBalancerDriver不在draining状态（不存在label `lbcf.tke.cloud.tencent.com/driver-draining:"true"`)
+3.	使用的LoadBalancerDriver不在draining状态（不存在label `lbcf.tkestack.io/driver-draining:"true"`)
 4.	调用[validateLoadBalancer](lbcf-webhook-specification.md#validateloadbalancer)校验业务逻辑
 5.	创建后，只能修改attributes和ensurePolicy
 
@@ -97,7 +97,7 @@ MutatingAdmissionWebhook的使用：
 
 1.	增加finalizer：
 
-* lbcf.tke.cloud.tencent.com/delete-load-loadbalancer，删除前调用[deleteLoadBalancer](lbcf-webhook-specification.md#deleteloadbalancer)
+* lbcf.tkestack.io/delete-load-loadbalancer，删除前调用[deleteLoadBalancer](lbcf-webhook-specification.md#deleteloadbalancer)
 
 **CRD结构体定义**
 
@@ -118,7 +118,7 @@ MutatingAdmissionWebhook的使用：
 **样例1：使用已存在的CLB实例与监听器(四层)**
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: LoadBalancer
 metadata: 
   name: my-load-balancer-1 
@@ -137,7 +137,7 @@ spec:
 **样例2：临时创建CLB实例与监听器(四层)**
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: LoadBalancer
 metadata: 
   name: my-load-balancer-1 
@@ -363,18 +363,18 @@ ownerReference: 指向所属的backendGroup
     
 finalizers:
 
-* lbcf.tke.cloud.tencent.com/deregister-backend，解绑backend
+* lbcf.tkestack.io/deregister-backend，解绑backend
 
 使用的label:
 
 | label key | Description |
 |:---|:---|
-|lbcf.tke.cloud.tencent.com/lb-driver|调用webhook所需的LoadBalancerDriver|
-|lbcf.tke.cloud.tencent.com/lb-name|被绑定的LoadBalancer的name|
-|lbcf.tke.cloud.tencent.com/backend-group|所属的BackendGroup|
-|lbcf.tke.cloud.tencent.com/backend-service|BackendGroup类型为service时，此BackendRecord对应的Service的name|
-|lbcf.tke.cloud.tencent.com/backend-pod|BackendGroup类型为pods时，此BackendRecord对应的Pod的name|
-|lbcf.tke.cloud.tencent.com/backend-static-addr|BackendGroup类型为static时，此BackendRecord对应的静态地址|
+|lbcf.tkestack.io/lb-driver|调用webhook所需的LoadBalancerDriver|
+|lbcf.tkestack.io/lb-name|被绑定的LoadBalancer的name|
+|lbcf.tkestack.io/backend-group|所属的BackendGroup|
+|lbcf.tkestack.io/backend-service|BackendGroup类型为service时，此BackendRecord对应的Service的name|
+|lbcf.tkestack.io/backend-pod|BackendGroup类型为pods时，此BackendRecord对应的Pod的name|
+|lbcf.tkestack.io/backend-static-addr|BackendGroup类型为static时，此BackendRecord对应的静态地址|
 
 **CRD结构体定义**
 
@@ -392,29 +392,29 @@ finalizers:
 **样例：PodBackend**
 
 ```yaml
-apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+apiVersion: lbcf.tkestack.io/v1beta1
 kind: BackendRecord
 metadata:
   creationTimestamp: 2019-05-30T10:45:26Z
   finalizers:
-  - lbcf.tke.cloud.tencent.com/deregister-backend
+  - lbcf.tkestack.io/deregister-backend
   generation: 1
   labels:
-    lbcf.tke.cloud.tencent.com/backend-group: web-backend-group
-    lbcf.tke.cloud.tencent.com/backend-pod: web-0
-    lbcf.tke.cloud.tencent.com/lb-driver: lbcf-god-driver
-    lbcf.tke.cloud.tencent.com/lb-name: test-load-balancer
+    lbcf.tkestack.io/backend-group: web-backend-group
+    lbcf.tkestack.io/backend-pod: web-0
+    lbcf.tkestack.io/lb-driver: lbcf-god-driver
+    lbcf.tkestack.io/lb-name: test-load-balancer
   name: 341953d53e36218d40b22ad9a0f67e9b
   namespace: kube-system
   ownerReferences:
-  - apiVersion: lbcf.tke.cloud.tencent.com/v1beta1
+  - apiVersion: lbcf.tkestack.io/v1beta1
     blockOwnerDeletion: true
     controller: true
     kind: BackendGroup
     name: web-backend-group
     uid: a2c45f2b-8284-11e9-b3e1-525400d96a00
   resourceVersion: "5260525"
-  selfLink: /apis/lbcf.tke.cloud.tencent.com/v1beta1/namespaces/kube-system/backendrecords/341953d53e36218d40b22ad9a0f67e9b
+  selfLink: /apis/lbcf.tkestack.io/v1beta1/namespaces/kube-system/backendrecords/341953d53e36218d40b22ad9a0f67e9b
   uid: 08e36678-82c8-11e9-b9e7-525400854cbb
 spec:
   lbAttributes: null
