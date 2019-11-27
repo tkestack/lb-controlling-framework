@@ -29,6 +29,7 @@ VERSION_PACKAGE=tkestack.io/lb-controlling-framework/pkg/version
 include build/lib/common.mk
 include build/lib/golang.mk
 include build/lib/image.mk
+include build/lib/gen.mk
 
 # ==============================================================================
 # Usage
@@ -48,6 +49,11 @@ export USAGE_OPTIONS
 
 # ==============================================================================
 # Targets
+
+## gen: Generate codes for API definitions.
+.PHONY: gen
+gen:
+	@$(MAKE) gen.run
 
 ## build: Build source code for host platform.
 .PHONY: build
