@@ -18,7 +18,7 @@
 package app
 
 import (
-	"flag"
+	goflag "flag"
 	"k8s.io/klog"
 	"net/http"
 	_ "net/http/pprof"
@@ -28,17 +28,34 @@ import (
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/admission"
+	"tkestack.io/lb-controlling-framework/pkg/version"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func NewServer() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use: "lbcr-controller",
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = cmd.Help()
+		},
+	}
+	rootCmd.AddCommand(newCmdStart())
+	rootCmd.AddCommand(version.NewCmdVersion())
+
+	fs := goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
+	klog.InitFlags(fs)
+	rootCmd.PersistentFlags().AddGoFlagSet(fs)
+
+	return rootCmd
+}
+
+func newCmdStart() *cobra.Command {
 	cfg := config.NewConfig()
 
 	cmd := &cobra.Command{
-		Use: "lbcf-controller",
-
+		Use: "run",
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := context.NewContext(cfg)
 			admissionWebhookServer := admission.NewWebhookServer(ctx, cfg.ServerCrt, cfg.ServerKey)
@@ -57,13 +74,6 @@ func NewServer() *cobra.Command {
 			<-wait.NeverStop
 		},
 	}
-
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	klog.InitFlags(fs)
-	cfg.AddFlags(fs)
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		panic(err)
-	}
-	cmd.Flags().AddGoFlagSet(fs)
+	cfg.AddFlags(cmd.LocalFlags())
 	return cmd
 }

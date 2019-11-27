@@ -18,8 +18,9 @@
 package config
 
 import (
-	"flag"
 	"time"
+
+	flag "github.com/spf13/pflag"
 )
 
 type Config struct {

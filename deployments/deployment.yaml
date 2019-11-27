@@ -17,11 +17,13 @@ spec:
       serviceAccountName: lbcf-controller
       containers:
         - name: controller
+          args:
+            - run
           image: ${IMAGE_NAME}
+          imagePullPolicy: Always
           ports:
             - containerPort: 443
               name: admit-server
-          imagePullPolicy: Always
           volumeMounts:
             - name: server-tls
               mountPath: /etc/lbcf
