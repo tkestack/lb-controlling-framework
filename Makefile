@@ -20,8 +20,8 @@ all: lint test build
 # ==============================================================================
 # Build options
 
-ROOT_PACKAGE=tkestack.io/tke
-VERSION_PACKAGE=tkestack.io/tke/pkg/app/version
+ROOT_PACKAGE=tkestack.io/lb-controlling-framework
+VERSION_PACKAGE=tkestack.io/lb-controlling-framework/pkg/version
 
 # ==============================================================================
 # Includes
