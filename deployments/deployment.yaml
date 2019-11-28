@@ -17,8 +17,6 @@ spec:
       serviceAccountName: lbcf-controller
       containers:
         - name: controller
-          args:
-            - run
           image: ${IMAGE_NAME}
           imagePullPolicy: Always
           ports:

@@ -21,10 +21,10 @@ package version
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 
-	"github.com/spf13/cobra"
-	"k8s.io/klog"
+	flag "github.com/spf13/pflag"
 )
 
 var (
@@ -36,7 +36,22 @@ var (
 	GitTreeState = ""
 	// BuildDate in ISO8601 format, output of $(date -u +'%Y-%m-%dT%H:%M:%SZ')
 	BuildDate = "1970-01-01T00:00:00Z"
+
+	versionFlag bool
 )
+
+func init() {
+	flag.BoolVar(&versionFlag, "version", false, "Print version information and quit")
+}
+
+// PrintAndExitIfRequested will check if the -version flag was passed
+// and, if so, print the version and exit.
+func PrintAndExitIfRequested() {
+	if versionFlag {
+		fmt.Println(Get().String())
+		os.Exit(0)
+	}
+}
 
 type Info struct {
 	GitVersion   string `json:"gitVersion"`
@@ -54,16 +69,6 @@ func (i Info) String() string {
 		return err.Error()
 	}
 	return string(b)
-}
-
-func NewCmdVersion() *cobra.Command {
-	cmd := &cobra.Command{
-		Use: "version",
-		Run: func(cmd *cobra.Command, args []string) {
-			klog.Info(Get().String())
-		},
-	}
-	return cmd
 }
 
 func Get() Info {
