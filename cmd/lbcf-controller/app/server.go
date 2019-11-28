@@ -19,7 +19,6 @@ package app
 
 import (
 	goflag "flag"
-	"k8s.io/klog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -32,31 +31,16 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog"
 )
 
 func NewServer() *cobra.Command {
+	cfg := config.NewConfig()
 	rootCmd := &cobra.Command{
 		Use: "lbcr-controller",
 		Run: func(cmd *cobra.Command, args []string) {
-			_ = cmd.Help()
-		},
-	}
-	rootCmd.AddCommand(newCmdStart())
-	rootCmd.AddCommand(version.NewCmdVersion())
+			version.PrintAndExitIfRequested()
 
-	fs := goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
-	klog.InitFlags(fs)
-	rootCmd.PersistentFlags().AddGoFlagSet(fs)
-
-	return rootCmd
-}
-
-func newCmdStart() *cobra.Command {
-	cfg := config.NewConfig()
-
-	cmd := &cobra.Command{
-		Use: "run",
-		Run: func(cmd *cobra.Command, args []string) {
 			ctx := context.NewContext(cfg)
 			admissionWebhookServer := admission.NewWebhookServer(ctx, cfg.ServerCrt, cfg.ServerKey)
 			lbcf := lbcfcontroller.NewController(ctx)
@@ -74,6 +58,10 @@ func newCmdStart() *cobra.Command {
 			<-wait.NeverStop
 		},
 	}
-	cfg.AddFlags(cmd.LocalFlags())
-	return cmd
+
+	fs := goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
+	klog.InitFlags(fs)
+	rootCmd.Flags().AddGoFlagSet(fs)
+	cfg.AddFlags(rootCmd.Flags())
+	return rootCmd
 }
