@@ -19,7 +19,6 @@
 #
 
 DOCKER := docker
-DOCKER_SUPPORTED_VERSIONS ?= 17|18|19
 
 REGISTRY_PREFIX ?= tkestack
 BASE_IMAGE = alpine:3.10
@@ -44,18 +43,11 @@ ifeq (${IMAGES},)
   $(error Could not determine IMAGES, set ROOT_DIR or run in source dir)
 endif
 
-.PHONY: image.verify
-image.verify:
-ifneq ($(shell $(DOCKER) -v | grep -q -E '\bversion ($(DOCKER_SUPPORTED_VERSIONS))\b' && echo 0 || echo 1), 0)
-	$(error unsupported docker version. Please make install one of the following supported version: '$(DOCKER_SUPPORTED_VERSIONS)')
-endif
-	@echo "===========> Docker version verification passed"
-
 .PHONY: image.build
-image.build: image.verify go.build.verify $(addprefix image.build., $(IMAGES))
+image.build: go.build.verify $(addprefix image.build., $(IMAGES))
 
 .PHONY: image.push
-image.push: image.verify go.build.verify $(addprefix image.push., $(IMAGES))
+image.push: go.build.verify $(addprefix image.push., $(IMAGES))
 
 .PHONY: image.build.%
 image.build.%: go.build.linux_amd64.%
