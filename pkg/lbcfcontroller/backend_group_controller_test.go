@@ -189,7 +189,6 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 	type testCase struct {
 		name string
 
-		lb    *lbcfapi.LoadBalancer
 		group *lbcfapi.BackendGroup
 		svc   *v1.Service
 		nodes []*v1.Node
@@ -204,7 +203,6 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 	cases := []testCase{
 		{
 			name:                "svc-not-found",
-			lb:                  lb,
 			group:               newFakeBackendGroupOfService("", "test-group", lb.Name, 80, "TCP", "not-exist-svc"),
 			nodes:               []*v1.Node{newFakeNode("", "node1"), newFakeNode("", "node2")},
 			expectTotalBackends: 0,
@@ -212,7 +210,6 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 		},
 		{
 			name:                "svc-not-NodePort",
-			lb:                  lb,
 			group:               newFakeBackendGroupOfService("", "test-group", lb.Name, 80, "TCP", "not-exist-svc"),
 			svc:                 newFakeService("", "test-svc", v1.ServiceTypeClusterIP),
 			nodes:               []*v1.Node{newFakeNode("", "node1"), newFakeNode("", "node2")},
@@ -251,17 +248,17 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 		key, _ := controller.KeyFunc(c.group)
 		result := ctrl.syncBackendGroup(key)
 		if !result.IsFinished() {
-			t.Fatalf("expect succ result, get %#v", result)
+			t.Fatalf("case %s: expect succ result, get %#v", c.name, result)
 		}
 		if get, _ := fakeClient.LbcfV1beta1().BackendGroups(c.group.Namespace).Get(c.group.Name, metav1.GetOptions{}); get == nil {
-			t.Fatalf("miss BackendGroup")
+			t.Fatalf("case %s: miss BackendGroup", c.name)
 		} else if get.Status.Backends != int32(c.expectTotalBackends) {
-			t.Fatalf("expect status.backends = 0, get %v", get.Status.Backends)
+			t.Fatalf("case %s: expect status.backends = 0, get %v", c.name, get.Status.Backends)
 		}
 
 		records, _ := fakeClient.LbcfV1beta1().BackendRecords(c.group.Namespace).List(metav1.ListOptions{})
 		if len(records.Items) != c.expectRecords {
-			t.Fatalf("expect %d BackendReocrds, get %v", c.expectRecords, len(records.Items))
+			t.Fatalf("case %s: expect %d BackendReocrds, get %v", c.name, c.expectRecords, len(records.Items))
 		}
 	}
 }

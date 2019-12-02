@@ -38,7 +38,7 @@ func TestConditionalRateLimitingQueueAddAfterMinimumDelay(t *testing.T) {
 	if quit {
 		t.Fatalf("should not quit")
 	}
-	elapsed := time.Now().Sub(startTime)
+	elapsed := time.Since(startTime)
 	if elapsed.Nanoseconds() < time.Second.Nanoseconds() {
 		t.Fatalf("too short, %s", elapsed.String())
 	}
@@ -52,7 +52,7 @@ func TestConditionalRateLimitingQueueAddAfterMinimumDelayWithEmptyValue(t *testi
 	if quit {
 		t.Fatalf("should not quit")
 	}
-	elapsed := time.Now().Sub(startTime)
+	elapsed := time.Since(startTime)
 	if elapsed.Nanoseconds() < time.Second.Nanoseconds() {
 		t.Fatalf("too short, %s", elapsed.String())
 	}

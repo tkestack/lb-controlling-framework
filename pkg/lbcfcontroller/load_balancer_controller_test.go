@@ -166,7 +166,7 @@ func TestLoadBalancerCreateInvalid(t *testing.T) {
 	}
 }
 func TestLoadBalancerEnsure(t *testing.T) {
-	createdAt := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	createdAt := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
 	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
@@ -215,7 +215,7 @@ func TestLoadBalancerEnsure(t *testing.T) {
 }
 
 func TestLoadBalancerEnsureFail(t *testing.T) {
-	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	timestamp := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
 	lb.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
@@ -265,7 +265,7 @@ func TestLoadBalancerEnsureFail(t *testing.T) {
 }
 
 func TestLoadBalancerEnsureRunning(t *testing.T) {
-	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	timestamp := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
 	lb.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
@@ -315,7 +315,7 @@ func TestLoadBalancerEnsureRunning(t *testing.T) {
 }
 
 func TestLoadBalancerReEnsure(t *testing.T) {
-	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	timestamp := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
 	lb.Status.Conditions = []lbcfapi.LoadBalancerCondition{
@@ -360,7 +360,7 @@ func TestLoadBalancerReEnsure(t *testing.T) {
 }
 
 func TestLoadBalancerEnsureInvalid(t *testing.T) {
-	timestamp := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	timestamp := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	lb := newFakeLoadBalancer("", "test-lb", nil, nil)
 	lb.Spec.LBDriver = "test-driver"
 	lb.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{

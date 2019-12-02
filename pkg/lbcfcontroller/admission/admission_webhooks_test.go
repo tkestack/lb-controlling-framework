@@ -27,13 +27,11 @@ import (
 
 	"github.com/evanphx/json-patch"
 	"k8s.io/api/admission/v1beta1"
-	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/listers/core/v1"
 )
 
 func TestAdmitter_MutateLB(t *testing.T) {
@@ -104,7 +102,7 @@ func TestAdmitter_MutateDriver(t *testing.T) {
 		},
 		Spec: lbcfapi.LoadBalancerDriverSpec{
 			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://test-driver.com",
+			URL:        "http://test-driver.com",
 		},
 	}
 	raw, _ := json.Marshal(driver)
@@ -176,7 +174,7 @@ func TestAdmitter_MutateDriver(t *testing.T) {
 		},
 		Spec: lbcfapi.LoadBalancerDriverSpec{
 			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://test-driver.com",
+			URL:        "http://test-driver.com",
 			Webhooks:   hooks,
 		},
 	}
@@ -351,7 +349,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 			expectAllow: false,
@@ -365,7 +363,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateBackend,
@@ -387,7 +385,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -449,7 +447,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -513,7 +511,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 			expectAllow: false,
@@ -527,7 +525,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: "a-not-supported-webhook",
@@ -549,7 +547,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -749,7 +747,7 @@ func TestAdmitter_ValidateDriverUpdate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -809,7 +807,7 @@ func TestAdmitter_ValidateDriverUpdate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -873,7 +871,7 @@ func TestAdmitter_ValidateDriverUpdate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -933,7 +931,7 @@ func TestAdmitter_ValidateDriverUpdate(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -977,7 +975,7 @@ func TestAdmitter_ValidateDriverUpdate_UpdatedForbiddenField(t *testing.T) {
 		},
 		Spec: lbcfapi.LoadBalancerDriverSpec{
 			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://1.1.1.1:80",
+			URL:        "http://1.1.1.1:80",
 		},
 	}
 	cur := &lbcfapi.LoadBalancerDriver{
@@ -987,7 +985,7 @@ func TestAdmitter_ValidateDriverUpdate_UpdatedForbiddenField(t *testing.T) {
 		},
 		Spec: lbcfapi.LoadBalancerDriverSpec{
 			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://another.url.com:80",
+			URL:        "http://another.url.com:80",
 		},
 	}
 	oldRaw, _ := json.Marshal(old)
@@ -1017,7 +1015,7 @@ func TestAdmitter_ValidateDriverUpdate_CurObjInvalid(t *testing.T) {
 		},
 		Spec: lbcfapi.LoadBalancerDriverSpec{
 			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "http://1.1.1.1:80",
+			URL:        "http://1.1.1.1:80",
 		},
 	}
 	cur := &lbcfapi.LoadBalancerDriver{
@@ -1027,7 +1025,7 @@ func TestAdmitter_ValidateDriverUpdate_CurObjInvalid(t *testing.T) {
 		},
 		Spec: lbcfapi.LoadBalancerDriverSpec{
 			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        "invalid url",
+			URL:        "invalid url",
 		},
 	}
 	oldRaw, _ := json.Marshal(old)
@@ -1063,7 +1061,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_DriverNotExist(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1096,7 +1094,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_DriverDraining(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1129,7 +1127,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_DriverDeleting(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1156,7 +1154,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_WebhookFail(t *testing.T) {
 			},
 			Spec: lbcfapi.LoadBalancerDriverSpec{
 				DriverType: string(lbcfapi.WebhookDriver),
-				Url:        "http://localhost:23456",
+				URL:        "http://localhost:23456",
 			},
 		},
 	}
@@ -1173,7 +1171,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_WebhookFail(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1216,7 +1214,7 @@ func TestAdmitter_ValidateLoadBalancerUpdate(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					1 * time.Minute,
+					Duration: 1 * time.Minute,
 				},
 			},
 		},
@@ -1315,7 +1313,7 @@ func TestAdmitter_ValidateLoadBalancerUpdate_CurObjInvalid(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyIfNotSucc,
 				MinPeriod: &lbcfapi.Duration{
-					1 * time.Minute,
+					Duration: 1 * time.Minute,
 				},
 			},
 		},
@@ -1381,7 +1379,7 @@ func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1445,7 +1443,7 @@ func TestAdmitter_ValidateBackendGroupCreate_InvalidGroup(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1489,7 +1487,7 @@ func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1533,7 +1531,7 @@ func TestAdmitter_ValidateBackendGroupCreate_LBDeleting(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1584,7 +1582,7 @@ func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyAlways,
 				MinPeriod: &lbcfapi.Duration{
-					30 * time.Second,
+					Duration: 30 * time.Second,
 				},
 			},
 		},
@@ -1786,7 +1784,7 @@ func TestAdmitter_ValidateBackendGroupUpdate_CurObjInvalid(t *testing.T) {
 			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 				Policy: lbcfapi.PolicyIfNotSucc,
 				MinPeriod: &lbcfapi.Duration{
-					10 * time.Second,
+					Duration: 10 * time.Second,
 				},
 			},
 		},
@@ -1829,23 +1827,6 @@ func TestAdmitter_ValidateBackendGroupDelete(t *testing.T) {
 	if !resp.Allowed {
 		t.Fatalf("expect allow")
 	}
-}
-
-type alwaysSuccPodLister struct {
-	getPod   *apiv1.Pod
-	listPods []*apiv1.Pod
-}
-
-func (l *alwaysSuccPodLister) Get(name string) (*apiv1.Pod, error) {
-	return l.getPod, nil
-}
-
-func (l *alwaysSuccPodLister) List(selector labels.Selector) (ret []*apiv1.Pod, err error) {
-	return l.listPods, nil
-}
-
-func (l *alwaysSuccPodLister) Pods(namespace string) v1.PodNamespaceLister {
-	return l
 }
 
 type alwaysSuccLBLister struct {

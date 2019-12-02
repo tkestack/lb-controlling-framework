@@ -374,7 +374,7 @@ func TestBackendEnsureFailed(t *testing.T) {
 func TestBackendEnsureRunning(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
 		Policy: lbcfapi.PolicyAlways,
@@ -424,7 +424,7 @@ func TestBackendEnsureRunning(t *testing.T) {
 func TestBackendEnsureRerun(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
 		Policy: lbcfapi.PolicyIfNotSucc,
@@ -510,7 +510,7 @@ func TestBackendEnsureInvalidResponse(t *testing.T) {
 func TestBackendDeregister(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
@@ -556,7 +556,7 @@ func TestBackendDeregister(t *testing.T) {
 func TestBackendDeregisterFailed(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
@@ -609,7 +609,7 @@ func TestBackendDeregisterFailed(t *testing.T) {
 func TestBackendDeregisterRunning(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
@@ -662,7 +662,7 @@ func TestBackendDeregisterRunning(t *testing.T) {
 func TestBackendDeregisterInvalidResponse(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
@@ -715,7 +715,7 @@ func TestBackendDeregisterInvalidResponse(t *testing.T) {
 func TestBackendDeregisterEmptyAddr(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 	backend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))
 	backend.DeletionTimestamp = &ts
 	backend.Finalizers = []string{lbcfapi.FinalizerDeregisterBackend}
@@ -760,7 +760,7 @@ func TestBackendDeregisterEmptyAddr(t *testing.T) {
 func TestBackendSameAddrOperation(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods("", "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	ts := v1.Time{time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
+	ts := v1.Time{Time: time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)}
 
 	// oldBackend is deleting
 	oldBackend := util.ConstructPodBackendRecord(lb, bg, newFakePod("", "pod-0", nil, true, false))

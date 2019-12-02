@@ -636,11 +636,11 @@ func TestRemoveFinalizer(t *testing.T) {
 	for _, c := range cases {
 		get := RemoveFinalizer(c.all, c.toRemove)
 		if len(get) != len(c.expect) {
-			t.Fatalf("error len")
+			t.Fatalf("case %s: error len", c.name)
 		}
 		for i := range get {
 			if get[i] != c.expect[i] {
-				t.Fatalf("different value, index %d", i)
+				t.Fatalf("case %s: different value, index %d", c.name, i)
 			}
 		}
 	}
@@ -857,10 +857,7 @@ func TestFilterPods(t *testing.T) {
 		},
 	}
 	filterByName := func(pod *v1.Pod) bool {
-		if strings.HasPrefix(pod.Name, "selected") {
-			return true
-		}
-		return false
+		return strings.HasPrefix(pod.Name, "selected")
 	}
 
 	get := FilterPods(allPods, filterByName)
@@ -1357,10 +1354,7 @@ func TestFilterBackendGroup(t *testing.T) {
 		},
 	}
 	filterFunc := func(group *lbcfapi.BackendGroup) bool {
-		if strings.HasPrefix(group.Name, "selected") {
-			return true
-		}
-		return false
+		return strings.HasPrefix(group.Name, "selected")
 	}
 	expect := sets.NewString("selected-1", "selected-2")
 	result := FilterBackendGroup(all, filterFunc)
