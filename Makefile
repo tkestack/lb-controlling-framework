@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations under the License.
 
 .PHONY: all
-all: build
+all: lint build
 
 # ==============================================================================
 # Build options
@@ -74,6 +74,11 @@ image:
 .PHONY: push
 push:
 	@$(MAKE) image.push
+
+## lint: Check syntax and styling of go sources.
+.PHONY: lint
+lint:
+	@$(MAKE) go.lint
 
 .PHONY: help
 help: Makefile
