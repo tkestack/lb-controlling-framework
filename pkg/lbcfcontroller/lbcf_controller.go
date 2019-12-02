@@ -198,7 +198,7 @@ func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface
 			queue.AddAfterFiltered(key, result.GetNextRun())
 		}
 
-		elapsed := time.Now().Sub(startTime)
+		elapsed := time.Since(startTime)
 		klog.V(3).Infof("sync finished, key %s, took %s", key, elapsed.String())
 	}()
 	return true

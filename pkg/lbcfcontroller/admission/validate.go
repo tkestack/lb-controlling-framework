@@ -41,7 +41,7 @@ func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList
 
 	allErrs = append(allErrs, validateDriverName(raw.Name, raw.Namespace, field.NewPath("metadata").Child("name"))...)
 	allErrs = append(allErrs, validateDriverType(raw.Spec.DriverType, field.NewPath("spec").Child("driverType"))...)
-	allErrs = append(allErrs, validateDriverURL(raw.Spec.Url, field.NewPath("spec").Child("url"))...)
+	allErrs = append(allErrs, validateDriverURL(raw.Spec.URL, field.NewPath("spec").Child("url"))...)
 	allErrs = append(allErrs, validateDriverWebhooks(raw.Spec.Webhooks, field.NewPath("spec").Child("webhooks"))...)
 	return allErrs
 }
@@ -70,7 +70,7 @@ func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 
 // DriverUpdatedFieldsAllowed returns false if the updating to fields is not allowed
 func DriverUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancerDriver, old *lbcfapi.LoadBalancerDriver) (bool, string) {
-	if old.Spec.Url != cur.Spec.Url {
+	if old.Spec.URL != cur.Spec.URL {
 		return false, "updating URL is prohibited"
 	}
 	if old.Spec.DriverType != cur.Spec.DriverType {

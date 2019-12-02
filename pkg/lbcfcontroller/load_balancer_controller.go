@@ -236,7 +236,7 @@ func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 func (c *loadBalancerController) removeFinalizer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
 	lb = lb.DeepCopy()
 	lb.Finalizers = util.RemoveFinalizer(lb.Finalizers, lbcfapi.FinalizerDeleteLB)
-	lb, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Update(lb)
+	_, err := c.lbcfClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Update(lb)
 	if err != nil {
 		return util.ErrorResult(err)
 	}

@@ -132,7 +132,7 @@ func (w *WebhookInvokerImpl) CallDeregisterBackend(driver *lbcfapi.LoadBalancerD
 }
 
 func callWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload interface{}, rsp interface{}) error {
-	u, err := url.Parse(driver.Spec.Url)
+	u, err := url.Parse(driver.Spec.URL)
 	if err != nil {
 		e := fmt.Errorf("invalid url: %v", err)
 		klog.Errorf("callwebhook failed: %v. driver: %s, webhookName: %s", e, driver.Name, webHookName)

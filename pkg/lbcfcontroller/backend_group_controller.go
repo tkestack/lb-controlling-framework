@@ -133,10 +133,7 @@ func (c *backendGroupController) expectedPodBackends(group *lbcfapi.BackendGroup
 				return false
 			}
 			except := sets.NewString(group.Spec.Pods.ByLabel.Except...)
-			if !except.Has(p.Name) {
-				return true
-			}
-			return false
+			return !except.Has(p.Name)
 		}
 		pods = util.FilterPods(pods, filter)
 	} else if len(group.Spec.Pods.ByName) > 0 {
@@ -237,10 +234,7 @@ func (c *backendGroupController) update(group *lbcfapi.BackendGroup, lb *lbcfapi
 
 func (c *backendGroupController) listRelatedBackendGroupsForPod(pod *v1.Pod) sets.String {
 	filter := func(group *lbcfapi.BackendGroup) bool {
-		if util.IsPodMatchBackendGroup(group, pod) {
-			return true
-		}
-		return false
+		return util.IsPodMatchBackendGroup(group, pod)
 	}
 	groups, err := c.listRelatedBackendGroups(pod.Namespace, filter)
 	if err != nil {
