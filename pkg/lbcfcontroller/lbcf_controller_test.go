@@ -1312,7 +1312,7 @@ func setBackendRecordOwner(backend *lbcfapi.BackendRecord, group *lbcfapi.Backen
 	valueTrue := true
 	backend.OwnerReferences = []metav1.OwnerReference{
 		{
-			APIVersion:         lbcfapi.ApiVersion,
+			APIVersion:         lbcfapi.APIVersion,
 			BlockOwnerDeletion: &valueTrue,
 			Controller:         &valueTrue,
 			Kind:               "BackendGroup",
@@ -1884,31 +1884,6 @@ func (c *fakeFailInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriv
 			Msg:    "fake fail",
 		},
 	}, nil
-}
-
-func drainingDriverLister() lbcflister.LoadBalancerDriverLister {
-	return &fakeDriverLister{
-		get: &lbcfapi.LoadBalancerDriver{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-driver",
-				Labels: map[string]string{
-					lbcfapi.DriverDrainingLabel: "True",
-				},
-			},
-		},
-	}
-}
-
-func deletingDriverLister() lbcflister.LoadBalancerDriverLister {
-	ts := metav1.Now()
-	return &fakeDriverLister{
-		get: &lbcfapi.LoadBalancerDriver{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              "test-driver",
-				DeletionTimestamp: &ts,
-			},
-		},
-	}
 }
 
 type fakeRunningInvoker struct{}

@@ -261,15 +261,6 @@ func succValidate(rsp http.ResponseWriter, req *http.Request) {
 	rsp.Write(payLoad)
 }
 
-func failValidate(rsp http.ResponseWriter, req *http.Request) {
-	body := &webhooks.ResponseForNoRetryHooks{
-		Succ: false,
-		Msg:  "fake-validate-fail",
-	}
-	payLoad, _ := json.Marshal(body)
-	rsp.Write(payLoad)
-}
-
 func timeoutlValidate(rsp http.ResponseWriter, req *http.Request) {
 	time.Sleep(2 * time.Second)
 	succValidate(rsp, req)
@@ -283,16 +274,6 @@ func succRun(rsp http.ResponseWriter, req *http.Request) {
 	body := &webhooks.ResponseForFailRetryHooks{
 		Status: webhooks.StatusSucc,
 		Msg:    "fake-validate-succ",
-	}
-	payLoad, _ := json.Marshal(body)
-	rsp.Write(payLoad)
-}
-
-func failRun(rsp http.ResponseWriter, req *http.Request) {
-	body := &webhooks.ResponseForFailRetryHooks{
-		Status:                 webhooks.StatusFail,
-		Msg:                    "fake-validate-succ",
-		MinRetryDelayInSeconds: 30,
 	}
 	payLoad, _ := json.Marshal(body)
 	rsp.Write(payLoad)
@@ -353,7 +334,7 @@ func fakeMockDriver(u *url.URL, timeout time.Duration) *lbcfapi.LoadBalancerDriv
 		},
 		Spec: lbcfapi.LoadBalancerDriverSpec{
 			DriverType: string(lbcfapi.WebhookDriver),
-			Url:        u.String(),
+			URL:        u.String(),
 			Webhooks: []lbcfapi.WebhookConfig{
 				{
 					Name: webhooks.ValidateLoadBalancer,

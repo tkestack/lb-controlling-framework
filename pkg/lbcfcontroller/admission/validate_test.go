@@ -42,54 +42,54 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.CreateLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.EnsureLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.DeleteLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.ValidateBackend,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.GenerateBackendAddr,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.EnsureBackend,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.DeregBackend,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 					},
@@ -106,54 +106,54 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.CreateLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.EnsureLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.DeleteLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.ValidateBackend,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.GenerateBackendAddr,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.EnsureBackend,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 						{
 							Name: webhooks.DeregBackend,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 					},
@@ -170,7 +170,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 		},
@@ -183,7 +183,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 		},
@@ -196,7 +196,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: "invalid-type",
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 		},
@@ -209,7 +209,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "1.1.1.1:80",
+					URL:        "1.1.1.1:80",
 				},
 			},
 		},
@@ -222,7 +222,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{},
 					},
@@ -238,12 +238,12 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								100 * time.Hour,
+								Duration: 100 * time.Hour,
 							},
 						},
 					},
@@ -259,7 +259,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
@@ -280,7 +280,7 @@ func TestValidateLoadBalancerDriver(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: "not-supported-name",
@@ -321,7 +321,7 @@ func TestValidateLoadBalancer(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -401,7 +401,7 @@ func TestValidateLoadBalancer(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyIfNotSucc,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -421,7 +421,7 @@ func TestValidateLoadBalancer(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							29 * time.Second,
+							Duration: 29 * time.Second,
 						},
 					},
 				},
@@ -483,7 +483,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -510,7 +510,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -538,7 +538,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -559,7 +559,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -595,7 +595,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -624,7 +624,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -653,7 +653,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -758,7 +758,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyIfNotSucc,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -782,7 +782,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -813,7 +813,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -840,7 +840,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							30 * time.Second,
+							Duration: 30 * time.Second,
 						},
 					},
 				},
@@ -874,7 +874,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 			cur: &lbcfapi.LoadBalancerDriver{
@@ -884,12 +884,12 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 					Webhooks: []lbcfapi.WebhookConfig{
 						{
 							Name: webhooks.ValidateLoadBalancer,
 							Timeout: lbcfapi.Duration{
-								10 * time.Second,
+								Duration: 10 * time.Second,
 							},
 						},
 					},
@@ -906,7 +906,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 			cur: &lbcfapi.LoadBalancerDriver{
@@ -916,7 +916,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 				Status: lbcfapi.LoadBalancerDriverStatus{
 					Conditions: []lbcfapi.LoadBalancerDriverCondition{
@@ -939,7 +939,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 			cur: &lbcfapi.LoadBalancerDriver{
@@ -949,7 +949,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://2.2.2.2:80",
+					URL:        "http://2.2.2.2:80",
 				},
 			},
 		},
@@ -962,7 +962,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string(lbcfapi.WebhookDriver),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 			cur: &lbcfapi.LoadBalancerDriver{
@@ -972,7 +972,7 @@ func TestDriverUpdatedFieldsAllowed(t *testing.T) {
 				},
 				Spec: lbcfapi.LoadBalancerDriverSpec{
 					DriverType: string("invalid"),
-					Url:        "http://1.1.1.1:80",
+					URL:        "http://1.1.1.1:80",
 				},
 			},
 		},
@@ -1018,7 +1018,7 @@ func TestLBUpdatedFieldsAllowed(t *testing.T) {
 					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
 						Policy: lbcfapi.PolicyAlways,
 						MinPeriod: &lbcfapi.Duration{
-							1 * time.Minute,
+							Duration: 1 * time.Minute,
 						},
 					},
 				},
