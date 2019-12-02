@@ -20,7 +20,6 @@ package app
 import (
 	goflag "flag"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/config"

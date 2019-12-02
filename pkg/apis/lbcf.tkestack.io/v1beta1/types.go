@@ -21,14 +21,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"strconv"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog"
 )
 
 const (
-	ApiVersion = "lbcf.tkestack.io/v1beta1"
+	APIVersion = "lbcf.tkestack.io/v1beta1"
 
 	SystemDriverPrefix = "lbcf-"
 
@@ -196,7 +198,7 @@ const (
 
 type LoadBalancerDriverSpec struct {
 	DriverType string `json:"driverType"`
-	Url        string `json:"url"`
+	URL        string `json:"url"`
 	// +optional
 	Webhooks []WebhookConfig `json:"webhooks,omitempty"`
 }
@@ -326,7 +328,7 @@ type IntOrString struct {
 
 func FromInt(val int) IntOrString {
 	if val > math.MaxInt32 || val < math.MinInt32 {
-		//glog.Errorf("value: %d overflows int32\n%s\n", val, debug.Stack())
+		klog.Errorf("value: %d overflows int32\n%s\n", val, debug.Stack())
 	}
 	return IntOrString{Type: Int, IntVal: int32(val)}
 }

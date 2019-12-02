@@ -274,7 +274,7 @@ func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendG
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         lbcfapi.ApiVersion,
+					APIVersion:         lbcfapi.APIVersion,
 					BlockOwnerDeletion: &valueTrue,
 					Controller:         &valueTrue,
 					Kind:               "BackendGroup",
@@ -323,7 +323,7 @@ func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.Back
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         lbcfapi.ApiVersion,
+					APIVersion:         lbcfapi.APIVersion,
 					BlockOwnerDeletion: &valueTrue,
 					Controller:         &valueTrue,
 					Kind:               "BackendGroup",
@@ -362,7 +362,7 @@ func ConstructStaticBackend(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGrou
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         lbcfapi.ApiVersion,
+					APIVersion:         lbcfapi.APIVersion,
 					BlockOwnerDeletion: &valueTrue,
 					Controller:         &valueTrue,
 					Kind:               "BackendGroup",
