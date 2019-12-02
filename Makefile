@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations under the License.
 
 .PHONY: all
-all: lint build
+all: lint test build
 
 # ==============================================================================
 # Build options
@@ -79,6 +79,11 @@ push:
 .PHONY: lint
 lint:
 	@$(MAKE) go.lint
+
+## test: Run unit test.
+.PHONY: test
+test:
+	@$(MAKE) go.test
 
 .PHONY: help
 help: Makefile
