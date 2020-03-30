@@ -6,6 +6,7 @@
 - [定义BackendGroup](#定义backendgroup)
 - [查看BackendRecord](#查看backendrecord)
 - [强制删除BackendRecord](#强制删除backendrecord)
+- [强制更新不可修改字段](#强制更新不可修改字段)
 
 <!-- /TOC -->
 
@@ -323,3 +324,82 @@ Status中的Backend Addr是被绑定backend的地址，该地址由[generateBack
 
 1. 删除所有BackendRecord中的Finalizer `lbcf.tkestack.io/deregister-backend`
 2. 删除BackendGroup或LoadBalancer
+
+## 强制更新不可修改字段
+
+LBCF为每种CRD规定了"不可修改"的字段，比如LoadBalancerDriver中的spec.url，如果想强制更新这些字段，则需要暂停K8S对该种资源的[validating webhook](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#validatingadmissionwebhook)功能，操作方式如下：
+
+1. 使用`kubectl edit`编辑LBCF的validating webhook配置
+
+```bash
+kubectl edit ValidatingWebhookConfiguration lbcf-validate
+```
+
+2. 在validating webhook中找到要修改的资源，我们现在要修改的是loadbalancerdriver，所以需要在yaml中找到下面这段内容:
+
+```yaml
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURORENDQWh3Q0NRQ0grMkVFYnFlL09UQU5CZ2txaGtpRzl3MEJBUXNGQURCY01Rc3dDUVlEVlFRR0V3SkQKVGpFTE1Ba0dBMVVFQ0F3Q1Frb3hGakFVQmdOVkJBb01EWFJsYm1ObGJuUXNJRWx1WXk0eEtEQW1CZ05WQkFNTQpIMnhpWTJZdFkyOXVkSEp2Ykd4bGNpNXJkV0psTFhONWMzUmxiUzV6ZG1Nd0hoY05NVGt3TlRFMU1EWXdNVFE1CldoY05Nakl3TXpBME1EWXdNVFE1V2pCY01Rc3dDUVlEVlFRR0V3SkRUakVMTUFrR0ExVUVDQXdDUWtveEZqQVUKQmdOVkJBb01EWFJsYm1ObGJuUXNJRWx1WXk0eEtEQW1CZ05WQkFNTUgyeGlZMll0WTI5dWRISnZiR3hsY2k1cgpkV0psTFhONWMzUmxiUzV6ZG1Nd2dnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3Z2dFS0FvSUJBUURuCnJoZFVqRHJGQ2ZaVFI3QkxNOHNpcTNaSDFraGNiSmpGMnIxaWtoNUtrOERaTTRndWxQSFhyZkNZbTFPUUIwb3cKOXluSTNSRXEwY2trUVAzSGZnck1hWHhLVEtjYWs0dlBHdGlROVhWSC8wR2E4ODhhbTdQQVBvYklzS3hTc1g5UQowTi9GdlJtWXZSK2tZRUNwS2VVNWhON0l1QUZlZ3JCOHd3eDBjbzVSN085cklZU0MvVHFpSytibW1SaDRBcHlGClc2QWlvVTFJWmNsUDZYQlUxbkRrRVVPYk5LTUdDbDhsYUV0NHc3eC9uVlB4eUFYZUJpNmNpYk0zdXFETzB1MjIKMFZDUXNJRjBpTUlWWWk1eVR4NTNCMWNjS0xOeUlaYXRmOHhvRmNLdHJqN1FISlBtYWhPcnVIbjkzYlV4MzduZAptYm9EbExqclZpejhWY0Y4TklwOUFnTUJBQUV3RFFZSktvWklodmNOQVFFTEJRQURnZ0VCQUJtckE2Q3IrQ1cyCldxeHZXNDVFcEx2WnByY3lVbGNGTGFBdGo0Qit0QkVCemdMb2FmWlZUd0ZlK25TOWhCRTEwUUlCZFhVNnFkT1YKKzZMT1VibTZoU0tEb1hXUThya3llZEZPQmNoWUkzZDhUOW1Kek91NlM5aFBCYk1RdkJxSE9HOW4rUnlNOUU2NQoxeEQweVYwZzRvaXo0QUFuaWF3VHZhUlZrNWNteHlzZlhLQkFRbDJPOEFLTit2VnRBR3BaYnJYVkNzR3NMWTdyCml1RHhqNjBhTnVSNjZGTjcrWXcyMWVZUDFhd2NuUkZGRHkvbStWUE9VV0pBc3lQb0gwR2QwYXBZWUxwaTQzODMKVTlHU0NrZHNNczFNOHhLM0Zhb0QrYTJFUm9Ed1A5a2REaTI3c002bXVtbE05S2JaN3dWaWxMVXNJSU41VDYxbwpEU3dYd0Nmak01OD0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==
+    service:
+      name: lbcf-controller
+      namespace: kube-system
+      path: /validate-load-balancer-driver
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Exact
+  name: driver.lbcf.tkestack.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - lbcf.tkestack.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - loadbalancerdrivers
+    scope: '*'
+  sideEffects: Unknown
+  timeoutSeconds: 30
+```
+
+3. 在上一步的yaml中可以看到一个`operations`数组，该数组定义了针对指定资源的哪些行为会触发LBCF的校验，我们在这里需要暂停LBCF对`UPDATE`行为的校验，因此我们需要删除`operations`中的`UPDATE`。修改后的yaml如下：
+
+```yaml
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURORENDQWh3Q0NRQ0grMkVFYnFlL09UQU5CZ2txaGtpRzl3MEJBUXNGQURCY01Rc3dDUVlEVlFRR0V3SkQKVGpFTE1Ba0dBMVVFQ0F3Q1Frb3hGakFVQmdOVkJBb01EWFJsYm1ObGJuUXNJRWx1WXk0eEtEQW1CZ05WQkFNTQpIMnhpWTJZdFkyOXVkSEp2Ykd4bGNpNXJkV0psTFhONWMzUmxiUzV6ZG1Nd0hoY05NVGt3TlRFMU1EWXdNVFE1CldoY05Nakl3TXpBME1EWXdNVFE1V2pCY01Rc3dDUVlEVlFRR0V3SkRUakVMTUFrR0ExVUVDQXdDUWtveEZqQVUKQmdOVkJBb01EWFJsYm1ObGJuUXNJRWx1WXk0eEtEQW1CZ05WQkFNTUgyeGlZMll0WTI5dWRISnZiR3hsY2k1cgpkV0psTFhONWMzUmxiUzV6ZG1Nd2dnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3Z2dFS0FvSUJBUURuCnJoZFVqRHJGQ2ZaVFI3QkxNOHNpcTNaSDFraGNiSmpGMnIxaWtoNUtrOERaTTRndWxQSFhyZkNZbTFPUUIwb3cKOXluSTNSRXEwY2trUVAzSGZnck1hWHhLVEtjYWs0dlBHdGlROVhWSC8wR2E4ODhhbTdQQVBvYklzS3hTc1g5UQowTi9GdlJtWXZSK2tZRUNwS2VVNWhON0l1QUZlZ3JCOHd3eDBjbzVSN085cklZU0MvVHFpSytibW1SaDRBcHlGClc2QWlvVTFJWmNsUDZYQlUxbkRrRVVPYk5LTUdDbDhsYUV0NHc3eC9uVlB4eUFYZUJpNmNpYk0zdXFETzB1MjIKMFZDUXNJRjBpTUlWWWk1eVR4NTNCMWNjS0xOeUlaYXRmOHhvRmNLdHJqN1FISlBtYWhPcnVIbjkzYlV4MzduZAptYm9EbExqclZpejhWY0Y4TklwOUFnTUJBQUV3RFFZSktvWklodmNOQVFFTEJRQURnZ0VCQUJtckE2Q3IrQ1cyCldxeHZXNDVFcEx2WnByY3lVbGNGTGFBdGo0Qit0QkVCemdMb2FmWlZUd0ZlK25TOWhCRTEwUUlCZFhVNnFkT1YKKzZMT1VibTZoU0tEb1hXUThya3llZEZPQmNoWUkzZDhUOW1Kek91NlM5aFBCYk1RdkJxSE9HOW4rUnlNOUU2NQoxeEQweVYwZzRvaXo0QUFuaWF3VHZhUlZrNWNteHlzZlhLQkFRbDJPOEFLTit2VnRBR3BaYnJYVkNzR3NMWTdyCml1RHhqNjBhTnVSNjZGTjcrWXcyMWVZUDFhd2NuUkZGRHkvbStWUE9VV0pBc3lQb0gwR2QwYXBZWUxwaTQzODMKVTlHU0NrZHNNczFNOHhLM0Zhb0QrYTJFUm9Ed1A5a2REaTI3c002bXVtbE05S2JaN3dWaWxMVXNJSU41VDYxbwpEU3dYd0Nmak01OD0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==
+    service:
+      name: lbcf-controller
+      namespace: kube-system
+      path: /validate-load-balancer-driver
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Exact
+  name: driver.lbcf.tkestack.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - lbcf.tkestack.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - DELETE
+    resources:
+    - loadbalancerdrivers
+    scope: '*'
+  sideEffects: Unknown
+  timeoutSeconds: 30
+```
+
+4. 现在可以随意修改LoadBalancerDriver中的url了，由于我们暂停了LBCF的校验，因此需要由操作人员保证url的合法性
+
+5. 手动修改完成后，重新使用`kubectl edit`将`UPDATE`加回去
