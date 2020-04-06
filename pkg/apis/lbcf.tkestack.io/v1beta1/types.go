@@ -43,6 +43,9 @@ const (
 	LabelPodName        = "lbcf.tkestack.io/backend-pod"
 	LabelStaticAddr     = "lbcf.tkestack.io/backend-static-addr"
 
+	// LoadBalancers and BackendGroups with label do-not-delete are not allowed to be deleted
+	LabelDoNotDelete = "lbcf.tkestack.io/do-not-delete"
+
 	FinalizerDeleteLB               = "lbcf.tkestack.io/delete-load-loadbalancer"
 	FinalizerDeregisterBackend      = "lbcf.tkestack.io/deregister-backend"
 	FinalizerDeregisterBackendGroup = "lbcf.tkestack.io/deregister-backend-group"

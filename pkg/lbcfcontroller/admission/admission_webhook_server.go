@@ -26,7 +26,7 @@ import (
 
 	"github.com/emicklei/go-restful"
 	"k8s.io/api/admission/v1beta1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 )
 
@@ -34,7 +34,7 @@ import (
 func NewWebhookServer(context *context.Context, crtFile string, keyFile string) *Server {
 	s := &Server{
 		context:      context,
-		admitWebhook: NewAdmitter(context.LBInformer.Lister(), context.LBDriverInformer.Lister(), context.BRInformer.Lister(), util.NewWebhookInvoker()),
+		admitWebhook: NewAdmitter(context, util.NewWebhookInvoker()),
 		crtFile:      crtFile,
 		keyFile:      keyFile,
 	}

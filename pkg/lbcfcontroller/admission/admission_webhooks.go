@@ -20,14 +20,15 @@ package admission
 import (
 	"encoding/json"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/errors"
 
+	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	admission "k8s.io/api/admission/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"
@@ -62,11 +63,12 @@ type MutatingAdmissionWebhook interface {
 }
 
 // NewAdmitter creates a new instance of Webhook
-func NewAdmitter(lbLister lbcflister.LoadBalancerLister, driverLister lbcflister.LoadBalancerDriverLister, backendLister lbcflister.BackendRecordLister, invoker util.WebhookInvoker) Webhook {
+func NewAdmitter(ctx *context.Context, invoker util.WebhookInvoker) Webhook {
 	return &Admitter{
-		lbLister:       lbLister,
-		driverLister:   driverLister,
-		backendLister:  backendLister,
+		lbLister:       ctx.LBInformer.Lister(),
+		driverLister:   ctx.LBDriverInformer.Lister(),
+		backendLister:  ctx.BRInformer.Lister(),
+		bgLister:       ctx.BGInformer.Lister(),
 		webhookInvoker: invoker,
 	}
 }
@@ -75,6 +77,7 @@ func NewAdmitter(lbLister lbcflister.LoadBalancerLister, driverLister lbcflister
 type Admitter struct {
 	lbLister      lbcflister.LoadBalancerLister
 	driverLister  lbcflister.LoadBalancerDriverLister
+	bgLister      lbcflister.BackendGroupLister
 	backendLister lbcflister.BackendRecordLister
 
 	webhookInvoker util.WebhookInvoker
@@ -231,7 +234,20 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 }
 
 // ValidateLoadBalancerDelete implements ValidatingWebHook for LoadBalancer deleting
-func (a *Admitter) ValidateLoadBalancerDelete(*admission.AdmissionReview) *admission.AdmissionResponse {
+func (a *Admitter) ValidateLoadBalancerDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	lb, err := a.lbLister.LoadBalancers(ar.Request.Namespace).Get(ar.Request.Name)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return toAdmissionResponse(
+				fmt.Errorf("get LoadBalancer %v in %v failed: %v", ar.Request.Name, ar.Request.Namespace, err))
+		}
+		return toAdmissionResponse(nil)
+	}
+	if _, ok := lb.Labels[lbcfapi.LabelDoNotDelete]; ok {
+		return toAdmissionResponse(
+			fmt.Errorf("LoadBalancer with label %s is not allowed to be deleted, delete the label first if you know what you are doing",
+				lbcfapi.LabelDoNotDelete))
+	}
 	return toAdmissionResponse(nil)
 }
 
@@ -394,7 +410,20 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 }
 
 // ValidateBackendGroupDelete implements ValidatingWebHook for BackendGroup deleting
-func (a *Admitter) ValidateBackendGroupDelete(*admission.AdmissionReview) *admission.AdmissionResponse {
+func (a *Admitter) ValidateBackendGroupDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	bg, err := a.bgLister.BackendGroups(ar.Request.Namespace).Get(ar.Request.Name)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return toAdmissionResponse(
+				fmt.Errorf("get BackendGroup %v in %v failed: %v", ar.Request.Name, ar.Request.Namespace, err))
+		}
+		return toAdmissionResponse(nil)
+	}
+	if _, ok := bg.Labels[lbcfapi.LabelDoNotDelete]; ok {
+		return toAdmissionResponse(
+			fmt.Errorf("BackendGroup with label %s is not allowed to be deleted, delete the label first if you know what you are doing",
+				lbcfapi.LabelDoNotDelete))
+	}
 	return toAdmissionResponse(nil)
 }
 

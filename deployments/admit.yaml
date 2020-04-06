@@ -31,6 +31,7 @@ webhooks:
         operations:
           - CREATE
           - UPDATE
+          - DELETE
         resources:
           - loadbalancers
     clientConfig:
@@ -49,6 +50,7 @@ webhooks:
         operations:
           - CREATE
           - UPDATE
+          - DELETE
         resources:
           - backendgroups
     clientConfig:
