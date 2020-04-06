@@ -91,7 +91,8 @@ ValidatingAdmissionWebhook的使用：
 2.	校验基本格式
 3.	使用的LoadBalancerDriver不在draining状态（不存在label `lbcf.tkestack.io/driver-draining:"true"`)
 4.	调用[validateLoadBalancer](lbcf-webhook-specification.md#validateloadbalancer)校验业务逻辑
-5.	创建后，只能修改attributes和ensurePolicy
+5.	创建后，只能修改attributes和ensurePolicy  
+6. 带有label `lbcf.tkestack.io/do-not-delete`时，禁止删除
 
 MutatingAdmissionWebhook的使用：
 
@@ -204,7 +205,8 @@ ValidatingAdmissionWebhook的使用：
 2.	校验基本格式
 3.	检查使用的LoadBalancer是否在正在delete，若是，则禁止创建BackendGroup
 4.	调用[validateBackend](lbcf-webhook-specification.md#validatebackend)校验业务逻辑
-5.	创建后，允许修改backend的选择范围、parameters与ensurePolicy，但不允许修改backend类型
+5.	创建后，允许修改backend的选择范围、parameters与ensurePolicy，但不允许修改backend类型  
+6. 带有label `lbcf.tkestack.io/do-not-delete`时，禁止删除
 
 MutatingAdmissionWebhook的使用：未使用
 
