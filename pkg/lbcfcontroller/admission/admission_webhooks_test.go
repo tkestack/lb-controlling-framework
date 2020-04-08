@@ -23,9 +23,10 @@ import (
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
-	"github.com/evanphx/json-patch"
+	jsonpatch "github.com/evanphx/json-patch"
 	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +36,7 @@ import (
 )
 
 func TestAdmitter_MutateLB(t *testing.T) {
-	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 
 	// case 1: create finalizers array
 	lb := &lbcfapi.LoadBalancer{
@@ -94,7 +95,7 @@ func TestAdmitter_MutateLB(t *testing.T) {
 }
 
 func TestAdmitter_MutateDriver(t *testing.T) {
-	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	driver := &lbcfapi.LoadBalancerDriver{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-driver",
@@ -226,7 +227,7 @@ func TestAdmitter_MutateDriver(t *testing.T) {
 }
 
 func TestAdmitter_MutateBackendGroup(t *testing.T) {
-	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	group := &lbcfapi.BackendGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-backendgroup",
@@ -603,7 +604,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 			expectAllow: true,
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 
 	for _, c := range cases {
 		raw, _ := json.Marshal(c.driver)
@@ -621,7 +622,7 @@ func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 }
 
 func TestAdmitter_ValidateDriverDelete(t *testing.T) {
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&notfoundLBLister{},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{
@@ -632,6 +633,7 @@ func TestAdmitter_ValidateDriverDelete(t *testing.T) {
 				},
 			},
 		},
+		nil,
 		&notfoundBackendLister{}, &fakeSuccInvoker{})
 	ar := &v1beta1.AdmissionReview{
 		Request: &v1beta1.AdmissionRequest{},
@@ -643,7 +645,7 @@ func TestAdmitter_ValidateDriverDelete(t *testing.T) {
 }
 
 func TestAdmitter_ValidateDriverDelete_NotDraining(t *testing.T) {
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&notfoundLBLister{},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{
@@ -652,6 +654,7 @@ func TestAdmitter_ValidateDriverDelete_NotDraining(t *testing.T) {
 				},
 			},
 		},
+		nil,
 		&notfoundBackendLister{}, &fakeSuccInvoker{})
 	ar := &v1beta1.AdmissionReview{
 		Request: &v1beta1.AdmissionRequest{},
@@ -664,7 +667,7 @@ func TestAdmitter_ValidateDriverDelete_NotDraining(t *testing.T) {
 
 func TestAdmitter_ValidateDriverDelete_LBRemaining(t *testing.T) {
 	ts := metav1.Now()
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -688,6 +691,7 @@ func TestAdmitter_ValidateDriverDelete_LBRemaining(t *testing.T) {
 				},
 			},
 		},
+		nil,
 		&notfoundBackendLister{}, &fakeSuccInvoker{})
 	ar := &v1beta1.AdmissionReview{
 		Request: &v1beta1.AdmissionRequest{},
@@ -700,7 +704,7 @@ func TestAdmitter_ValidateDriverDelete_LBRemaining(t *testing.T) {
 
 func TestAdmitter_ValidateDriverDelete_BackendRemaining(t *testing.T) {
 	ts := metav1.Now()
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&notfoundLBLister{},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{
@@ -711,6 +715,7 @@ func TestAdmitter_ValidateDriverDelete_BackendRemaining(t *testing.T) {
 				},
 			},
 		},
+		nil,
 		&alwaysSuccBackendLister{
 			list: []*lbcfapi.BackendRecord{
 				{
@@ -946,7 +951,7 @@ func TestAdmitter_ValidateDriverUpdate(t *testing.T) {
 		},
 	}
 
-	a := NewAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	for _, c := range cases {
 		oldRaw, _ := json.Marshal(c.old)
 		curRaw, _ := json.Marshal(c.cur)
@@ -1000,7 +1005,7 @@ func TestAdmitter_ValidateDriverUpdate_UpdatedForbiddenField(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateDriverUpdate(ar)
 	if resp.Allowed {
 		t.Fatalf("expect not allow")
@@ -1040,7 +1045,7 @@ func TestAdmitter_ValidateDriverUpdate_CurObjInvalid(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateDriverUpdate(ar)
 	if resp.Allowed {
 		t.Fatalf("expect not allow")
@@ -1048,7 +1053,7 @@ func TestAdmitter_ValidateDriverUpdate_CurObjInvalid(t *testing.T) {
 }
 
 func TestAdmitter_ValidateLoadBalancerCreate_DriverNotExist(t *testing.T) {
-	a := NewAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &notfoundDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	lb := &lbcfapi.LoadBalancer{
 		Spec: lbcfapi.LoadBalancerSpec{
 			LBDriver: "test-driver",
@@ -1081,7 +1086,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_DriverNotExist(t *testing.T) {
 }
 
 func TestAdmitter_ValidateLoadBalancerCreate_DriverDraining(t *testing.T) {
-	a := NewAdmitter(&alwaysSuccLBLister{}, drainingDriverLister(), &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, drainingDriverLister(), nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	lb := &lbcfapi.LoadBalancer{
 		Spec: lbcfapi.LoadBalancerSpec{
 			LBDriver: "test-driver",
@@ -1114,7 +1119,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_DriverDraining(t *testing.T) {
 }
 
 func TestAdmitter_ValidateLoadBalancerCreate_DriverDeleting(t *testing.T) {
-	a := NewAdmitter(&alwaysSuccLBLister{}, deletingDriverLister(), &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, deletingDriverLister(), nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	lb := &lbcfapi.LoadBalancer{
 		Spec: lbcfapi.LoadBalancerSpec{
 			LBDriver: "test-driver",
@@ -1158,7 +1163,7 @@ func TestAdmitter_ValidateLoadBalancerCreate_WebhookFail(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{}, driverLister, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, driverLister, nil, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	lb := &lbcfapi.LoadBalancer{
 		Spec: lbcfapi.LoadBalancerSpec{
 			LBDriver: "test-driver",
@@ -1231,10 +1236,11 @@ func TestAdmitter_ValidateLoadBalancerUpdate(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{},
+	a := fakeAdmitter(&alwaysSuccLBLister{},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateLoadBalancerUpdate(ar)
 	if !resp.Allowed {
@@ -1278,10 +1284,11 @@ func TestAdmitter_ValidateLoadBalancerUpdate_UpdatedForbiddenField(t *testing.T)
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{},
+	a := fakeAdmitter(&alwaysSuccLBLister{},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateLoadBalancerUpdate(ar)
 	if resp.Allowed {
@@ -1330,10 +1337,11 @@ func TestAdmitter_ValidateLoadBalancerUpdate_CurObjInvalid(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{},
+	a := fakeAdmitter(&alwaysSuccLBLister{},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateLoadBalancerUpdate(ar)
 	if resp.Allowed {
@@ -1342,7 +1350,7 @@ func TestAdmitter_ValidateLoadBalancerUpdate_CurObjInvalid(t *testing.T) {
 }
 
 func TestAdmitter_ValidateLoadBalancerDelete(t *testing.T) {
-	a := NewAdmitter(&notfoundLBLister{}, &notfoundDriverLister{}, &notfoundBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&notfoundLBLister{}, &notfoundDriverLister{}, nil, &notfoundBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateLoadBalancerDelete(&v1beta1.AdmissionReview{
 		Request: &v1beta1.AdmissionRequest{
 			Name:      "name",
@@ -1392,7 +1400,7 @@ func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1412,6 +1420,7 @@ func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 				},
 			},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
 	if !resp.Allowed {
@@ -1456,7 +1465,7 @@ func TestAdmitter_ValidateBackendGroupCreate_InvalidGroup(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
+	a := fakeAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
 	if resp.Allowed {
 		t.Fatalf("expect not allow")
@@ -1500,7 +1509,7 @@ func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(&notfoundLBLister{}, &alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
+	a := fakeAdmitter(&notfoundLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
 	if resp.Allowed {
 		t.Fatalf("expect not allow")
@@ -1545,13 +1554,13 @@ func TestAdmitter_ValidateBackendGroupCreate_LBDeleting(t *testing.T) {
 		},
 	}
 	ts := metav1.Now()
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&alwaysSuccLBLister{get: &lbcfapi.LoadBalancer{
 			ObjectMeta: metav1.ObjectMeta{
 				DeletionTimestamp: &ts,
 			},
 		}},
-		&alwaysSuccDriverLister{}, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
+		&alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
 	if resp.Allowed {
 		t.Fatalf("expect not allow")
@@ -1595,7 +1604,7 @@ func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1615,6 +1624,7 @@ func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
 				},
 			},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
 	if resp.Allowed {
@@ -1676,13 +1686,14 @@ func TestAdmitter_ValidateBackendGroupUpdate(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{},
 		},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateBackendGroupUpdate(ar)
 	if !resp.Allowed {
@@ -1732,13 +1743,14 @@ func TestAdmitter_ValidateBackendGroupUpdate_UpdatedForbiddenField(t *testing.T)
 			},
 		},
 	}
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{},
 		},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateBackendGroupUpdate(ar)
 	if resp.Allowed {
@@ -1801,13 +1813,14 @@ func TestAdmitter_ValidateBackendGroupUpdate_CurObjInvalid(t *testing.T) {
 			},
 		},
 	}
-	a := NewAdmitter(
+	a := fakeAdmitter(
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{},
 		},
 		&alwaysSuccDriverLister{
 			get: &lbcfapi.LoadBalancerDriver{},
 		},
+		nil,
 		&alwaysSuccBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateBackendGroupUpdate(ar)
 	if resp.Allowed {
@@ -1816,7 +1829,7 @@ func TestAdmitter_ValidateBackendGroupUpdate_CurObjInvalid(t *testing.T) {
 }
 
 func TestAdmitter_ValidateBackendGroupDelete(t *testing.T) {
-	a := NewAdmitter(&notfoundLBLister{}, &notfoundDriverLister{}, &notfoundBackendLister{}, &fakeSuccInvoker{})
+	a := fakeAdmitter(&notfoundLBLister{}, &notfoundDriverLister{}, &alwaysSuccBackendGroupLister{get: &lbcfapi.BackendGroup{}}, &notfoundBackendLister{}, &fakeSuccInvoker{})
 	resp := a.ValidateBackendGroupDelete(&v1beta1.AdmissionReview{
 		Request: &v1beta1.AdmissionRequest{
 			Name:      "name",
@@ -1877,6 +1890,23 @@ func (l *alwaysSuccBackendLister) List(selector labels.Selector) (ret []*lbcfapi
 }
 
 func (l *alwaysSuccBackendLister) BackendRecords(namespace string) lbcflister.BackendRecordNamespaceLister {
+	return l
+}
+
+type alwaysSuccBackendGroupLister struct {
+	get  *lbcfapi.BackendGroup
+	list []*lbcfapi.BackendGroup
+}
+
+func (l *alwaysSuccBackendGroupLister) Get(name string) (*lbcfapi.BackendGroup, error) {
+	return l.get, nil
+}
+
+func (l *alwaysSuccBackendGroupLister) List(selector labels.Selector) (ret []*lbcfapi.BackendGroup, err error) {
+	return l.list, nil
+}
+
+func (l *alwaysSuccBackendGroupLister) BackendGroups(namespace string) lbcflister.BackendGroupNamespaceLister {
 	return l
 }
 
@@ -2093,5 +2123,19 @@ func deletingDriverLister() lbcflister.LoadBalancerDriverLister {
 				DeletionTimestamp: &ts,
 			},
 		},
+	}
+}
+func fakeAdmitter(
+	lbLister lbcflister.LoadBalancerLister,
+	driverLister lbcflister.LoadBalancerDriverLister,
+	bgLister lbcflister.BackendGroupLister,
+	beLister lbcflister.BackendRecordLister,
+	invoker util.WebhookInvoker) Webhook {
+	return &Admitter{
+		lbLister:       lbLister,
+		driverLister:   driverLister,
+		bgLister:       bgLister,
+		backendLister:  beLister,
+		webhookInvoker: invoker,
 	}
 }
