@@ -36,7 +36,7 @@ import (
 func NewServer() *cobra.Command {
 	cfg := config.NewConfig()
 	rootCmd := &cobra.Command{
-		Use: "lbcr-controller",
+		Use: "lbcf-controller",
 		Run: func(cmd *cobra.Command, args []string) {
 			version.PrintAndExitIfRequested()
 
