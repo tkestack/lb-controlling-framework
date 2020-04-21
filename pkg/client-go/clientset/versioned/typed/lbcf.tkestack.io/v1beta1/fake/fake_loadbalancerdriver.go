@@ -133,7 +133,7 @@ func (c *FakeLoadBalancerDrivers) DeleteCollection(options *v1.DeleteOptions, li
 // Patch applies the patch and returns the patched loadBalancerDriver.
 func (c *FakeLoadBalancerDrivers) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.LoadBalancerDriver, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(loadbalancerdriversResource, c.ns, name, data, subresources...), &v1beta1.LoadBalancerDriver{})
+		Invokes(testing.NewPatchSubresourceAction(loadbalancerdriversResource, c.ns, name, pt, data, subresources...), &v1beta1.LoadBalancerDriver{})
 
 	if obj == nil {
 		return nil, err

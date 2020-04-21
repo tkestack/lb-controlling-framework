@@ -58,7 +58,7 @@ func (in *BackendGroup) DeepCopyObject() runtime.Object {
 func (in *BackendGroupList) DeepCopyInto(out *BackendGroupList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]BackendGroup, len(*in))
@@ -195,7 +195,7 @@ func (in *BackendRecordCondition) DeepCopy() *BackendRecordCondition {
 func (in *BackendRecordList) DeepCopyInto(out *BackendRecordList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]BackendRecord, len(*in))
@@ -458,7 +458,7 @@ func (in *LoadBalancerDriverCondition) DeepCopy() *LoadBalancerDriverCondition {
 func (in *LoadBalancerDriverList) DeepCopyInto(out *LoadBalancerDriverList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]LoadBalancerDriver, len(*in))
@@ -535,7 +535,7 @@ func (in *LoadBalancerDriverStatus) DeepCopy() *LoadBalancerDriverStatus {
 func (in *LoadBalancerList) DeepCopyInto(out *LoadBalancerList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]LoadBalancer, len(*in))

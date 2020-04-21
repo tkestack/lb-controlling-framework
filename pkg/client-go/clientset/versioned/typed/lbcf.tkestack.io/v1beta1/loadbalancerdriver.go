@@ -21,6 +21,8 @@
 package v1beta1
 
 import (
+	"time"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -78,11 +80,16 @@ func (c *loadBalancerDrivers) Get(name string, options v1.GetOptions) (result *v
 
 // List takes label and field selectors, and returns the list of LoadBalancerDrivers that match those selectors.
 func (c *loadBalancerDrivers) List(opts v1.ListOptions) (result *v1beta1.LoadBalancerDriverList, err error) {
+	var timeout time.Duration
+	if opts.TimeoutSeconds != nil {
+		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
+	}
 	result = &v1beta1.LoadBalancerDriverList{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("loadbalancerdrivers").
 		VersionedParams(&opts, scheme.ParameterCodec).
+		Timeout(timeout).
 		Do().
 		Into(result)
 	return
@@ -90,11 +97,16 @@ func (c *loadBalancerDrivers) List(opts v1.ListOptions) (result *v1beta1.LoadBal
 
 // Watch returns a watch.Interface that watches the requested loadBalancerDrivers.
 func (c *loadBalancerDrivers) Watch(opts v1.ListOptions) (watch.Interface, error) {
+	var timeout time.Duration
+	if opts.TimeoutSeconds != nil {
+		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
+	}
 	opts.Watch = true
 	return c.client.Get().
 		Namespace(c.ns).
 		Resource("loadbalancerdrivers").
 		VersionedParams(&opts, scheme.ParameterCodec).
+		Timeout(timeout).
 		Watch()
 }
 
@@ -152,10 +164,15 @@ func (c *loadBalancerDrivers) Delete(name string, options *v1.DeleteOptions) err
 
 // DeleteCollection deletes a collection of objects.
 func (c *loadBalancerDrivers) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+	var timeout time.Duration
+	if listOptions.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	}
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("loadbalancerdrivers").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
+		Timeout(timeout).
 		Body(options).
 		Do().
 		Error()
