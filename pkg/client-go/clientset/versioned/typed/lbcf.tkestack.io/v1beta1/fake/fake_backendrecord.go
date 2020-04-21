@@ -133,7 +133,7 @@ func (c *FakeBackendRecords) DeleteCollection(options *v1.DeleteOptions, listOpt
 // Patch applies the patch and returns the patched backendRecord.
 func (c *FakeBackendRecords) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.BackendRecord, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(backendrecordsResource, c.ns, name, data, subresources...), &v1beta1.BackendRecord{})
+		Invokes(testing.NewPatchSubresourceAction(backendrecordsResource, c.ns, name, pt, data, subresources...), &v1beta1.BackendRecord{})
 
 	if obj == nil {
 		return nil, err
