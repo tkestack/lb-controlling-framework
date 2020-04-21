@@ -14,12 +14,14 @@
 # WARRANTIES OF ANY KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations under the License.
 
-# set the kubernetes apimachinery package dir
-K8S_APIMACHINERY_DIR = $(shell go list -f '{{ .Dir }}' -m k8s.io/apimachinery)
-# set the kubernetes api package dir
-K8S_API_DIR = $(shell go list -f '{{ .Dir }}' -m k8s.io/api)
-# set the gogo protobuf package dir
-GOGO_PROTOBUF_DIR = $(shell go list -f '{{ .Dir }}' -m github.com/gogo/protobuf)
+# Determine api packages
+API_DIR ?= $(wildcard ${ROOT_DIR}/pkg/apis/lbcf.tkestack.io/*)
+# Determine api versions
+APIS_VERSIONS ?= $(foreach api,${API_DIR},$(notdir ${api}))
+# Determine api group versions
+API_GROUP_VERSIONS ?= $(foreach api_version,$(APIS_VERSIONS),lbcf.tkestack.io:$(api_version))
+# set the code-generator image version
+CODE_GENERATOR_VERSION = v1.17.0-3
 
 .PHONY: gen.run
 gen.run: gen.clean gen.generator gen.api
@@ -30,20 +32,19 @@ gen.run: gen.clean gen.generator gen.api
 .PHONY: gen.generator
 gen.generator:
 	@echo "===========> Building code generator $(VERSION) docker image"
-	@$(DOCKER) build --pull -t $(REGISTRY_PREFIX)/code-generator:$(VERSION) -f $(ROOT_DIR)/build/docker/tools/code-generator/Dockerfile $(ROOT_DIR)/build/docker/tools/code-generator
+	@$(DOCKER) pull $(REGISTRY_PREFIX)/code-generator:$(CODE_GENERATOR_VERSION)
 
 .PHONY: gen.api
 gen.api:
-	$(eval CODE_GENERATOR_VERSION := $(shell $(DOCKER) images --filter 'reference=$(REGISTRY_PREFIX)/code-generator' |sed 's/[ ][ ]*/,/g' |cut -d ',' -f 2 |sed -n '2p'))
 	@$(DOCKER) run --rm \
 		-v $(ROOT_DIR):/go/src/$(ROOT_PACKAGE) \
 	 	$(REGISTRY_PREFIX)/code-generator:$(CODE_GENERATOR_VERSION) \
-	 	/root/code.sh \
-	 	deepcopy-external,client-external,informer-external,lister-external\
+	 	bash -x /root/code.sh \
+	 	deepcopy-external,defaulter-external,client-external,lister-external,informer-external\
 	 	$(ROOT_PACKAGE)/pkg/client-go \
 	 	$(ROOT_PACKAGE)/pkg/apis \
 	 	$(ROOT_PACKAGE)/pkg/apis \
-	 	"lbcf.tkestack.io:v1beta1"
+	  	"$(API_GROUP_VERSIONS)"
 
 .PHONY: gen.clean
 gen.clean:
