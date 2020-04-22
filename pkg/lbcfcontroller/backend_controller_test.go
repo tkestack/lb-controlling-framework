@@ -17,8 +17,6 @@
 package lbcfcontroller
 
 import (
-	v12 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
 	"time"
@@ -27,7 +25,9 @@ import (
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
-	"k8s.io/kubernetes/pkg/controller"
+	v12 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 func TestBackendGenerateAddr(t *testing.T) {
@@ -51,7 +51,7 @@ func TestBackendGenerateAddr(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -98,7 +98,7 @@ func TestBackendGenerateSvcAddr(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -136,7 +136,7 @@ func TestBackendGenerateStaticAddr(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -175,7 +175,7 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect failed result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -218,7 +218,7 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
 		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -261,7 +261,7 @@ func TestBackendGenerateAddrInvalidResponse(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -306,7 +306,7 @@ func TestBackendEnsure(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -348,7 +348,7 @@ func TestBackendEnsureFailed(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -403,7 +403,7 @@ func TestBackendEnsureRunning(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
 		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -453,7 +453,7 @@ func TestBackendEnsureRerun(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -493,7 +493,7 @@ func TestBackendEnsureInvalidResponse(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -542,7 +542,7 @@ func TestBackendDeregister(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -588,7 +588,7 @@ func TestBackendDeregisterFailed(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect fail result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -641,7 +641,7 @@ func TestBackendDeregisterRunning(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
 		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -694,7 +694,7 @@ func TestBackendDeregisterInvalidResponse(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
 		t.Fatalf("expect error result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -746,7 +746,7 @@ func TestBackendDeregisterEmptyAddr(t *testing.T) {
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(backend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -813,7 +813,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
 
-	key, _ := controller.KeyFunc(oldBackend)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(oldBackend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
 		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -828,7 +828,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 	delete(store, oldBackend.Name)
 
 	// ensureBackend on newBackend should be delayed
-	key, _ = controller.KeyFunc(newBackend)
+	key, _ = cache.DeletionHandlingMetaNamespaceKeyFunc(newBackend)
 	resp = ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
 		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -844,7 +844,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 
 	// bypass oldBackend deregisterBackend webhook
 	ctrl.webhookInvoker = &fakeSuccInvoker{}
-	key, _ = controller.KeyFunc(oldBackend)
+	key, _ = cache.DeletionHandlingMetaNamespaceKeyFunc(oldBackend)
 	resp = ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
@@ -852,7 +852,7 @@ func TestBackendSameAddrOperation(t *testing.T) {
 	delete(store, oldBackend.Name)
 
 	// once oldBackend finished, ensureBackend of newBackend starts
-	key, _ = controller.KeyFunc(newBackend)
+	key, _ = cache.DeletionHandlingMetaNamespaceKeyFunc(newBackend)
 	resp = ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
 		t.Fatalf("expect running result, get %#v, err: %v", resp, resp.GetFailReason())

@@ -19,14 +19,14 @@ package lbcfcontroller
 import (
 	"reflect"
 	"testing"
-	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/client-go/tools/cache"
 )
 
 func TestBackendGroupCreateRecord(t *testing.T) {
@@ -54,7 +54,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 	)
-	key, _ := controller.KeyFunc(group)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
@@ -112,7 +112,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 	)
-	key, _ := controller.KeyFunc(group)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
@@ -165,7 +165,7 @@ func TestBackendGroupCreateRecordByService(t *testing.T) {
 			},
 		},
 	)
-	key, _ := controller.KeyFunc(group)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
@@ -245,7 +245,7 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 				store: nodeStore,
 			},
 		)
-		key, _ := controller.KeyFunc(c.group)
+		key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(c.group)
 		result := ctrl.syncBackendGroup(key)
 		if !result.IsFinished() {
 			t.Fatalf("case %s: expect succ result, get %#v", c.name, result)
@@ -286,7 +286,7 @@ func TestBackendGroupCreateRecordByStatic(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 	)
-	key, _ := controller.KeyFunc(group)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
@@ -340,7 +340,7 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 	)
-	key, _ := controller.KeyFunc(curGroup)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(curGroup)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
@@ -411,7 +411,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 	)
-	key, _ := controller.KeyFunc(group)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
@@ -477,7 +477,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 	)
-	key, _ := controller.KeyFunc(group)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result)
@@ -534,7 +534,7 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 	)
-	key, _ := controller.KeyFunc(group)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %#v", result.GetFailReason())

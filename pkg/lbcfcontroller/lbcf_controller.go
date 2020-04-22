@@ -25,12 +25,11 @@ import (
 	"tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 // NewController creates a new LBCF-controller
@@ -142,7 +141,7 @@ func (c *Controller) enqueue(obj interface{}, queue util.ConditionalRateLimiting
 		queue.Add(obj)
 		return
 	}
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		klog.Errorf("enqueue failed: %v", err)
 		return
