@@ -18,9 +18,10 @@ package lbcfcontroller
 
 import (
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/controller"
 	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
@@ -29,7 +30,7 @@ import (
 func TestDriverControllerSyncDriverCreate(t *testing.T) {
 	driver := newFakeDriver("kube-system", fmt.Sprintf("%s%s", lbcfapi.SystemDriverPrefix, "driver"))
 
-	key, _ := controller.KeyFunc(driver)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
 	ctrl := newDriverController(fake.NewSimpleClientset(driver), &fakeDriverLister{
 		get: driver,
 	})
@@ -50,7 +51,7 @@ func TestDriverControllerSyncDriverAccepted(t *testing.T) {
 			},
 		},
 	}
-	key, _ := controller.KeyFunc(driver)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
 	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
 		get: driver,
 	})
@@ -64,7 +65,7 @@ func TestDriverControllerSyncDriverAccepted(t *testing.T) {
 func TestDriverControllerSyncDriverNotFound(t *testing.T) {
 	driver := newFakeDriver("kube-system", fmt.Sprintf("%s%s", lbcfapi.SystemDriverPrefix, "driver"))
 
-	key, _ := controller.KeyFunc(driver)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
 	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
 	result := ctrl.syncDriver(key)
 	if !result.IsFinished() {
@@ -77,7 +78,7 @@ func TestDriverControllerSyncDriverDeleting(t *testing.T) {
 	ts := metav1.Now()
 	driver.DeletionTimestamp = &ts
 
-	key, _ := controller.KeyFunc(driver)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
 	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
 		get: driver,
 	})

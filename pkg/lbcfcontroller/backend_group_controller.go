@@ -27,7 +27,7 @@ import (
 	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -36,7 +36,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 func newBackendGroupController(
@@ -276,7 +275,7 @@ func (c *backendGroupController) listRelatedBackendGroups(namespace string, filt
 	}
 	related := util.FilterBackendGroup(groupList, filter)
 	for _, r := range related {
-		key, err := controller.KeyFunc(r)
+		key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(r)
 		if err != nil {
 			klog.Errorf("%v", err)
 			continue

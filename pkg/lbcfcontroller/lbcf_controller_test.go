@@ -18,15 +18,15 @@ package lbcfcontroller
 
 import (
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/kubernetes/pkg/controller"
-	"strings"
-	"testing"
-	"time"
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
@@ -39,7 +39,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/listers/core/v1"
+	v1 "k8s.io/client-go/listers/core/v1"
 )
 
 func TestLBCFControllerAddPod(t *testing.T) {
@@ -73,7 +73,7 @@ func TestLBCFControllerAddPod(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -87,7 +87,7 @@ func TestLBCFControllerAddPod(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg2); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg2); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -133,7 +133,7 @@ func TestLBCFControllerUpdatePod_PodStatusChange(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -147,7 +147,7 @@ func TestLBCFControllerUpdatePod_PodStatusChange(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -161,7 +161,7 @@ func TestLBCFControllerUpdatePod_PodStatusChange(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -219,7 +219,7 @@ func TestLBCFControllerUpdatePod_PodLabelChange(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -233,7 +233,7 @@ func TestLBCFControllerUpdatePod_PodLabelChange(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -259,8 +259,8 @@ func TestLBCFControllerUpdatePod_PodLabelChange(t *testing.T) {
 	} else {
 		getKeySet.Insert(key)
 	}
-	expectKey1, _ := controller.KeyFunc(bg1)
-	expectKey2, _ := controller.KeyFunc(bg2)
+	expectKey1, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1)
+	expectKey2, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg2)
 	if !getKeySet.Has(expectKey1) {
 		t.Errorf("miss BackendGroup key %s", expectKey1)
 	}
@@ -282,7 +282,7 @@ func TestLBCFControllerDeletePod(t *testing.T) {
 	}
 	pod1 := newFakePod("", "pod-1", podLabel1, false, false)
 	bg1 := newFakeBackendGroupOfPods("", "bg-1", "", 80, "tcp", podLabel1, nil, nil)
-	tomestoneKey, _ := controller.KeyFunc(pod1)
+	tomestoneKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(pod1)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: pod1}
 
 	bgCtrl := newBackendGroupController(
@@ -307,7 +307,7 @@ func TestLBCFControllerDeletePod(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -321,7 +321,7 @@ func TestLBCFControllerDeletePod(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg1); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg1); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -340,7 +340,7 @@ func TestLBCFControllerAddBackendGroup(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -367,7 +367,7 @@ func TestLBCFControllerUpdateBackendGroup(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(curGroup); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(curGroup); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -386,12 +386,12 @@ func TestLBCFControllerDeleteBackendGroup(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
 
-	tomestoneKey, _ := controller.KeyFunc(bg)
+	tomestoneKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: bg}
 	c.deleteBackendGroup(tombstone)
 	if c.backendGroupQueue.Len() != 1 {
@@ -402,7 +402,7 @@ func TestLBCFControllerDeleteBackendGroup(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -428,7 +428,7 @@ func TestLBCFControllerAddService(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := groupKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(groupKey)
@@ -465,7 +465,7 @@ func TestLBCFControllerUpdateService(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := groupKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(groupKey)
@@ -475,7 +475,7 @@ func TestLBCFControllerDeleteService(t *testing.T) {
 	svc := newFakeService("", "test-svc", apiv1.ServiceTypeNodePort)
 	bg := newFakeBackendGroupOfService(svc.Namespace, "bg", "lb", 80, "TCP", svc.Name)
 	bg2 := newFakeBackendGroupOfService(svc.Namespace, "another-bg", "lb", 80, "TCP", "another-svc")
-	tomestoneKey, _ := controller.KeyFunc(bg)
+	tomestoneKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: svc}
 
 	bgCtrl := newBackendGroupController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeBackendGroupLister{
@@ -493,7 +493,7 @@ func TestLBCFControllerDeleteService(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := groupKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(groupKey)
@@ -508,7 +508,7 @@ func TestLBCFControllerDeleteService(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := groupKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(groupKey)
@@ -537,7 +537,7 @@ func TestLBCFControllerAddLoadBalancer(t *testing.T) {
 		t.Error("failed to enqueue LoadBalancer")
 	} else if key, ok := lbKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(lb); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb); expectedKey != key {
 		t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
 	}
 	c.loadBalancerQueue.Done(lbKey)
@@ -547,7 +547,7 @@ func TestLBCFControllerAddLoadBalancer(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := groupKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(groupKey)
@@ -735,7 +735,7 @@ func TestLBCFControllerUpdateLoadBalancer(t *testing.T) {
 				t.Error("failed to enqueue BackendGroup")
 			} else if key, ok := key.(string); !ok {
 				t.Error("key is not a string")
-			} else if expectedKey, _ := controller.KeyFunc(c.cur); expectedKey != key {
+			} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(c.cur); expectedKey != key {
 				t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
 			}
 			c.ctrl.loadBalancerQueue.Done(key)
@@ -747,7 +747,7 @@ func TestLBCFControllerUpdateLoadBalancer(t *testing.T) {
 				t.Error("failed to enqueue BackendGroup")
 			} else if key, ok := key.(string); !ok {
 				t.Error("key is not a string")
-			} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+			} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 				t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
 			}
 			c.ctrl.loadBalancerQueue.Done(key)
@@ -759,7 +759,7 @@ func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	bg := newFakeBackendGroupOfPods(lb.Namespace, "bg", lb.Name, 80, "tcp", nil, nil, nil)
 	bg2 := newFakeBackendGroupOfPods(lb.Namespace, "bg", "another-lb", 80, "tcp", nil, nil, nil)
-	tomestoneKey, _ := controller.KeyFunc(bg)
+	tomestoneKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: lb}
 
 	lbCtrl := newLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
@@ -780,7 +780,7 @@ func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
 		t.Error("failed to enqueue LoadBalancer")
 	} else if key, ok := lbKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(lb); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb); expectedKey != key {
 		t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
 	}
 	c.loadBalancerQueue.Done(lbKey)
@@ -790,7 +790,7 @@ func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := groupKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(groupKey)
@@ -806,7 +806,7 @@ func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
 		t.Error("failed to enqueue LoadBalancer")
 	} else if key, ok := lbKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(lb); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb); expectedKey != key {
 		t.Errorf("expected LoadBalancer key %s found %s", expectedKey, key)
 	}
 	c.loadBalancerQueue.Done(lbKey)
@@ -816,7 +816,7 @@ func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := groupKey.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(groupKey)
@@ -836,7 +836,7 @@ func TestLBCFControllerAddDriver(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(driver); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.driverQueue.Done(key)
@@ -863,7 +863,7 @@ func TestLBCFControllerUpdateDriver(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(curDriver); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(curDriver); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.driverQueue.Done(key)
@@ -872,7 +872,7 @@ func TestLBCFControllerUpdateDriver(t *testing.T) {
 func TestLBCFControllerDeleteDriver(t *testing.T) {
 	driver := newFakeDriver("", "driver")
 	driverCtrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
-	tomestoneKey, _ := controller.KeyFunc(driver)
+	tomestoneKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: driver}
 
 	c := newFakeLBCFController(driverCtrl, nil, nil, nil)
@@ -886,7 +886,7 @@ func TestLBCFControllerDeleteDriver(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(driver); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.driverQueue.Done(key)
@@ -900,7 +900,7 @@ func TestLBCFControllerDeleteDriver(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(driver); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.driverQueue.Done(key)
@@ -920,7 +920,7 @@ func TestLBCFControllerAddBackendRecord(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(record); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(record); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendQueue.Done(key)
@@ -1142,7 +1142,7 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 				t.Error("failed to enqueue BackendGroup")
 			} else if key, ok := key.(string); !ok {
 				t.Error("key is not a string")
-			} else if expectedKey, _ := controller.KeyFunc(c.cur); expectedKey != key {
+			} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(c.cur); expectedKey != key {
 				t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 			}
 			c.ctrl.backendQueue.Done(key)
@@ -1157,7 +1157,7 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 				t.Error("failed to enqueue BackendGroup")
 			} else if key, ok := key.(string); !ok {
 				t.Error("key is not a string")
-			} else if expectedKey, _ := controller.KeyFunc(bg); expectedKey != key {
+			} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(bg); expectedKey != key {
 				t.Errorf("expected BackendGroup key %s found %s", expectedKey, key)
 			}
 			c.ctrl.loadBalancerQueue.Done(key)
@@ -1170,7 +1170,7 @@ func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
 	record := util.ConstructPodBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
 	backendCtrl := newBackendController(fake.NewSimpleClientset(), &fakeBackendLister{}, &fakeDriverLister{}, &fakePodLister{}, &fakeSvcListerWithStore{}, &fakeNodeListerWithStore{}, &fakeEventRecorder{}, &fakeSuccInvoker{})
-	tomestoneKey, _ := controller.KeyFunc(record)
+	tomestoneKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(record)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tomestoneKey, Obj: record}
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
 
@@ -1185,7 +1185,7 @@ func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(group); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -1201,7 +1201,7 @@ func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(group); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendGroupQueue.Done(key)
@@ -1252,7 +1252,7 @@ func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
 	ctrl := &Controller{}
 	q := util.NewConditionalDelayingQueue(nil, time.Millisecond, time.Millisecond, 2*time.Second)
 	obj := newFakeDriver("", "driver")
-	key, _ := controller.KeyFunc(obj)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {
@@ -1269,7 +1269,7 @@ func TestLBCFControllerProcessNextItemRunning(t *testing.T) {
 	ctrl := &Controller{}
 	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
-	key, _ := controller.KeyFunc(obj)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {
@@ -1286,7 +1286,7 @@ func TestLBCFControllerProcessNextItemPeriodic(t *testing.T) {
 	ctrl := &Controller{}
 	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
-	key, _ := controller.KeyFunc(obj)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
 	ctrl.processNextItem(q, func(key string) *util.SyncResult {

@@ -17,10 +17,11 @@
 package lbcfcontroller
 
 import (
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/controller"
 	"testing"
 	"time"
+
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
@@ -42,7 +43,7 @@ func TestLoadBalancerCreate(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ, get %+v", result)
@@ -78,7 +79,7 @@ func TestLoadBalancerCreateFail(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
 		t.Fatalf("expect failed, get %+v", result)
@@ -113,7 +114,7 @@ func TestLoadBalancerCreateRunning(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
 		t.Fatalf("expect running, get %+v", result)
@@ -147,7 +148,7 @@ func TestLoadBalancerCreateInvalid(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
 		t.Fatalf("expect error, get %+v", result)
@@ -194,7 +195,7 @@ func TestLoadBalancerEnsure(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ, get %+v", result)
@@ -246,7 +247,7 @@ func TestLoadBalancerEnsureFail(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
 		t.Fatalf("expect fail, get %+v", result)
@@ -296,7 +297,7 @@ func TestLoadBalancerEnsureRunning(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
 		t.Fatalf("expect fail, get %+v", result)
@@ -343,7 +344,7 @@ func TestLoadBalancerReEnsure(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
 		t.Fatalf("expect running, get %+v", result)
@@ -391,7 +392,7 @@ func TestLoadBalancerEnsureInvalid(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
 		t.Fatalf("expect error, get %+v", result)
@@ -424,7 +425,7 @@ func TestLoadBalancerDelete(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeSuccInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ, get %+v", result)
@@ -454,7 +455,7 @@ func TestLoadBalancerDeleteFailed(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeFailInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
 		t.Fatalf("expect succ, get %+v", result)
@@ -491,7 +492,7 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeRunningInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
 		t.Fatalf("expect async, get %+v", result)
@@ -528,7 +529,7 @@ func TestLoadBalancerDeleteInvalid(t *testing.T) {
 		},
 		&fakeEventRecorder{store: store},
 		&fakeInvalidInvoker{})
-	key, _ := controller.KeyFunc(lb)
+	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
 		t.Fatalf("expect error, get %+v", result)
