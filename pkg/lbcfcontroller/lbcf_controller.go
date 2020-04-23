@@ -40,10 +40,17 @@ func NewController(ctx *context.Context) *Controller {
 		loadBalancerQueue: util.NewConditionalDelayingQueue(util.QueueFilterForLB(ctx.LBInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 		backendGroupQueue: util.NewConditionalDelayingQueue(nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 		backendQueue:      util.NewConditionalDelayingQueue(util.QueueFilterForBackend(ctx.BRInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		dryRun:            ctx.IsDryRun(),
 	}
 
-	c.driverCtrl = newDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister())
-	c.lbCtrl = newLoadBalancerController(c.context.LbcfClient, c.context.LBInformer.Lister(), ctx.LBDriverInformer.Lister(), ctx.EventRecorder, util.NewWebhookInvoker())
+	c.driverCtrl = newDriverController(c.context.LbcfClient, c.context.LBDriverInformer.Lister(), c.context.IsDryRun())
+	c.lbCtrl = newLoadBalancerController(
+		c.context.LbcfClient,
+		c.context.LBInformer.Lister(),
+		ctx.LBDriverInformer.Lister(),
+		ctx.EventRecorder,
+		util.NewWebhookInvoker(),
+		c.context.IsDryRun())
 	c.backendCtrl = newBackendController(
 		c.context.LbcfClient,
 		c.context.BRInformer.Lister(),
@@ -53,6 +60,7 @@ func NewController(ctx *context.Context) *Controller {
 		c.context.NodeInformer.Lister(),
 		c.context.EventRecorder,
 		util.NewWebhookInvoker(),
+		ctx.IsDryRun(),
 	)
 	c.backendGroupCtrl = newBackendGroupController(
 		c.context.LbcfClient,
@@ -62,6 +70,7 @@ func NewController(ctx *context.Context) *Controller {
 		c.context.PodInformer.Lister(),
 		c.context.SvcInformer.Lister(),
 		c.context.NodeInformer.Lister(),
+		ctx.IsDryRun(),
 	)
 
 	// enqueue backendgroup
@@ -121,6 +130,7 @@ type Controller struct {
 	loadBalancerQueue util.ConditionalRateLimitingInterface
 	backendGroupQueue util.ConditionalRateLimitingInterface
 	backendQueue      util.ConditionalRateLimitingInterface
+	dryRun            bool
 }
 
 // Start starts controller in a new goroutine
@@ -181,21 +191,14 @@ func (c *Controller) processNextItem(kind string, queue util.ConditionalRateLimi
 		klog.V(3).Infof("sync %s %s start", kind, key)
 		startTime := time.Now()
 		result := syncFunc(key.(string))
-
-		if result.IsFailed() {
-			klog.Infof("Failed %s %s, reason: %v", kind, key, result.GetFailReason())
-			queue.AddAfterMinimumDelay(key, result.GetNextRun())
-		} else if result.IsRunning() {
-			klog.Infof("Async %s %s", kind, key)
-			queue.AddAfterMinimumDelay(key, result.GetNextRun())
-		} else if result.IsPeriodic() {
-			klog.Infof("Periodic %s %s", kind, key)
-			queue.AddAfterFiltered(key, result.GetNextRun())
-		} else {
-			klog.Infof("Successfully Finished %s %s", kind, key)
+		// in dry-run mode, the result of a key is dumped, the same key will not be processed until:
+		// 1. informer resynced
+		// 2. objects in the cluster are updated and the informer received new events
+		if c.dryRun {
 			queue.Forget(key)
+		} else {
+			handleResult(kind, key, queue, result)
 		}
-
 		elapsed := time.Since(startTime)
 		klog.V(3).Infof("sync %s %s, took %s", kind, key, elapsed.String())
 	}()
@@ -429,5 +432,21 @@ func (c *Controller) deleteBackendRecord(obj interface{}) {
 	}
 	if controllerRef := metav1.GetControllerOf(backend); controllerRef != nil {
 		c.enqueue(util.NamespacedNameKeyFunc(backend.Namespace, controllerRef.Name), c.backendGroupQueue)
+	}
+}
+
+func handleResult(kind string, key interface{}, queue util.ConditionalRateLimitingInterface, result *util.SyncResult) {
+	if result.IsFailed() {
+		klog.Infof("Failed %s %s, reason: %v", kind, key, result.GetFailReason())
+		queue.AddAfterMinimumDelay(key, result.GetNextRun())
+	} else if result.IsRunning() {
+		klog.Infof("Async %s %s", kind, key)
+		queue.AddAfterMinimumDelay(key, result.GetNextRun())
+	} else if result.IsPeriodic() {
+		klog.Infof("Periodic %s %s", kind, key)
+		queue.AddAfterFiltered(key, result.GetNextRun())
+	} else {
+		klog.Infof("Successfully Finished %s %s", kind, key)
+		queue.Forget(key)
 	}
 }

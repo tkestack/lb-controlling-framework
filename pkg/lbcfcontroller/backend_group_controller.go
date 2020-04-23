@@ -18,6 +18,7 @@
 package lbcfcontroller
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -45,7 +46,8 @@ func newBackendGroupController(
 	brLister lbcflister.BackendRecordLister,
 	podLister corev1.PodLister,
 	svcLister corev1.ServiceLister,
-	nodeLister corev1.NodeLister) *backendGroupController {
+	nodeLister corev1.NodeLister,
+	dryRun bool) *backendGroupController {
 	return &backendGroupController{
 		client:              client,
 		lbLister:            lbLister,
@@ -56,6 +58,7 @@ func newBackendGroupController(
 		nodeLister:          nodeLister,
 		relatedLoadBalancer: &sync.Map{},
 		relatedPod:          &sync.Map{},
+		dryRun:              dryRun,
 	}
 }
 
@@ -71,6 +74,7 @@ type backendGroupController struct {
 
 	relatedLoadBalancer *sync.Map
 	relatedPod          *sync.Map
+	dryRun              bool
 }
 
 func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
@@ -286,6 +290,17 @@ func (c *backendGroupController) listRelatedBackendGroups(namespace string, filt
 }
 
 func (c *backendGroupController) createBackendRecord(record *lbcfapi.BackendRecord) error {
+	// in dry-run mode, BackendRecord is printed without being created
+	if c.dryRun {
+		var extraInfo string
+		if klog.V(3) {
+			b, _ := json.Marshal(record)
+			extraInfo = fmt.Sprintf("created BackendRecord: %s", string(b))
+		}
+		klog.Infof("[dry-run] create BackendRecord %s/%s. %s", record.Namespace, record.Name, extraInfo)
+		return nil
+	}
+
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Create(record)
 	if err != nil {
 		return fmt.Errorf("create BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
@@ -294,6 +309,17 @@ func (c *backendGroupController) createBackendRecord(record *lbcfapi.BackendReco
 }
 
 func (c *backendGroupController) updateBackendRecord(record *lbcfapi.BackendRecord) error {
+	// in dry-run mode, BackendRecord is printed without being updated
+	if c.dryRun {
+		var extraInfo string
+		if klog.V(3) {
+			b, _ := json.Marshal(record)
+			extraInfo = fmt.Sprintf("updated BackendRecord: %s", string(b))
+		}
+		klog.Infof("[dry-run] update BackendRecord %s/%s. %s", record.Namespace, record.Name, extraInfo)
+		return nil
+	}
+
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Update(record)
 	if err != nil {
 		return fmt.Errorf("update BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
@@ -305,6 +331,12 @@ func (c *backendGroupController) deleteBackendRecord(record *lbcfapi.BackendReco
 	if record.DeletionTimestamp != nil {
 		return nil
 	}
+	// in dry-run mode, BackendRecord is printed without being deleted
+	if c.dryRun {
+		klog.Infof("[dry-run] delete BackendRecord %s/%s", record.Namespace, record.Name)
+		return nil
+	}
+
 	err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Delete(record.Name, nil)
 	if err != nil {
 		return fmt.Errorf("delete BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)

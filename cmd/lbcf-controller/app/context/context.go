@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/informers/core/v1"
+	v1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -99,6 +99,10 @@ func (c *Context) Start() {
 func (c *Context) WaitForCacheSync() {
 	c.K8sFactory.WaitForCacheSync(wait.NeverStop)
 	c.LbcfFactory.WaitForCacheSync(wait.NeverStop)
+}
+
+func (c *Context) IsDryRun() bool {
+	return c.Cfg.DryRun
 }
 
 func getClientConfigOrDie(kubeConfig string) *rest.Config {

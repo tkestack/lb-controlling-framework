@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"k8s.io/klog"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
@@ -29,14 +30,23 @@ import (
 
 	apicore "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 )
 
-func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, svcLister corev1.ServiceLister, nodeLister corev1.NodeLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *backendController {
+func newBackendController(
+	client lbcfclient.Interface,
+	brLister v1beta1.BackendRecordLister,
+	driverLister v1beta1.LoadBalancerDriverLister,
+	podLister corev1.PodLister,
+	svcLister corev1.ServiceLister,
+	nodeLister corev1.NodeLister,
+	recorder record.EventRecorder,
+	invoker util.WebhookInvoker,
+	dryRun bool) *backendController {
 	return &backendController{
 		client:             client,
 		brLister:           brLister,
@@ -47,6 +57,7 @@ func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendR
 		eventRecorder:      recorder,
 		inProgressDeleting: new(sync.Map),
 		webhookInvoker:     invoker,
+		dryRun:             dryRun,
 	}
 }
 
@@ -61,6 +72,7 @@ type backendController struct {
 
 	inProgressDeleting *sync.Map
 	webhookInvoker     util.WebhookInvoker
+	dryRun             bool
 }
 
 func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
@@ -112,6 +124,10 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 	} else {
 		return util.ErrorResult(fmt.Errorf("unknown backend type"))
 	}
+	// in dry-run mode, status will not be updated and no events are generated
+	if c.dryRun {
+		return util.FinishedResult()
+	}
 
 	switch rsp.Status {
 	case webhooks.StatusSucc:
@@ -139,7 +155,9 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
 	if name, deleting := c.sameAddrDeleting(backend); deleting {
-		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "DelayedEnsureBackend", "ensureBackend will start once %s is finished", name)
+		if !c.dryRun {
+			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "DelayedEnsureBackend", "ensureBackend will start once %s is finished", name)
+		}
 		return util.AsyncResult(util.CalculateRetryInterval(0))
 	}
 
@@ -157,11 +175,24 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		BackendAddr:  backend.Status.BackendAddr,
 		Parameters:   backend.Spec.Parameters,
 		InjectedInfo: backend.Status.InjectedInfo,
+		DryRun:       c.dryRun,
+	}
+	if c.dryRun {
+		klog.Infof("[dry-run] webhook: ensureBackend, BackendRecord: %s/%s",
+			backend.Namespace, backend.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return util.FinishedResult()
+		}
 	}
 	rsp, err := c.webhookInvoker.CallEnsureBackend(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
+	// in dry-run mode, status will not be updated and no events are generated
+	if c.dryRun {
+		return util.FinishedResult()
+	}
+
 	switch rsp.Status {
 	case webhooks.StatusSucc:
 		backend = backend.DeepCopy()
@@ -214,6 +245,9 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 	c.storeDeletingBackend(backend)
 
 	if backend.Status.BackendAddr == "" {
+		if c.dryRun {
+			return util.FinishedResult()
+		}
 		return c.removeFinalizer(backend)
 	}
 
@@ -230,11 +264,24 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		BackendAddr:  backend.Status.BackendAddr,
 		Parameters:   backend.Spec.Parameters,
 		InjectedInfo: backend.Status.InjectedInfo,
+		DryRun:       c.dryRun,
+	}
+	if c.dryRun {
+		klog.Infof("[dry-run] webhook: deregisterBackend, BackendRecord: %s/%s",
+			backend.Namespace, backend.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return util.FinishedResult()
+		}
 	}
 	rsp, err := c.webhookInvoker.CallDeregisterBackend(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
+	// in dry-run mode, status will not be updated and no events are generated
+	if c.dryRun {
+		return util.FinishedResult()
+	}
+
 	switch rsp.Status {
 	case webhooks.StatusSucc:
 		return c.removeFinalizer(backend)
@@ -316,6 +363,14 @@ func (c *backendController) generatePodAddr(backend *lbcfapi.BackendRecord, driv
 			Pod:  *pod,
 			Port: backend.Spec.PodBackendInfo.Port,
 		},
+		DryRun: c.dryRun,
+	}
+	if c.dryRun {
+		klog.Infof("[dry-run] webhook: generateBackendAddr, BackendRecord: %s/%s",
+			backend.Namespace, backend.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return nil, nil
+		}
 	}
 	return c.webhookInvoker.CallGenerateBackendAddr(driver, req)
 }
@@ -342,6 +397,14 @@ func (c *backendController) generateServiceAddr(backend *lbcfapi.BackendRecord, 
 			NodeName:      node.Name,
 			NodeAddresses: node.Status.Addresses,
 		},
+		DryRun: c.dryRun,
+	}
+	if c.dryRun {
+		klog.Infof("[dry-run] webhook: generateBackendAddr, BackendRecord: %s/%s",
+			backend.Namespace, backend.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return nil, nil
+		}
 	}
 	return c.webhookInvoker.CallGenerateBackendAddr(driver, req)
 }

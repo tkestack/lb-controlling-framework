@@ -123,6 +123,11 @@ func toAdmissionResponse(err error) *v1beta1.AdmissionResponse {
 	return &v1beta1.AdmissionResponse{Result: &v1.Status{Message: err.Error()}}
 }
 
+func dryRunResponse() *v1beta1.AdmissionResponse {
+	return toAdmissionResponse(
+		fmt.Errorf("validate succeeded, but this operation is rejected because lbcf-controller is in dry-run mode"))
+}
+
 func responseAndLog(ar *v1beta1.AdmissionReview, rsp *restful.Response) {
 	if err := rsp.WriteAsJson(ar); err != nil {
 		klog.Errorf("send admissionWebhook response failed: %v, ar: %+v", err, *ar)

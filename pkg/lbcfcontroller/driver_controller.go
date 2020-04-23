@@ -24,20 +24,22 @@ import (
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
-func newDriverController(client lbcfclient.Interface, lister v1beta1.LoadBalancerDriverLister) *driverController {
+func newDriverController(client lbcfclient.Interface, lister v1beta1.LoadBalancerDriverLister, dryRun bool) *driverController {
 	return &driverController{
 		lbcfClient: client,
 		lister:     lister,
+		dryRun:     dryRun,
 	}
 }
 
 type driverController struct {
 	lbcfClient lbcfclient.Interface
 	lister     v1beta1.LoadBalancerDriverLister
+	dryRun     bool
 }
 
 func (c *driverController) syncDriver(key string) *util.SyncResult {
@@ -56,7 +58,12 @@ func (c *driverController) syncDriver(key string) *util.SyncResult {
 		return util.FinishedResult()
 	}
 
-	// create DriverConnector
+	// in dry-run mode, status of the driver will not be updated
+	if c.dryRun {
+		return util.FinishedResult()
+	}
+
+	// update driver status
 	if len(driver.Status.Conditions) == 0 {
 		driver.Status = lbcfapi.LoadBalancerDriverStatus{
 			Conditions: []lbcfapi.LoadBalancerDriverCondition{

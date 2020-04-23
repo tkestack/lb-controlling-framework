@@ -200,8 +200,9 @@ const (
 )
 
 type LoadBalancerDriverSpec struct {
-	DriverType string `json:"driverType"`
-	URL        string `json:"url"`
+	DriverType       string `json:"driverType"`
+	URL              string `json:"url"`
+	AcceptDryRunCall bool   `json:"acceptDryRunCall"`
 	// +optional
 	Webhooks []WebhookConfig `json:"webhooks,omitempty"`
 }

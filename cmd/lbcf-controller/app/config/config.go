@@ -31,6 +31,7 @@ type Config struct {
 	KubeConfig           string
 	ServerCrt            string
 	ServerKey            string
+	DryRun               bool
 }
 
 func NewConfig() *Config {
@@ -45,4 +46,5 @@ func (o *Config) AddFlags(fs *flag.FlagSet) {
 	fs.StringVar(&o.KubeConfig, "kubeconfig", "", "Path to kubeconfig file with authorization information")
 	fs.StringVar(&o.ServerCrt, "server-crt", "/etc/lbcf/server.crt", "Path to crt file for admit webhook server")
 	fs.StringVar(&o.ServerKey, "server-key", "/etc/lbcf/server.key", "Path to key file for admit webhook server")
+	fs.BoolVar(&o.DryRun, "dry-run", false, "If true, only print the webhooks that would be invoked, without invoking them")
 }
