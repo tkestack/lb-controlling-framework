@@ -20,6 +20,7 @@ package lbcfcontroller
 import (
 	"fmt"
 
+	"k8s.io/klog"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
@@ -28,19 +29,26 @@ import (
 
 	apicore "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 )
 
-func newLoadBalancerController(client lbcfclient.Interface, lbLister v1beta1.LoadBalancerLister, driverLister v1beta1.LoadBalancerDriverLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *loadBalancerController {
+func newLoadBalancerController(
+	client lbcfclient.Interface,
+	lbLister v1beta1.LoadBalancerLister,
+	driverLister v1beta1.LoadBalancerDriverLister,
+	recorder record.EventRecorder,
+	invoker util.WebhookInvoker,
+	dryRun bool) *loadBalancerController {
 	return &loadBalancerController{
 		lbcfClient:     client,
 		lister:         lbLister,
 		driverLister:   driverLister,
 		eventRecorder:  recorder,
 		webhookInvoker: invoker,
+		dryRun:         dryRun,
 	}
 }
 
@@ -52,6 +60,7 @@ type loadBalancerController struct {
 
 	eventRecorder  record.EventRecorder
 	webhookInvoker util.WebhookInvoker
+	dryRun         bool
 }
 
 func (c *loadBalancerController) syncLB(key string) *util.SyncResult {
@@ -91,11 +100,24 @@ func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		},
 		LBSpec:     lb.Spec.LBSpec,
 		Attributes: lb.Spec.Attributes,
+		DryRun:     c.dryRun,
+	}
+	if c.dryRun {
+		klog.Infof("[dry-run] webhook: createLoadBalancer, LoadBalancer: %s/%s",
+			lb.Namespace, lb.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return util.FinishedResult()
+		}
 	}
 	rsp, err := c.webhookInvoker.CallCreateLoadBalancer(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
+	// in dry-run mode, status of the lb will not be updated and no events are generated
+	if c.dryRun {
+		return util.FinishedResult()
+	}
+
 	switch rsp.Status {
 	case webhooks.StatusSucc:
 		lb = lb.DeepCopy()
@@ -150,11 +172,24 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 			RetryID:  string(uuid.NewUUID()),
 		},
 		Attributes: lb.Spec.Attributes,
+		DryRun:     c.dryRun,
+	}
+	if c.dryRun {
+		klog.Infof("[dry-run] webhook: ensureLoadBalancer, LoadBalancer: %s/%s",
+			lb.Namespace, lb.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return util.FinishedResult()
+		}
 	}
 	rsp, err := c.webhookInvoker.CallEnsureLoadBalancer(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
+	// in dry-run mode, status of the lb will not be updated and no events are generated
+	if c.dryRun {
+		return util.FinishedResult()
+	}
+
 	switch rsp.Status {
 	case webhooks.StatusSucc:
 		lb = lb.DeepCopy()
@@ -212,11 +247,24 @@ func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		},
 		LBInfo:     lb.Status.LBInfo,
 		Attributes: lb.Spec.Attributes,
+		DryRun:     c.dryRun,
+	}
+	if c.dryRun {
+		klog.Infof("[dry-run] webhook: deleteLoadBalancer, LoadBalancer: %s/%s",
+			lb.Namespace, lb.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return util.FinishedResult()
+		}
 	}
 	rsp, err := c.webhookInvoker.CallDeleteLoadBalancer(driver, req)
 	if err != nil {
 		return util.ErrorResult(err)
 	}
+	// in dry-run mode, status of the lb will not be updated and no events are generated
+	if c.dryRun {
+		return util.FinishedResult()
+	}
+
 	switch rsp.Status {
 	case webhooks.StatusSucc:
 		return c.removeFinalizer(lb)

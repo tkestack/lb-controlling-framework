@@ -20,7 +20,7 @@ package webhooks
 import (
 	"tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -111,6 +111,7 @@ const (
 
 // ValidateLoadBalancerRequest is the request for webhook validateLoadBalancer
 type ValidateLoadBalancerRequest struct {
+	DryRun        bool              `json:"dryRun"`
 	LBSpec        map[string]string `json:"lbSpec"`
 	Operation     OperationType     `json:"operation"`
 	Attributes    map[string]string `json:"attributes"`
@@ -125,6 +126,7 @@ type ValidateLoadBalancerResponse struct {
 // CreateLoadBalancerRequest is the request for webhook createLoadBalancer
 type CreateLoadBalancerRequest struct {
 	RequestForRetryHooks
+	DryRun     bool              `json:"dryRun"`
 	LBSpec     map[string]string `json:"lbSpec"`
 	Attributes map[string]string `json:"attributes"`
 }
@@ -138,6 +140,7 @@ type CreateLoadBalancerResponse struct {
 // EnsureLoadBalancerRequest is the request for webhook ensureLoadBalancer
 type EnsureLoadBalancerRequest struct {
 	RequestForRetryHooks
+	DryRun     bool              `json:"dryRun"`
 	LBInfo     map[string]string `json:"lbInfo"`
 	Attributes map[string]string `json:"attributes"`
 }
@@ -150,6 +153,7 @@ type EnsureLoadBalancerResponse struct {
 // DeleteLoadBalancerRequest is the request for webhook deleteLoadBalancer
 type DeleteLoadBalancerRequest struct {
 	RequestForRetryHooks
+	DryRun     bool              `json:"dryRun"`
 	LBInfo     map[string]string `json:"lbInfo"`
 	Attributes map[string]string `json:"attributes"`
 }
@@ -161,6 +165,7 @@ type DeleteLoadBalancerResponse struct {
 
 // ValidateBackendRequest is the request for webhook validateBackend
 type ValidateBackendRequest struct {
+	DryRun        bool              `json:"dryRun"`
 	BackendType   string            `json:"backendType"`
 	LBInfo        map[string]string `json:"lbInfo"`
 	Operation     OperationType     `json:"operation"`
@@ -176,6 +181,7 @@ type ValidateBackendResponse struct {
 // GenerateBackendAddrRequest is the request for webhook generateBackendAddr
 type GenerateBackendAddrRequest struct {
 	RequestForRetryHooks
+	DryRun         bool                                 `json:"dryRun"`
 	LBInfo         map[string]string                    `json:"lbInfo"`
 	LBAttributes   map[string]string                    `json:"lbAttributes"`
 	Parameters     map[string]string                    `json:"parameters"`
@@ -206,6 +212,7 @@ type GenerateBackendAddrResponse struct {
 // BackendOperationRequest is the request for webhook ensureBackend and deregisterBackend
 type BackendOperationRequest struct {
 	RequestForRetryHooks
+	DryRun       bool              `json:"dryRun"`
 	LBInfo       map[string]string `json:"lbInfo"`
 	BackendAddr  string            `json:"backendAddr"`
 	Parameters   map[string]string `json:"parameters"`

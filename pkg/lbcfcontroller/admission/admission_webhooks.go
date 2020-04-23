@@ -70,6 +70,7 @@ func NewAdmitter(ctx *context.Context, invoker util.WebhookInvoker) Webhook {
 		backendLister:  ctx.BRInformer.Lister(),
 		bgLister:       ctx.BGInformer.Lister(),
 		webhookInvoker: invoker,
+		dryRun:         ctx.IsDryRun(),
 	}
 }
 
@@ -81,6 +82,7 @@ type Admitter struct {
 	backendLister lbcflister.BackendRecordLister
 
 	webhookInvoker util.WebhookInvoker
+	dryRun         bool
 }
 
 // MutateLB implements MutatingWebHook for LoadBalancer
@@ -180,6 +182,14 @@ func (a *Admitter) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *ad
 		LBSpec:     lb.Spec.LBSpec,
 		Operation:  webhooks.OperationCreate,
 		Attributes: lb.Spec.Attributes,
+		DryRun:     a.dryRun,
+	}
+	if a.dryRun {
+		klog.Infof("[dry-run] webhook: validateLoadBalancer, LoadBalancer: %s/%s",
+			lb.Namespace, lb.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return dryRunResponse()
+		}
 	}
 	rsp, err := a.webhookInvoker.CallValidateLoadBalancer(driver, req)
 	if err != nil {
@@ -187,7 +197,9 @@ func (a *Admitter) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *ad
 	} else if !rsp.Succ {
 		return toAdmissionResponse(fmt.Errorf("invalid LoadBalancer: %s", rsp.Msg))
 	}
-
+	if a.dryRun {
+		return dryRunResponse()
+	}
 	return toAdmissionResponse(nil)
 }
 
@@ -222,6 +234,14 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 		Operation:     webhooks.OperationUpdate,
 		Attributes:    curObj.Spec.Attributes,
 		OldAttributes: oldObj.Spec.Attributes,
+		DryRun:        a.dryRun,
+	}
+	if a.dryRun {
+		klog.Infof("[dry-run] webhook: validateLoadBalancer, LoadBalancer: %s/%s",
+			curObj.Namespace, curObj.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return dryRunResponse()
+		}
 	}
 	rsp, err := a.webhookInvoker.CallValidateLoadBalancer(driver, req)
 	if err != nil {
@@ -229,7 +249,9 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 	} else if !rsp.Succ {
 		return toAdmissionResponse(fmt.Errorf("invalid LoadBalancer: %s", rsp.Msg))
 	}
-
+	if a.dryRun {
+		return dryRunResponse()
+	}
 	return toAdmissionResponse(nil)
 }
 
@@ -248,6 +270,10 @@ func (a *Admitter) ValidateLoadBalancerDelete(ar *admission.AdmissionReview) *ad
 			fmt.Errorf("LoadBalancer with label %s is not allowed to be deleted, delete the label first if you know what you are doing",
 				lbcfapi.LabelDoNotDelete))
 	}
+
+	if a.dryRun {
+		return dryRunResponse()
+	}
 	return toAdmissionResponse(nil)
 }
 
@@ -264,6 +290,9 @@ func (a *Admitter) ValidateDriverCreate(ar *admission.AdmissionReview) *admissio
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
+	if a.dryRun {
+		return dryRunResponse()
+	}
 	return toAdmissionResponse(nil)
 }
 
@@ -285,6 +314,10 @@ func (a *Admitter) ValidateDriverUpdate(ar *admission.AdmissionReview) *admissio
 	errList := ValidateLoadBalancerDriver(curObj)
 	if len(errList) > 0 {
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
+	}
+
+	if a.dryRun {
+		return dryRunResponse()
 	}
 	return toAdmissionResponse(nil)
 }
@@ -314,6 +347,10 @@ func (a *Admitter) ValidateDriverDelete(ar *admission.AdmissionReview) *admissio
 		return toAdmissionResponse(fmt.Errorf("unable to list BackendRecords for driver, err: %v", err))
 	} else if len(beList) > 0 {
 		return toAdmissionResponse(fmt.Errorf("all BackendRecord must be deregistered, %d remaining", len(beList)))
+	}
+
+	if a.dryRun {
+		return dryRunResponse()
 	}
 	return toAdmissionResponse(nil)
 }
@@ -351,6 +388,14 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 		LBInfo:      lb.Status.LBInfo,
 		Operation:   webhooks.OperationCreate,
 		Parameters:  bg.Spec.Parameters,
+		DryRun:      a.dryRun,
+	}
+	if a.dryRun {
+		klog.Infof("[dry-run] webhook: validateBackend, BackendGroup: %s/%s",
+			bg.Namespace, bg.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return dryRunResponse()
+		}
 	}
 	rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
 	if err != nil {
@@ -358,7 +403,9 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 	} else if !rsp.Succ {
 		return toAdmissionResponse(fmt.Errorf("invalid Backend, msg: %v", rsp.Msg))
 	}
-
+	if a.dryRun {
+		return dryRunResponse()
+	}
 	return toAdmissionResponse(nil)
 }
 
@@ -399,12 +446,24 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 		Operation:     webhooks.OperationUpdate,
 		Parameters:    curObj.Spec.Parameters,
 		OldParameters: oldObj.Spec.Parameters,
+		DryRun:        a.dryRun,
+	}
+	if a.dryRun {
+		klog.Infof("[dry-run] webhook: validateBackend, BackendGroup: %s/%s",
+			curObj.Namespace, curObj.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return dryRunResponse()
+		}
 	}
 	rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
 	if err != nil {
 		return toAdmissionResponse(fmt.Errorf("call webhook error, webhook validateBackend, err: %v", err))
 	} else if !rsp.Succ {
 		return toAdmissionResponse(fmt.Errorf("invalid Backend, msg: %v", rsp.Msg))
+	}
+
+	if a.dryRun {
+		return dryRunResponse()
 	}
 	return toAdmissionResponse(nil)
 }
@@ -423,6 +482,10 @@ func (a *Admitter) ValidateBackendGroupDelete(ar *admission.AdmissionReview) *ad
 		return toAdmissionResponse(
 			fmt.Errorf("BackendGroup with label %s is not allowed to be deleted, delete the label first if you know what you are doing",
 				lbcfapi.LabelDoNotDelete))
+	}
+
+	if a.dryRun {
+		return dryRunResponse()
 	}
 	return toAdmissionResponse(nil)
 }
