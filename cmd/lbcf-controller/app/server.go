@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/spf13/pflag"
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller"
@@ -39,6 +40,7 @@ func NewServer() *cobra.Command {
 		Use: "lbcf-controller",
 		Run: func(cmd *cobra.Command, args []string) {
 			version.PrintAndExitIfRequested()
+			printFlags(cmd.Flags())
 
 			ctx := context.NewContext(cfg)
 			admissionWebhookServer := admission.NewWebhookServer(ctx, cfg.ServerCrt, cfg.ServerKey)
@@ -63,4 +65,11 @@ func NewServer() *cobra.Command {
 	rootCmd.Flags().AddGoFlagSet(fs)
 	cfg.AddFlags(rootCmd.Flags())
 	return rootCmd
+}
+
+func printFlags(fs *pflag.FlagSet) {
+	klog.Infof("Using flags:")
+	fs.VisitAll(func(flag *pflag.Flag) {
+		klog.Infof("\t%s: %s", flag.Name, flag.Value.String())
+	})
 }
