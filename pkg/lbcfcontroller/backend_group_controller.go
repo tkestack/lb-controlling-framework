@@ -197,21 +197,6 @@ func (c *backendGroupController) update(group *lbcfapi.BackendGroup, lb *lbcfapi
 	if err != nil {
 		return util.ErrorResult(err)
 	}
-	needCreate, needUpdate, needDelete := util.CompareBackendRecords(expectedBackends, existingRecords)
-	var errs util.ErrorList
-	if err := util.IterateBackends(needDelete, c.deleteBackendRecord); err != nil {
-		errs = append(errs, err)
-	}
-	if err := util.IterateBackends(needUpdate, c.updateBackendRecord); err != nil {
-		errs = append(errs, err)
-	}
-	if err := util.IterateBackends(needCreate, c.createBackendRecord); err != nil {
-		errs = append(errs, err)
-	}
-	if len(errs) > 0 {
-		return util.ErrorResult(errs)
-	}
-
 	// update status
 	curTotal := len(expectedBackends)
 	var curRegistered int32
@@ -227,6 +212,21 @@ func (c *backendGroupController) update(group *lbcfapi.BackendGroup, lb *lbcfapi
 		if err := c.updateStatus(group, &group.Status); err != nil {
 			return util.ErrorResult(err)
 		}
+	}
+
+	needCreate, needUpdate, needDelete := util.CompareBackendRecords(expectedBackends, existingRecords)
+	var errs util.ErrorList
+	if err := util.IterateBackends(needDelete, c.deleteBackendRecord); err != nil {
+		errs = append(errs, err)
+	}
+	if err := util.IterateBackends(needUpdate, c.updateBackendRecord); err != nil {
+		errs = append(errs, err)
+	}
+	if err := util.IterateBackends(needCreate, c.createBackendRecord); err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return util.ErrorResult(errs)
 	}
 	return util.FinishedResult()
 }
