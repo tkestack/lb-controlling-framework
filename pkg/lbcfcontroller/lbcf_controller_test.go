@@ -1212,7 +1212,7 @@ func TestLBCFControllerProcessNextItemSucc(t *testing.T) {
 	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
 		return util.FinishedResult()
 	})
 	if q.Len() != 0 || q.LenWaitingForFilter() != 0 {
@@ -1236,7 +1236,7 @@ func TestLBCFControllerProcessNextItemError(t *testing.T) {
 	ctrl := &Controller{}
 	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
 	ctrl.enqueue("key", q)
-	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
 		return util.ErrorResult(fmt.Errorf("fake error"))
 	})
 	if get, done := q.Get(); done {
@@ -1255,7 +1255,7 @@ func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
 		return util.FailResult(500*time.Millisecond, "")
 	})
 	if get, done := q.Get(); done {
@@ -1272,7 +1272,7 @@ func TestLBCFControllerProcessNextItemRunning(t *testing.T) {
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
 		return util.AsyncResult(500 * time.Millisecond)
 	})
 	if get, done := q.Get(); done {
@@ -1289,7 +1289,7 @@ func TestLBCFControllerProcessNextItemPeriodic(t *testing.T) {
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem(q, func(key string) *util.SyncResult {
+	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
 		return util.PeriodicResult(500 * time.Millisecond)
 	})
 	if get, done := q.Get(); done {
