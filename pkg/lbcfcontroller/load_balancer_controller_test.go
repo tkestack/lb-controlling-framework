@@ -20,11 +20,12 @@ import (
 	"testing"
 	"time"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
+
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 func TestLoadBalancerCreate(t *testing.T) {
@@ -42,7 +43,8 @@ func TestLoadBalancerCreate(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFinished() {
@@ -78,7 +80,8 @@ func TestLoadBalancerCreateFail(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeFailInvoker{})
+		&fakeFailInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
@@ -113,7 +116,8 @@ func TestLoadBalancerCreateRunning(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
@@ -147,7 +151,8 @@ func TestLoadBalancerCreateInvalid(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeInvalidInvoker{})
+		&fakeInvalidInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
@@ -194,7 +199,8 @@ func TestLoadBalancerEnsure(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFinished() {
@@ -246,7 +252,8 @@ func TestLoadBalancerEnsureFail(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeFailInvoker{})
+		&fakeFailInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
@@ -296,7 +303,8 @@ func TestLoadBalancerEnsureRunning(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
@@ -343,7 +351,8 @@ func TestLoadBalancerReEnsure(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
@@ -391,7 +400,8 @@ func TestLoadBalancerEnsureInvalid(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeInvalidInvoker{})
+		&fakeInvalidInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
@@ -424,7 +434,8 @@ func TestLoadBalancerDelete(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFinished() {
@@ -454,7 +465,8 @@ func TestLoadBalancerDeleteFailed(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeFailInvoker{})
+		&fakeFailInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
@@ -491,7 +503,8 @@ func TestLoadBalancerDeleteRunning(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsRunning() {
@@ -528,7 +541,8 @@ func TestLoadBalancerDeleteInvalid(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeInvalidInvoker{})
+		&fakeInvalidInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
 	if !result.IsFailed() {
