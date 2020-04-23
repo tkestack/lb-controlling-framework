@@ -150,26 +150,26 @@ func (c *Controller) enqueue(obj interface{}, queue util.ConditionalRateLimiting
 }
 
 func (c *Controller) lbWorker() {
-	for c.processNextItem(c.loadBalancerQueue, c.lbCtrl.syncLB) {
+	for c.processNextItem("LoadBalancer", c.loadBalancerQueue, c.lbCtrl.syncLB) {
 	}
 }
 
 func (c *Controller) driverWorker() {
-	for c.processNextItem(c.driverQueue, c.driverCtrl.syncDriver) {
+	for c.processNextItem("LoadBalancerDriver", c.driverQueue, c.driverCtrl.syncDriver) {
 	}
 }
 
 func (c *Controller) backendGroupWorker() {
-	for c.processNextItem(c.backendGroupQueue, c.backendGroupCtrl.syncBackendGroup) {
+	for c.processNextItem("BackendGroup", c.backendGroupQueue, c.backendGroupCtrl.syncBackendGroup) {
 	}
 }
 
 func (c *Controller) backendWorker() {
-	for c.processNextItem(c.backendQueue, c.backendCtrl.syncBackendRecord) {
+	for c.processNextItem("BackendRecord", c.backendQueue, c.backendCtrl.syncBackendRecord) {
 	}
 }
 
-func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
+func (c *Controller) processNextItem(kind string, queue util.ConditionalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
 	key, quit := queue.Get()
 	if quit {
 		return false
@@ -178,27 +178,26 @@ func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface
 	go func() {
 		defer queue.Done(key)
 
-		klog.V(3).Infof("sync start, key %s", key)
+		klog.V(3).Infof("sync %s %s start", kind, key)
 		startTime := time.Now()
 		result := syncFunc(key.(string))
 
-		if !result.IsFailed() {
+		if result.IsFailed() {
+			klog.Infof("Failed %s %s, reason: %v", kind, key, result.GetFailReason())
+			queue.AddAfterMinimumDelay(key, result.GetNextRun())
+		} else if result.IsRunning() {
+			klog.Infof("Async %s %s", kind, key)
+			queue.AddAfterMinimumDelay(key, result.GetNextRun())
+		} else if result.IsPeriodic() {
+			klog.Infof("Periodic %s %s", kind, key)
+			queue.AddAfterFiltered(key, result.GetNextRun())
+		} else {
+			klog.Infof("Successfully Finished %s %s", kind, key)
 			queue.Forget(key)
 		}
 
-		if result.IsFailed() {
-			klog.Infof("Failed key %s, reason: %v", key, result.GetFailReason())
-			queue.AddAfterMinimumDelay(key, result.GetNextRun())
-		} else if result.IsRunning() {
-			klog.Infof("Async key %s", key)
-			queue.AddAfterMinimumDelay(key, result.GetNextRun())
-		} else if result.IsPeriodic() {
-			klog.Infof("Periodic key %s", key)
-			queue.AddAfterFiltered(key, result.GetNextRun())
-		}
-
 		elapsed := time.Since(startTime)
-		klog.V(3).Infof("sync finished, key %s, took %s", key, elapsed.String())
+		klog.V(3).Infof("sync %s %s, took %s", kind, key, elapsed.String())
 	}()
 	return true
 }
