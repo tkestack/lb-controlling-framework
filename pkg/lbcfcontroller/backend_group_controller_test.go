@@ -53,6 +53,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
@@ -111,6 +112,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
@@ -164,6 +166,7 @@ func TestBackendGroupCreateRecordByService(t *testing.T) {
 				"node2": newFakeNode("", "node2"),
 			},
 		},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
@@ -244,6 +247,7 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 			&fakeNodeListerWithStore{
 				store: nodeStore,
 			},
+			false,
 		)
 		key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(c.group)
 		result := ctrl.syncBackendGroup(key)
@@ -285,6 +289,7 @@ func TestBackendGroupCreateRecordByStatic(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
@@ -339,6 +344,7 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(curGroup)
 	result := ctrl.syncBackendGroup(key)
@@ -410,6 +416,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
@@ -476,6 +483,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
@@ -533,6 +541,7 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)

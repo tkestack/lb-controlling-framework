@@ -31,9 +31,12 @@ func TestDriverControllerSyncDriverCreate(t *testing.T) {
 	driver := newFakeDriver("kube-system", fmt.Sprintf("%s%s", lbcfapi.SystemDriverPrefix, "driver"))
 
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
-	ctrl := newDriverController(fake.NewSimpleClientset(driver), &fakeDriverLister{
-		get: driver,
-	})
+	ctrl := newDriverController(
+		fake.NewSimpleClientset(driver),
+		&fakeDriverLister{
+			get: driver,
+		},
+		false)
 	result := ctrl.syncDriver(key)
 	if !result.IsFinished() {
 		t.Logf("%v", result.GetFailReason())
@@ -52,9 +55,12 @@ func TestDriverControllerSyncDriverAccepted(t *testing.T) {
 		},
 	}
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
-	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
-		get: driver,
-	})
+	ctrl := newDriverController(
+		fake.NewSimpleClientset(),
+		&fakeDriverLister{
+			get: driver,
+		},
+		false)
 	result := ctrl.syncDriver(key)
 	if !result.IsFinished() {
 		t.Logf("%v", result.GetFailReason())
@@ -66,7 +72,7 @@ func TestDriverControllerSyncDriverNotFound(t *testing.T) {
 	driver := newFakeDriver("kube-system", fmt.Sprintf("%s%s", lbcfapi.SystemDriverPrefix, "driver"))
 
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
-	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{})
+	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{}, false)
 	result := ctrl.syncDriver(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %v", result)
@@ -79,9 +85,12 @@ func TestDriverControllerSyncDriverDeleting(t *testing.T) {
 	driver.DeletionTimestamp = &ts
 
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(driver)
-	ctrl := newDriverController(fake.NewSimpleClientset(), &fakeDriverLister{
-		get: driver,
-	})
+	ctrl := newDriverController(
+		fake.NewSimpleClientset(),
+		&fakeDriverLister{
+			get: driver,
+		},
+		false)
 	result := ctrl.syncDriver(key)
 	if !result.IsFinished() {
 		t.Fatalf("expect succ result, get %v", result)

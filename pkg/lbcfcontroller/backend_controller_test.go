@@ -50,7 +50,8 @@ func TestBackendGenerateAddr(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
@@ -97,7 +98,8 @@ func TestBackendGenerateSvcAddr(t *testing.T) {
 			},
 		},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
@@ -135,7 +137,8 @@ func TestBackendGenerateStaticAddr(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
@@ -174,7 +177,8 @@ func TestBackendGenerateAddrFailed(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeFailInvoker{})
+		&fakeFailInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
@@ -217,7 +221,8 @@ func TestBackendGenerateAddrRunning(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
@@ -260,7 +265,8 @@ func TestBackendGenerateAddrInvalidResponse(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeInvalidInvoker{})
+		&fakeInvalidInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
@@ -305,7 +311,8 @@ func TestBackendEnsure(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
@@ -347,7 +354,8 @@ func TestBackendEnsureFailed(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeFailInvoker{})
+		&fakeFailInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
@@ -402,7 +410,8 @@ func TestBackendEnsureRunning(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
@@ -452,7 +461,8 @@ func TestBackendEnsureRerun(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeFailInvoker{})
+		&fakeFailInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
@@ -492,7 +502,8 @@ func TestBackendEnsureInvalidResponse(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeInvalidInvoker{})
+		&fakeInvalidInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
@@ -541,7 +552,7 @@ func TestBackendDeregister(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{}, false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
@@ -587,7 +598,8 @@ func TestBackendDeregisterFailed(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeFailInvoker{})
+		&fakeFailInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
@@ -640,7 +652,8 @@ func TestBackendDeregisterRunning(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsRunning() {
@@ -693,7 +706,8 @@ func TestBackendDeregisterInvalidResponse(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeInvalidInvoker{})
+		&fakeInvalidInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFailed() {
@@ -745,7 +759,8 @@ func TestBackendDeregisterEmptyAddr(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeSuccInvoker{})
+		&fakeSuccInvoker{},
+		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
 	if !resp.IsFinished() {
@@ -811,7 +826,8 @@ func TestBackendSameAddrOperation(t *testing.T) {
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{})
+		&fakeRunningInvoker{},
+		false)
 
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(oldBackend)
 	resp := ctrl.syncBackendRecord(key)
