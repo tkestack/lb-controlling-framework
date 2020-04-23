@@ -9,6 +9,8 @@ spec:
     listKind: LoadBalancerDriverList
     plural: loadbalancerdrivers
     singular: loadbalancerdriver
+    shortNames:
+    - driver
   scope: Namespaced
   subresources:
     status: {}
@@ -25,6 +27,8 @@ spec:
     listKind: LoadBalancerList
     plural: loadbalancers
     singular: loadbalancer
+    shortNames:
+    - lb
   scope: Namespaced
   subresources:
     status: {}
@@ -41,6 +45,8 @@ spec:
     listKind: BackendGroupList
     plural: backendgroups
     singular: backendgroup
+    shortNames:
+    - bg
   scope: Namespaced
   subresources:
     status: {}
@@ -57,6 +63,8 @@ spec:
     listKind: BackendRecordList
     plural: backendrecords
     singular: backendrecord
+    shortNames:
+    - br
   scope: Namespaced
   subresources:
     status: {}
