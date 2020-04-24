@@ -447,6 +447,10 @@ func handleResult(kind string, key interface{}, queue util.ConditionalRateLimiti
 		queue.AddAfterFiltered(key, result.GetNextRun())
 	} else {
 		klog.Infof("Successfully Finished %s %s", kind, key)
+	}
+
+	// reset rate limiter if not failed
+	if !result.IsFailed() {
 		queue.Forget(key)
 	}
 }
