@@ -141,7 +141,8 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 
 	bgPatch := &backendGroupPatch{obj: obj}
 	bgPatch.addLabel()
-	bgPatch.setDefaultProtocol()
+	bgPatch.convertLoadBalancers()
+	bgPatch.convertPortSelector()
 
 	p, err := json.Marshal(bgPatch.patch())
 	if err != nil {
@@ -365,43 +366,10 @@ func (a *Admitter) ValidateBackendGroupCreate(ar *admission.AdmissionReview) *ad
 	if len(errList) > 0 {
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
-
-	lb, err := a.lbLister.LoadBalancers(bg.Namespace).Get(bg.Spec.LBName)
-	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
-	}
-	if lb.DeletionTimestamp != nil {
-		return toAdmissionResponse(fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name))
-	}
-	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, bg.Namespace)
-	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
-	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
-	}
-	if util.IsDriverDraining(driver) {
-		return toAdmissionResponse(fmt.Errorf("driver %q is draining, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver))
-	} else if driver.DeletionTimestamp != nil {
-		return toAdmissionResponse(fmt.Errorf("driver %q is deleting, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver))
-	}
-	req := &webhooks.ValidateBackendRequest{
-		BackendType: string(util.GetBackendType(bg)),
-		LBInfo:      lb.Status.LBInfo,
-		Operation:   webhooks.OperationCreate,
-		Parameters:  bg.Spec.Parameters,
-		DryRun:      a.dryRun,
-	}
-	if a.dryRun {
-		klog.Infof("[dry-run] webhook: validateBackend, BackendGroup: %s/%s",
-			bg.Namespace, bg.Name)
-		if !driver.Spec.AcceptDryRunCall {
-			return dryRunResponse()
+	for _, lb := range bg.Spec.GetLoadBalancers() {
+		if err := a.validateBackendGroupCreate(bg, lb); err != nil {
+			return toAdmissionResponse(err)
 		}
-	}
-	rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
-	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("call webhook error, webhook validateBackend, err: %v", err))
-	} else if !rsp.Succ {
-		return toAdmissionResponse(fmt.Errorf("invalid Backend, msg: %v", rsp.Msg))
 	}
 	if a.dryRun {
 		return dryRunResponse()
@@ -430,38 +398,11 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
 
-	lb, err := a.lbLister.LoadBalancers(curObj.Namespace).Get(curObj.Spec.LBName)
-	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup"))
-	}
-	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, curObj.Namespace)
-	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
-	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err))
-	}
-
-	req := &webhooks.ValidateBackendRequest{
-		BackendType:   string(util.GetBackendType(curObj)),
-		LBInfo:        lb.Status.LBInfo,
-		Operation:     webhooks.OperationUpdate,
-		Parameters:    curObj.Spec.Parameters,
-		OldParameters: oldObj.Spec.Parameters,
-		DryRun:        a.dryRun,
-	}
-	if a.dryRun {
-		klog.Infof("[dry-run] webhook: validateBackend, BackendGroup: %s/%s",
-			curObj.Namespace, curObj.Name)
-		if !driver.Spec.AcceptDryRunCall {
-			return dryRunResponse()
+	for _, lb := range curObj.Spec.GetLoadBalancers() {
+		if err := a.validateBackendGroupUpdate(oldObj, curObj, lb); err != nil {
+			return toAdmissionResponse(err)
 		}
 	}
-	rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
-	if err != nil {
-		return toAdmissionResponse(fmt.Errorf("call webhook error, webhook validateBackend, err: %v", err))
-	} else if !rsp.Succ {
-		return toAdmissionResponse(fmt.Errorf("invalid Backend, msg: %v", rsp.Msg))
-	}
-
 	if a.dryRun {
 		return dryRunResponse()
 	}
@@ -522,4 +463,80 @@ func (a *Admitter) listBackendByDriver(driverName string, driverNamespace string
 		}
 	}
 	return ret, nil
+}
+
+func (a *Admitter) validateBackendGroupCreate(bg *lbcfapi.BackendGroup, lbName string) error {
+	lb, err := a.lbLister.LoadBalancers(bg.Namespace).Get(lbName)
+	if err != nil {
+		return fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup")
+	}
+	if lb.DeletionTimestamp != nil {
+		return fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name)
+	}
+	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, bg.Namespace)
+	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
+	if err != nil {
+		return fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err)
+	}
+	if util.IsDriverDraining(driver) {
+		return fmt.Errorf("driver %q is draining, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver)
+	} else if driver.DeletionTimestamp != nil {
+		return fmt.Errorf("driver %q is deleting, all BackendGroup creating operation for that dirver is denied", lb.Spec.LBDriver)
+	}
+	req := &webhooks.ValidateBackendRequest{
+		BackendType: string(util.GetBackendType(bg)),
+		LBInfo:      lb.Status.LBInfo,
+		Operation:   webhooks.OperationCreate,
+		Parameters:  bg.Spec.Parameters,
+		DryRun:      a.dryRun,
+	}
+	if a.dryRun {
+		klog.Infof("[dry-run] webhook: validateBackend, BackendGroup: %s/%s",
+			bg.Namespace, bg.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return nil
+		}
+	}
+	rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
+	if err != nil {
+		return fmt.Errorf("call webhook error, webhook validateBackend, err: %v", err)
+	} else if !rsp.Succ {
+		return fmt.Errorf("invalid Backend, msg: %v", rsp.Msg)
+	}
+	return nil
+}
+
+func (a *Admitter) validateBackendGroupUpdate(oldObj, curObj *lbcfapi.BackendGroup, lbName string) error {
+	lb, err := a.lbLister.LoadBalancers(curObj.Namespace).Get(lbName)
+	if err != nil {
+		return fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup")
+	}
+	driverNamespace := util.GetDriverNamespace(lb.Spec.LBDriver, curObj.Namespace)
+	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
+	if err != nil {
+		return fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Spec.LBDriver, err)
+	}
+
+	req := &webhooks.ValidateBackendRequest{
+		BackendType:   string(util.GetBackendType(curObj)),
+		LBInfo:        lb.Status.LBInfo,
+		Operation:     webhooks.OperationUpdate,
+		Parameters:    curObj.Spec.Parameters,
+		OldParameters: oldObj.Spec.Parameters,
+		DryRun:        a.dryRun,
+	}
+	if a.dryRun {
+		klog.Infof("[dry-run] webhook: validateBackend, BackendGroup: %s/%s",
+			curObj.Namespace, curObj.Name)
+		if !driver.Spec.AcceptDryRunCall {
+			return nil
+		}
+	}
+	rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
+	if err != nil {
+		return fmt.Errorf("call webhook error, webhook validateBackend, err: %v", err)
+	} else if !rsp.Succ {
+		return fmt.Errorf("invalid Backend, msg: %v", rsp.Msg)
+	}
+	return nil
 }

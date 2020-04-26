@@ -38,6 +38,7 @@ const (
 	DriverDrainingLabel = "lbcf.tkestack.io/driver-draining"
 	LabelDriverName     = "lbcf.tkestack.io/lb-driver"
 	LabelLBName         = "lbcf.tkestack.io/lb-name"
+	LabelLBNamePrefix   = "name.lb.lbcf.tkestack.io/"
 	LabelGroupName      = "lbcf.tkestack.io/backend-group"
 	LabelServiceName    = "lbcf.tkestack.io/backend-service"
 	LabelPodName        = "lbcf.tkestack.io/backend-pod"
@@ -125,7 +126,10 @@ type BackendGroup struct {
 }
 
 type BackendGroupSpec struct {
-	LBName string `json:"lbName"`
+	// +optional
+	// Deprecated: use loadBalancers instead
+	LBName        *string  `json:"lbName"`
+	LoadBalancers []string `json:"loadBalancers"`
 	// +optional
 	Service *ServiceBackend `json:"service,omitempty"`
 	// +optional
@@ -138,6 +142,15 @@ type BackendGroupSpec struct {
 	EnsurePolicy *EnsurePolicyConfig `json:"ensurePolicy,omitempty"`
 }
 
+func (bgSpec BackendGroupSpec) GetLoadBalancers() []string {
+	if len(bgSpec.LoadBalancers) > 0 {
+		return bgSpec.LoadBalancers
+	} else if bgSpec.LBName != nil {
+		return []string{*bgSpec.LBName}
+	}
+	return nil
+}
+
 type ServiceBackend struct {
 	Name string       `json:"name"`
 	Port PortSelector `json:"port,omitempty"`
@@ -146,17 +159,39 @@ type ServiceBackend struct {
 }
 
 type PodBackend struct {
-	Port PortSelector `json:"port"`
+	// +optional
+	// Deprecated: use ports instead
+	Port  *PortSelector  `json:"port"`
+	Ports []PortSelector `json:"ports"`
 	// +optional
 	ByLabel *SelectPodByLabel `json:"byLabel,omitempty"`
 	// +optional
 	ByName []string `json:"byName,omitempty"`
 }
 
+func (pb PodBackend) GetPortSelectors() []PortSelector {
+	if len(pb.Ports) > 0 {
+		return pb.Ports
+	}
+	return []PortSelector{*pb.Port}
+}
+
 type PortSelector struct {
-	PortNumber int32 `json:"portNumber"`
+	// +optional
+	// Deprecated: use port instead
+	PortNumber *int32 `json:"portNumber,omitempty"`
+	Port       int32  `json:"port"`
 	// +optional
 	Protocol string `json:"protocol,omitempty"`
+}
+
+func (ps PortSelector) GetPort() int32 {
+	if ps.Port > 0 {
+		return ps.Port
+	} else if ps.PortNumber != nil {
+		return *ps.PortNumber
+	}
+	return 0
 }
 
 type SelectPodByLabel struct {

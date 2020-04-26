@@ -267,7 +267,7 @@ func (e ErrorList) Error() string {
 
 // MakePodBackendName generates a name for BackendRecord
 func MakePodBackendName(lbName, groupName string, podUID types.UID, port lbcfapi.PortSelector) string {
-	raw := fmt.Sprintf("%s_%s_%s_%d_%s", lbName, groupName, podUID, port.PortNumber, port.Protocol)
+	raw := fmt.Sprintf("%s_%s_%s_%d_%s", lbName, groupName, podUID, port.GetPort(), port.Protocol)
 	h := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", h)
 }
@@ -302,40 +302,44 @@ func MakeBackendLabels(driverName, lbName, groupName, svcName, podName string) m
 }
 
 // ConstructPodBackendRecord constructs a new BackendRecord
-func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, pod *v1.Pod) *lbcfapi.BackendRecord {
+func ConstructPodBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.BackendGroup, pod *v1.Pod) []*lbcfapi.BackendRecord {
 	valueTrue := true
-	return &lbcfapi.BackendRecord{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      MakePodBackendName(lb.Name, group.Name, pod.UID, group.Spec.Pods.Port),
-			Namespace: group.Namespace,
-			Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", pod.Name),
-			Finalizers: []string{
-				lbcfapi.FinalizerDeregisterBackend,
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         lbcfapi.APIVersion,
-					BlockOwnerDeletion: &valueTrue,
-					Controller:         &valueTrue,
-					Kind:               "BackendGroup",
-					Name:               group.Name,
-					UID:                group.UID,
+	var ret []*lbcfapi.BackendRecord
+	for _, port := range group.Spec.Pods.GetPortSelectors() {
+		ret = append(ret, &lbcfapi.BackendRecord{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      MakePodBackendName(lb.Name, group.Name, pod.UID, port),
+				Namespace: group.Namespace,
+				Labels:    MakeBackendLabels(lb.Spec.LBDriver, lb.Name, group.Name, "", pod.Name),
+				Finalizers: []string{
+					lbcfapi.FinalizerDeregisterBackend,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion:         lbcfapi.APIVersion,
+						BlockOwnerDeletion: &valueTrue,
+						Controller:         &valueTrue,
+						Kind:               "BackendGroup",
+						Name:               group.Name,
+						UID:                group.UID,
+					},
 				},
 			},
-		},
-		Spec: lbcfapi.BackendRecordSpec{
-			LBName:       lb.Name,
-			LBDriver:     lb.Spec.LBDriver,
-			LBInfo:       lb.Status.LBInfo,
-			LBAttributes: lb.Spec.Attributes,
-			PodBackendInfo: &lbcfapi.PodBackendRecord{
-				Name: pod.Name,
-				Port: group.Spec.Pods.Port,
+			Spec: lbcfapi.BackendRecordSpec{
+				LBName:       lb.Name,
+				LBDriver:     lb.Spec.LBDriver,
+				LBInfo:       lb.Status.LBInfo,
+				LBAttributes: lb.Spec.Attributes,
+				PodBackendInfo: &lbcfapi.PodBackendRecord{
+					Name: pod.Name,
+					Port: port,
+				},
+				Parameters:   group.Spec.Parameters,
+				EnsurePolicy: group.Spec.EnsurePolicy,
 			},
-			Parameters:   group.Spec.Parameters,
-			EnsurePolicy: group.Spec.EnsurePolicy,
-		},
+		})
 	}
+	return ret
 }
 
 // ConstructServiceBackendRecord constructs a new BackendRecord of type service
@@ -343,7 +347,7 @@ func ConstructServiceBackendRecord(lb *lbcfapi.LoadBalancer, group *lbcfapi.Back
 	var selectedSvcPort *v1.ServicePort
 	wantedPort := group.Spec.Service.Port
 	for i, svcPort := range svc.Spec.Ports {
-		if svcPort.Port == wantedPort.PortNumber && string(svcPort.Protocol) == wantedPort.Protocol {
+		if svcPort.Port == wantedPort.GetPort() && string(svcPort.Protocol) == wantedPort.Protocol {
 			selectedSvcPort = &svc.Spec.Ports[i]
 			break
 		}
@@ -495,7 +499,14 @@ func IsPodMatchBackendGroup(group *lbcfapi.BackendGroup, pod *v1.Pod) bool {
 
 // IsLBMatchBackendGroup returns true if group is connected to lb
 func IsLBMatchBackendGroup(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) bool {
-	if group.Namespace == lb.Namespace && group.Spec.LBName == lb.Name {
+	found := false
+	for _, lbName := range group.Spec.GetLoadBalancers() {
+		if lbName == lb.Name {
+			found = true
+			break
+		}
+	}
+	if group.Namespace == lb.Namespace && found {
 		return true
 	}
 	return false
