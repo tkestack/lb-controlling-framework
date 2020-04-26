@@ -19,18 +19,19 @@ package admission
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"net/url"
 	"reflect"
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -61,6 +62,7 @@ func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
 // ValidateBackendGroup validates BackendGroup
 func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 	allErrs := field.ErrorList{}
+	allErrs = append(allErrs, validateTargetLoadBalancer(raw, field.NewPath("spec"))...)
 	if raw.Spec.EnsurePolicy != nil {
 		allErrs = append(allErrs, validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
 	}
@@ -92,9 +94,6 @@ func LBUpdatedFieldsAllowed(cur *lbcfapi.LoadBalancer, old *lbcfapi.LoadBalancer
 
 // BackendGroupUpdateFieldsAllowed returns false if the updating to fields is not allowed
 func BackendGroupUpdateFieldsAllowed(cur *lbcfapi.BackendGroup, old *lbcfapi.BackendGroup) (bool, string) {
-	if cur.Spec.LBName != old.Spec.LBName {
-		return false, "updating lbName is prohibited"
-	}
 	if util.GetBackendType(cur) != util.GetBackendType(old) {
 		return false, "changing backend type is prohibited"
 	}
@@ -181,6 +180,14 @@ func validateDriverWebhooks(raw []lbcfapi.WebhookConfig, path *field.Path) field
 	return allErrs
 }
 
+func validateTargetLoadBalancer(raw *lbcfapi.BackendGroup, path *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if raw.Spec.LBName == nil && len(raw.Spec.LoadBalancers) == 0 {
+		allErrs = append(allErrs, field.Required(path.Child("loadBalancers"), "loadBalancers must be set"))
+	}
+	return allErrs
+}
+
 func validateBackends(raw *lbcfapi.BackendGroupSpec, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
@@ -215,7 +222,12 @@ func validateServiceBackend(raw *lbcfapi.ServiceBackend, path *field.Path) field
 
 func validatePodBackend(raw *lbcfapi.PodBackend, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	allErrs = append(allErrs, validatePortSelector(raw.Port, path.Child("port"))...)
+	if raw.Port == nil && len(raw.Ports) == 0 {
+		allErrs = append(allErrs, field.Required(path.Child("ports"), "ports must be specified"))
+	}
+	for i, port := range raw.Ports {
+		allErrs = append(allErrs, validatePortSelector(port, path.Child(fmt.Sprintf("ports[%d]", i)))...)
+	}
 	if raw.ByLabel != nil {
 		if raw.ByName != nil {
 			allErrs = append(allErrs, field.Invalid(path.Child("byName"), raw.ByName, "only one of \"byLabel, byName\" is allowed"))
@@ -236,8 +248,8 @@ func validatePodBackend(raw *lbcfapi.PodBackend, path *field.Path) field.ErrorLi
 func validatePortSelector(raw lbcfapi.PortSelector, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	if raw.PortNumber <= 0 || raw.PortNumber > 65535 {
-		allErrs = append(allErrs, field.Invalid(path.Child("portNumber"), raw.PortNumber, "portNumber must be greater than 0 and less than 65536"))
+	if raw.GetPort() <= 0 || raw.GetPort() > 65535 {
+		allErrs = append(allErrs, field.Invalid(path.Child("port"), raw.PortNumber, "port must be greater than 0 and less than 65536"))
 	}
 
 	if raw.Protocol != string(v1.ProtocolTCP) && raw.Protocol != string(v1.ProtocolUDP) {
