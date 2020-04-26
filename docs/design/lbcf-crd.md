@@ -215,7 +215,7 @@ MutatingAdmissionWebhook的使用：未使用
 
 | Field | Type | Required| Description|
 |:---:|:---:|:---:|:---|
-|lbName|string|TRUE|使用的LoadBalancer的name|
+|loadBalancers|[]string|TRUE|使用的LoadBalancer的name|
 |service|ServiceBackend|FALSE|被绑定至负载均衡的service配置。**service、pods、static三种配置中只能存在一种**|
 |pods|PodBackend|FALSE|被绑定至负载均衡的Pod配置。**service、pods、static三种配置中只能存在一种**|
 |static|[]string|FALSE|被绑定至负载均衡的静态地址配置。**service、pods、static三种配置中只能存在一种**|
@@ -235,7 +235,7 @@ MutatingAdmissionWebhook的使用：未使用
 
 | Field | Type | Required| Description|
 |:---:|:---:|:---:|:---|
-|port|PortSelector|TRUE|用来选择被绑定的**容器内**端口|
+|ports|[]PortSelector|TRUE|用来选择被绑定的**容器内**端口|
 |byLabel|SelectPodByLabel|FALSE|通过label选择Pod|
 |byName|[]string|FALSE|通过Pod.name选择Pod|
 
@@ -250,7 +250,7 @@ MutatingAdmissionWebhook的使用：未使用
 
 | Field | Type | Required| Description|
 |:---:|:---:|:---:|:---|
-|portNumber|int32|TRUE|端口号|
+|port|int32|TRUE|端口号|
 |protocol|string|FALSE|支持`TCP`和`UDP`，默认`TCP`|
 
 **样例1： 使用Service NodePort作为backend**
@@ -262,11 +262,12 @@ metadata:
   name: my-lb-backend-1 
   namespace: my-namespace
 spec: 
-  lbName: my-load-balancer-1
+  loadBalancers: 
+    - my-load-balancer-1
   service:
     name: my-service
     port:
-      portNumber: 80
+      port: 80
       protocol: TCP 
     nodeSelector: 
       key1: value1
@@ -284,11 +285,12 @@ metadata:
   name: my-lb-backend-2
   namespace: my-namespace
 spec: 
-  lbName: my-load-balancer-1
+  loadBalancers: 
+    - my-load-balancer-1
   pods:
-    port:
-      portNumber: 80
-      protocol: TCP
+    ports:
+      - port: 80
+        protocol: TCP
     byLabel:
       app: my-web-server 
     except: 
@@ -308,10 +310,11 @@ metadata:
   name: my-lb-backend-3
   namespace: my-namespace
 spec: 
-  lbName: my-load-balancer-1
+  loadBalancers: 
+    - my-load-balancer-1
   pods:
     port:
-      portNumber: 80
+      port: 80
       protocol: TCP
     byName:
       # delete pod name below to deregister Pod
@@ -330,7 +333,8 @@ metadata:
   name: my-lb-backend-4
   namespace: my-namespace
 spec: 
-  lbName: my-load-balancer-1
+  loadBalancers: 
+    - my-load-balancer-1
   static:
   - "1.1.1.1:8080"
   - "my-web.com:8080"
@@ -429,7 +433,7 @@ spec:
   podBackend:
     name: web-0
     port:
-      portNumber: 80
+      port: 80
       protocol: TCP
 ```
 
