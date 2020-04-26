@@ -181,11 +181,6 @@ func TestLoadBalancerEnsure(t *testing.T) {
 			Status:             lbcfapi.ConditionTrue,
 			LastTransitionTime: createdAt,
 		},
-		{
-			Type:               lbcfapi.LBAttributesSynced,
-			Status:             lbcfapi.ConditionTrue,
-			LastTransitionTime: createdAt,
-		},
 	}
 	driver := newFakeDriver(lb.Namespace, lb.Spec.LBDriver)
 	fakeClient := fake.NewSimpleClientset(lb)
@@ -351,12 +346,12 @@ func TestLoadBalancerReEnsure(t *testing.T) {
 			get: driver,
 		},
 		&fakeEventRecorder{store: store},
-		&fakeRunningInvoker{},
+		&fakeFailInvoker{},
 		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(lb)
 	result := ctrl.syncLB(key)
-	if !result.IsRunning() {
-		t.Fatalf("expect running, get %+v", result)
+	if !result.IsFinished() {
+		t.Fatalf("expect finished, get %+v", result)
 	}
 	get, _ := fakeClient.LbcfV1beta1().LoadBalancers(lb.Namespace).Get(lb.Name, v1.GetOptions{})
 	if !util.LBCreated(get) {
@@ -364,7 +359,7 @@ func TestLoadBalancerReEnsure(t *testing.T) {
 	} else if !util.LBEnsured(get) {
 		t.Errorf("expect LoadBalancer ensured, get status: %#v", get.Status)
 	}
-	if len(store) != 1 {
+	if len(store) != 0 {
 		t.Fatalf("expect 1 event, get %d", len(store))
 	}
 }

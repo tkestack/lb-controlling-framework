@@ -465,18 +465,18 @@ func TestBackendEnsureRerun(t *testing.T) {
 		false)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(backend)
 	resp := ctrl.syncBackendRecord(key)
-	if !resp.IsFailed() {
-		t.Fatalf("expect succ result, get %#v, err: %v", resp, resp.GetFailReason())
+	if !resp.IsFinished() {
+		t.Fatalf("expect finished result, get %#v, err: %v", resp, resp.GetFailReason())
 	}
-	if len(store) != 1 {
-		t.Fatalf("expect 1 event, get %d", len(store))
+	if len(store) != 0 {
+		t.Fatalf("expect 0 event, get %d", len(store))
 	}
 
 	get, _ := fakeClient.LbcfV1beta1().BackendRecords(backend.Namespace).Get(backend.Name, v1.GetOptions{})
 	if get := util.GetBackendRecordCondition(&get.Status, lbcfapi.BackendRegistered); get == nil {
 		t.Fatalf("missing condition")
-	} else if get.Status != lbcfapi.ConditionFalse {
-		t.Fatalf("expect condition false, get %v", get.Status)
+	} else if get.Status != lbcfapi.ConditionTrue {
+		t.Fatalf("expect condition true, get %v", get.Status)
 	}
 }
 
