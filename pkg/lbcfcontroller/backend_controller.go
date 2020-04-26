@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"k8s.io/klog"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
@@ -35,6 +34,7 @@ import (
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog"
 )
 
 func newBackendController(
@@ -154,6 +154,12 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 }
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+	alwaysEnsure := backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
+	if !alwaysEnsure && util.BackendRegistered(backend) {
+		klog.Infof("skip BackendRecord %s: already registered", util.NamespacedNameKeyFunc(backend.Namespace, backend.Name))
+		return util.FinishedResult()
+	}
+
 	if name, deleting := c.sameAddrDeleting(backend); deleting {
 		if !c.dryRun {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "DelayedEnsureBackend", "ensureBackend will start once %s is finished", name)

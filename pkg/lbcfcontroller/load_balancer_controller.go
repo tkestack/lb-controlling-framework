@@ -20,7 +20,6 @@ package lbcfcontroller
 import (
 	"fmt"
 
-	"k8s.io/klog"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
@@ -33,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog"
 )
 
 func newLoadBalancerController(
@@ -162,6 +162,12 @@ func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 }
 
 func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
+	alwaysEnsure := lb.Spec.EnsurePolicy != nil && lb.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
+	if !alwaysEnsure && util.LBEnsured(lb) {
+		klog.Infof("skip LoadBalancer %s: already ensured", util.NamespacedNameKeyFunc(lb.Namespace, lb.Name))
+		return util.FinishedResult()
+	}
+
 	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
