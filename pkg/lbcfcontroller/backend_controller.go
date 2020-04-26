@@ -34,6 +34,7 @@ import (
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog"
 )
 
 func newBackendController(client lbcfclient.Interface, brLister v1beta1.BackendRecordLister, driverLister v1beta1.LoadBalancerDriverLister, podLister corev1.PodLister, svcLister corev1.ServiceLister, nodeLister corev1.NodeLister, recorder record.EventRecorder, invoker util.WebhookInvoker) *backendController {
@@ -138,6 +139,12 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 }
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
+	alwaysEnsure := backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
+	if !alwaysEnsure && util.BackendRegistered(backend) {
+		klog.Infof("skip BackendRecord %s: already registered", util.NamespacedNameKeyFunc(backend.Namespace, backend.Name))
+		return util.FinishedResult()
+	}
+
 	if name, deleting := c.sameAddrDeleting(backend); deleting {
 		c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "DelayedEnsureBackend", "ensureBackend will start once %s is finished", name)
 		return util.AsyncResult(util.CalculateRetryInterval(0))
