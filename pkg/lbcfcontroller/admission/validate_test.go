@@ -19,6 +19,7 @@ package admission
 import (
 	"testing"
 	"time"
+
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
@@ -453,7 +454,7 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "valid-empty-group",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 				},
 			},
 			expectValid: true,
@@ -462,11 +463,13 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "valid-pod-backend",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   tcp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: tcp,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -494,11 +497,13 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "valid-pod-backend-2",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   udp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: udp,
+							},
 						},
 						ByName: []string{
 							"pod-1",
@@ -521,12 +526,12 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "valid-svc-backend",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Service: &lbcfapi.ServiceBackend{
 						Name: "svc-name",
 						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   tcp,
+							Port:     80,
+							Protocol: tcp,
 						},
 						NodeSelector: map[string]string{
 							"k1": "v1",
@@ -549,7 +554,7 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "valid-static-backend",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Static: []string{
 						"1.1.1.1:80",
 					},
@@ -570,11 +575,13 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "invalid-multi-backend-svc-pod",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   udp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: udp,
+							},
 						},
 						ByName: []string{
 							"pod-1",
@@ -583,7 +590,7 @@ func TestValidateBackendGroup(t *testing.T) {
 					Service: &lbcfapi.ServiceBackend{
 						Name: "svc-name",
 						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
+							Port: 80,
 						},
 						NodeSelector: map[string]string{
 							"k1": "v1",
@@ -605,14 +612,14 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "invalid-multi-backend-svc-static",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Static: []string{
 						"pod-0",
 					},
 					Service: &lbcfapi.ServiceBackend{
 						Name: "svc-name",
 						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
+							Port: 80,
 						},
 						NodeSelector: map[string]string{
 							"k1": "v1",
@@ -634,11 +641,13 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "invalid-multi-backend-pod-static",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   udp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: udp,
+							},
 						},
 						ByName: []string{
 							"pod-1",
@@ -664,9 +673,11 @@ func TestValidateBackendGroup(t *testing.T) {
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   invalid,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: invalid,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -685,9 +696,11 @@ func TestValidateBackendGroup(t *testing.T) {
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 0,
-							Protocol:   tcp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     0,
+								Protocol: tcp,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -706,9 +719,11 @@ func TestValidateBackendGroup(t *testing.T) {
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   invalid,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: invalid,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -730,9 +745,11 @@ func TestValidateBackendGroup(t *testing.T) {
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   invalid,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: invalid,
+							},
 						},
 					},
 				},
@@ -742,11 +759,13 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "invalid-ensurePolicy",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   udp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: udp,
+							},
 						},
 						ByName: []string{
 							"pod-1",
@@ -768,11 +787,13 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "invalid-pod-backend-no-selector",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   tcp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: tcp,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{},
 					},
@@ -792,11 +813,13 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "invalid-pod-backend-invalid-label",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   tcp,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     80,
+								Protocol: tcp,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -823,12 +846,12 @@ func TestValidateBackendGroup(t *testing.T) {
 			name: "invalid-svc-backend-invalid-nodeSelector",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-lb",
+					LoadBalancers: []string{"test-lb"},
 					Service: &lbcfapi.ServiceBackend{
 						Name: "svc-name",
 						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   tcp,
+							Port:     80,
+							Protocol: tcp,
 						},
 						NodeSelector: map[string]string{
 							"kayc./-jaj": "kayc./-jaj",
@@ -1095,10 +1118,12 @@ func TestBackendGroupUpdateFieldsAllowed(t *testing.T) {
 			name: "valid",
 			old: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-loadbalancer",
+					LoadBalancers: []string{"test-loadbalancer"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port: 80,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -1113,10 +1138,12 @@ func TestBackendGroupUpdateFieldsAllowed(t *testing.T) {
 			},
 			cur: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-loadbalancer",
+					LoadBalancers: []string{"test-loadbalancer"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 8080,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port: 8080,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -1135,13 +1162,16 @@ func TestBackendGroupUpdateFieldsAllowed(t *testing.T) {
 			expectValid: true,
 		},
 		{
-			name: "invalid-change-lbName",
+			name:        "invalid-change-lbName",
+			expectValid: true,
 			old: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-loadbalancer",
+					LoadBalancers: []string{"test-loadbalancer"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port: 80,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -1156,10 +1186,12 @@ func TestBackendGroupUpdateFieldsAllowed(t *testing.T) {
 			},
 			cur: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-loadbalancer-2",
+					LoadBalancers: []string{"test-loadbalancer-2"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port: 80,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -1177,10 +1209,12 @@ func TestBackendGroupUpdateFieldsAllowed(t *testing.T) {
 			name: "invalid-change-type",
 			old: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-loadbalancer",
+					LoadBalancers: []string{"test-loadbalancer"},
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port: 80,
+							},
 						},
 						ByLabel: &lbcfapi.SelectPodByLabel{
 							Selector: map[string]string{
@@ -1195,7 +1229,7 @@ func TestBackendGroupUpdateFieldsAllowed(t *testing.T) {
 			},
 			cur: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "test-loadbalancer",
+					LoadBalancers: []string{"test-loadbalancer"},
 					Static: []string{
 						"pod-1",
 					},

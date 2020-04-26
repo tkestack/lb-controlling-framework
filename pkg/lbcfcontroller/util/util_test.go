@@ -18,15 +18,16 @@ package util
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -388,7 +389,7 @@ func TestGetBackendType(t *testing.T) {
 					Service: &lbcfapi.ServiceBackend{
 						Name: "my-service",
 						Port: lbcfapi.PortSelector{
-							PortNumber: 8080,
+							Port: 8080,
 						},
 						NodeSelector: map[string]string{
 							"key1": "value1",
@@ -403,8 +404,10 @@ func TestGetBackendType(t *testing.T) {
 			backendGroup: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
 					Pods: &lbcfapi.PodBackend{
-						Port: lbcfapi.PortSelector{
-							PortNumber: 8080,
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port: 8080,
+							},
 						},
 						ByName: []string{
 							"pod-1",
@@ -767,12 +770,12 @@ func TestMakeBackendName(t *testing.T) {
 	groupName := "group"
 	podUID := types.UID("12345")
 	port1 := lbcfapi.PortSelector{
-		PortNumber: 12324,
-		Protocol:   "TCP",
+		Port:     12324,
+		Protocol: "TCP",
 	}
 	port2 := lbcfapi.PortSelector{
-		PortNumber: 12324,
-		Protocol:   "UDP",
+		Port:     12324,
+		Protocol: "UDP",
 	}
 	if MakePodBackendName(lbName, groupName, podUID, port1) == MakePodBackendName(lbName, groupName, podUID, port2) {
 		t.Fatalf("expect not equal")
@@ -1059,7 +1062,9 @@ func TestIsLBMatchBackendGroup(t *testing.T) {
 			name: "match",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "my-lb",
+					LoadBalancers: []string{
+						"my-lb",
+					},
 				},
 			},
 			lb: &lbcfapi.LoadBalancer{
@@ -1073,7 +1078,9 @@ func TestIsLBMatchBackendGroup(t *testing.T) {
 			name: "name-not-match",
 			group: &lbcfapi.BackendGroup{
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "my-lb",
+					LoadBalancers: []string{
+						"my-lb",
+					},
 				},
 			},
 			lb: &lbcfapi.LoadBalancer{
@@ -1090,7 +1097,9 @@ func TestIsLBMatchBackendGroup(t *testing.T) {
 					Namespace: "test",
 				},
 				Spec: lbcfapi.BackendGroupSpec{
-					LBName: "my-lb",
+					LoadBalancers: []string{
+						"my-lb",
+					},
 				},
 			},
 			lb: &lbcfapi.LoadBalancer{
@@ -1128,8 +1137,8 @@ func TestIsSvcMatchBackendGroup(t *testing.T) {
 					Service: &lbcfapi.ServiceBackend{
 						Name: "test-svc",
 						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   "TCP",
+							Port:     80,
+							Protocol: "TCP",
 						},
 					},
 				},
@@ -1153,8 +1162,8 @@ func TestIsSvcMatchBackendGroup(t *testing.T) {
 					Service: &lbcfapi.ServiceBackend{
 						Name: "test-svc",
 						Port: lbcfapi.PortSelector{
-							PortNumber: 80,
-							Protocol:   "TCP",
+							Port:     80,
+							Protocol: "TCP",
 						},
 					},
 				},
@@ -1191,7 +1200,7 @@ func TestCompareBackendRecords(t *testing.T) {
 			PodBackendInfo: &lbcfapi.PodBackendRecord{
 				Name: "my-pod-0",
 				Port: lbcfapi.PortSelector{
-					PortNumber: 8080,
+					Port: 8080,
 				},
 			},
 			Parameters: map[string]string{},
@@ -1214,7 +1223,7 @@ func TestCompareBackendRecords(t *testing.T) {
 			PodBackendInfo: &lbcfapi.PodBackendRecord{
 				Name: "my-pod-1",
 				Port: lbcfapi.PortSelector{
-					PortNumber: 8080,
+					Port: 8080,
 				},
 			},
 			Parameters: map[string]string{},
@@ -1237,7 +1246,7 @@ func TestCompareBackendRecords(t *testing.T) {
 			PodBackendInfo: &lbcfapi.PodBackendRecord{
 				Name: "my-pod-1",
 				Port: lbcfapi.PortSelector{
-					PortNumber: 8080,
+					Port: 8080,
 				},
 			},
 			Parameters: map[string]string{
@@ -1281,7 +1290,7 @@ func TestCompareBackendRecords(t *testing.T) {
 			PodBackendInfo: &lbcfapi.PodBackendRecord{
 				Name: "my-pod-0",
 				Port: lbcfapi.PortSelector{
-					PortNumber: 8080,
+					Port: 8080,
 				},
 			},
 			Parameters: map[string]string{},

@@ -58,7 +58,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
 	result := ctrl.syncBackendGroup(key)
 	if !result.IsFinished() {
-		t.Fatalf("expect succ result, get %#v", result)
+		t.Fatalf("expect succ result, get %#v", result.GetFailReason())
 	}
 
 	if get, _ := fakeClient.LbcfV1beta1().BackendGroups(group.Namespace).Get(group.Name, metav1.GetOptions{}); get == nil {
@@ -74,17 +74,17 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 		t.Fatalf("expect 2 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
 	for _, r := range records.Items {
-		var expected *lbcfapi.BackendRecord
+		var expected []*lbcfapi.BackendRecord
 		switch r.Name {
-		case util.MakePodBackendName(lb.Name, group.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80, Protocol: "TCP"}):
+		case util.MakePodBackendName(lb.Name, group.Name, pod1.UID, lbcfapi.PortSelector{Port: 80, Protocol: "TCP"}):
 			expected = util.ConstructPodBackendRecord(lb, group, pod1)
-		case util.MakePodBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80, Protocol: "TCP"}):
+		case util.MakePodBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{Port: 80, Protocol: "TCP"}):
 			expected = util.ConstructPodBackendRecord(lb, group, pod2)
 		default:
 			t.Fatalf("unknown BackendRecord %#v", r)
 		}
-		if !reflect.DeepEqual(*expected, r) {
-			t.Errorf("expect BackendRecord %#v \n get %#v", *expected, r)
+		if !reflect.DeepEqual(*expected[0], r) {
+			t.Errorf("expect BackendRecord %#v \n get %#v", *expected[0], r)
 		}
 	}
 }
@@ -133,8 +133,8 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 		t.Fatalf("expect 1 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
 	expect := util.ConstructPodBackendRecord(lb, group, pod1)
-	if !reflect.DeepEqual(*expect, records.Items[0]) {
-		t.Errorf("expect BackendRecord %#v \n get %#v", *expect, records.Items[0])
+	if !reflect.DeepEqual(*expect[0], records.Items[0]) {
+		t.Errorf("expect BackendRecord %#v \n get %#v", *expect[0], records.Items[0])
 	}
 }
 
@@ -322,7 +322,7 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	}
 	oldBackend1 := util.ConstructPodBackendRecord(lb, oldGroup, pod1)
 	oldBackend2 := util.ConstructPodBackendRecord(lb, oldGroup, pod2)
-	fakeClient := fake.NewSimpleClientset(curGroup, oldBackend1, oldBackend2)
+	fakeClient := fake.NewSimpleClientset(curGroup, oldBackend1[0], oldBackend2[0])
 	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
@@ -334,8 +334,8 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 		},
 		&fakeBackendLister{
 			list: []*lbcfapi.BackendRecord{
-				oldBackend1,
-				oldBackend2,
+				oldBackend1[0],
+				oldBackend2[0],
 			},
 		},
 		&fakePodLister{
@@ -365,17 +365,17 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 		t.Fatalf("expect 2 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
 	for _, r := range records.Items {
-		var expected *lbcfapi.BackendRecord
+		var expected []*lbcfapi.BackendRecord
 		switch r.Name {
-		case util.MakePodBackendName(lb.Name, curGroup.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80, Protocol: "TCP"}):
+		case util.MakePodBackendName(lb.Name, curGroup.Name, pod1.UID, lbcfapi.PortSelector{Port: 80, Protocol: "TCP"}):
 			expected = util.ConstructPodBackendRecord(lb, curGroup, pod1)
-		case util.MakePodBackendName(lb.Name, curGroup.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80, Protocol: "TCP"}):
+		case util.MakePodBackendName(lb.Name, curGroup.Name, pod2.UID, lbcfapi.PortSelector{Port: 80, Protocol: "TCP"}):
 			expected = util.ConstructPodBackendRecord(lb, curGroup, pod2)
 		default:
 			t.Fatalf("unknown BackendRecord %#v", r)
 		}
-		if !reflect.DeepEqual(*expected, r) {
-			t.Errorf("expect BackendRecord %#v \n get %#v", *expected, r)
+		if !reflect.DeepEqual(*expected[0], r) {
+			t.Errorf("expect BackendRecord %#v \n get %#v", *expected[0], r)
 		}
 	}
 }
@@ -393,7 +393,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", curLB.Name, 80, "TCP", pod1.Labels, nil, nil)
 	oldBackend1 := util.ConstructPodBackendRecord(oldLB, group, pod1)
 	oldBackend2 := util.ConstructPodBackendRecord(oldLB, group, pod2)
-	fakeClient := fake.NewSimpleClientset(group, oldBackend1, oldBackend2)
+	fakeClient := fake.NewSimpleClientset(group, oldBackend1[0], oldBackend2[0])
 
 	ctrl := newBackendGroupController(
 		fakeClient,
@@ -406,8 +406,8 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 		},
 		&fakeBackendLister{
 			list: []*lbcfapi.BackendRecord{
-				oldBackend1,
-				oldBackend2,
+				oldBackend1[0],
+				oldBackend2[0],
 			},
 		},
 		&fakePodLister{
@@ -437,17 +437,17 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 		t.Fatalf("expect 2 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
 	for _, r := range records.Items {
-		var expected *lbcfapi.BackendRecord
+		var expected []*lbcfapi.BackendRecord
 		switch r.Name {
-		case util.MakePodBackendName(curLB.Name, group.Name, pod1.UID, lbcfapi.PortSelector{PortNumber: 80, Protocol: "TCP"}):
+		case util.MakePodBackendName(curLB.Name, group.Name, pod1.UID, lbcfapi.PortSelector{Port: 80, Protocol: "TCP"}):
 			expected = util.ConstructPodBackendRecord(curLB, group, pod1)
-		case util.MakePodBackendName(curLB.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80, Protocol: "TCP"}):
+		case util.MakePodBackendName(curLB.Name, group.Name, pod2.UID, lbcfapi.PortSelector{Port: 80, Protocol: "TCP"}):
 			expected = util.ConstructPodBackendRecord(curLB, group, pod2)
 		default:
 			t.Fatalf("unknown BackendRecord %#v", r)
 		}
-		if !reflect.DeepEqual(*expected, r) {
-			t.Errorf("expect BackendRecord %#v \n get %#v", *expected, r)
+		if !reflect.DeepEqual(*expected[0], r) {
+			t.Errorf("expect BackendRecord %#v \n get %#v", *expected[0], r)
 		}
 	}
 }
@@ -464,7 +464,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	existingBackend1 := util.ConstructPodBackendRecord(lb, group, oldPod)
 	existingBackend2 := util.ConstructPodBackendRecord(lb, group, pod2)
 
-	fakeClient := fake.NewSimpleClientset(group, existingBackend1, existingBackend2)
+	fakeClient := fake.NewSimpleClientset(group, existingBackend1[0], existingBackend2[0])
 	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
@@ -475,7 +475,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 			get: group,
 		},
 		&fakeBackendLister{
-			list: []*lbcfapi.BackendRecord{existingBackend1, existingBackend2},
+			list: []*lbcfapi.BackendRecord{existingBackend1[0], existingBackend2[0]},
 		},
 		&fakePodLister{
 			get:  curPod,
@@ -504,7 +504,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	if len(records.Items) != 1 {
 		t.Fatalf("expect 1 BackendReocrds, get %v, %#v", len(records.Items), records.Items)
 	}
-	if records.Items[0].Name != util.MakePodBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{PortNumber: 80, Protocol: "TCP"}) {
+	if records.Items[0].Name != util.MakePodBackendName(lb.Name, group.Name, pod2.UID, lbcfapi.PortSelector{Port: 80, Protocol: "TCP"}) {
 		t.Fatalf("wrong BackendRecord, get %v", records.Items[0])
 	}
 }
@@ -519,7 +519,7 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 	group := newFakeBackendGroupOfPods(pod1.Namespace, "group", lb.Name, 80, "tcp", pod1.Labels, nil, nil)
 	existingBackend1 := util.ConstructPodBackendRecord(lb, group, pod1)
 	existingBackend2 := util.ConstructPodBackendRecord(lb, group, pod2)
-	fakeClient := fake.NewSimpleClientset(group, existingBackend1, existingBackend2)
+	fakeClient := fake.NewSimpleClientset(group, existingBackend1[0], existingBackend2[0])
 	ctrl := newBackendGroupController(
 		fakeClient,
 		&fakeLBLister{
@@ -531,8 +531,8 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 		},
 		&fakeBackendLister{
 			list: []*lbcfapi.BackendRecord{
-				existingBackend1,
-				existingBackend2,
+				existingBackend1[0],
+				existingBackend2[0],
 			},
 		},
 		&fakePodLister{

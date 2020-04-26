@@ -1270,7 +1270,8 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 	lb := newFakeLoadBalancer("", "lb", nil, nil)
 	group := newFakeBackendGroupOfPods(lb.Namespace, "group", lb.Name, 80, "tcp", nil, nil, []string{"pod-0"})
-	record := util.ConstructPodBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
+	records := util.ConstructPodBackendRecord(lb, group, newFakePod("", "pod-0", nil, true, false))
+	record := records[0]
 	backendCtrl := newBackendController(
 		fake.NewSimpleClientset(),
 		&fakeBackendLister{},
@@ -1465,10 +1466,10 @@ func newFakeBackendGroupOfPods(namespace, name string, lbName string, portNum in
 			Namespace: namespace,
 		},
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: lbName,
+			LBName: &lbName,
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: portNum,
+				Port: &lbcfapi.PortSelector{
+					PortNumber: &portNum,
 					Protocol:   protocol,
 				},
 			},
@@ -1492,11 +1493,11 @@ func newFakeBackendGroupOfService(namespace, name string, lbName string, portNum
 			Namespace: namespace,
 		},
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: lbName,
+			LBName: &lbName,
 			Service: &lbcfapi.ServiceBackend{
 				Name: serviceName,
 				Port: lbcfapi.PortSelector{
-					PortNumber: portNum,
+					PortNumber: &portNum,
 					Protocol:   protocol,
 				},
 			},
@@ -1512,7 +1513,7 @@ func newFakeBackendGroupOfStatic(namespace, name string, lbName string, staticAd
 			Namespace: namespace,
 		},
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: lbName,
+			LBName: &lbName,
 			Static: staticAddrs,
 		},
 	}

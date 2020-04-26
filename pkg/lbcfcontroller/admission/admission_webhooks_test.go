@@ -226,111 +226,441 @@ func TestAdmitter_MutateDriver(t *testing.T) {
 	}
 }
 
-func TestAdmitter_MutateBackendGroup(t *testing.T) {
-	a := fakeAdmitter(&alwaysSuccLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeSuccInvoker{})
-	group := &lbcfapi.BackendGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-backendgroup",
-			Namespace: "test",
-		},
-		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-lb",
-			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
+func TestAdmitter_MutateBackendGroupLabels(t *testing.T) {
+	a := fakeAdmitter(
+		&alwaysSuccLBLister{},
+		&alwaysSuccDriverLister{},
+		nil,
+		&alwaysSuccBackendLister{},
+		&fakeSuccInvoker{})
+	type testCase struct {
+		name           string
+		bg             *lbcfapi.BackendGroup
+		expectedLabels map[string]string
+	}
+	cases := []testCase{
+		{
+			name: "add labels on bg without label",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg-without-labels",
 				},
-				ByLabel: &lbcfapi.SelectPodByLabel{
-					Selector: map[string]string{
-						"key1": "value1",
+				Spec: lbcfapi.BackendGroupSpec{
+					LoadBalancers: []string{"test-lb", "test-lb2"},
+				},
+			},
+			expectedLabels: map[string]string{
+				lbcfapi.LabelLBName:                    "test-lb",
+				lbcfapi.LabelLBNamePrefix + "test-lb":  "True",
+				lbcfapi.LabelLBNamePrefix + "test-lb2": "True",
+			},
+		},
+		{
+			name: "lbName set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: toStringPtr("test-lb"),
+				},
+			},
+			expectedLabels: map[string]string{
+				lbcfapi.LabelLBName:                   "test-lb",
+				lbcfapi.LabelLBNamePrefix + "test-lb": "True",
+			},
+		},
+		{
+			name: "lbName merged",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName:        toStringPtr("test-lb"),
+					LoadBalancers: []string{"test-lb", "test-lb2"},
+				},
+			},
+			expectedLabels: map[string]string{
+				lbcfapi.LabelLBName:                    "test-lb",
+				lbcfapi.LabelLBNamePrefix + "test-lb":  "True",
+				lbcfapi.LabelLBNamePrefix + "test-lb2": "True",
+			},
+		},
+		{
+			name: "keep user specified labels",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg-with-labels",
+					Labels: map[string]string{
+						"user-label": "user-label-value",
+					},
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LoadBalancers: []string{"test-lb", "test-lb2"},
+				},
+			},
+			expectedLabels: map[string]string{
+				"user-label":                           "user-label-value",
+				lbcfapi.LabelLBName:                    "test-lb",
+				lbcfapi.LabelLBNamePrefix + "test-lb":  "True",
+				lbcfapi.LabelLBNamePrefix + "test-lb2": "True",
+			},
+		},
+	}
+	for _, c := range cases {
+		raw, _ := json.Marshal(c.bg)
+		rsp := a.MutateBackendGroup(&v1beta1.AdmissionReview{
+			Request: &v1beta1.AdmissionRequest{
+				Object: runtime.RawExtension{
+					Raw: raw,
+				},
+			},
+		})
+		if !rsp.Allowed {
+			t.Fatalf("expect always allow")
+		}
+		patch, err := jsonpatch.DecodePatch(rsp.Patch)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		modified, err := patch.Apply(raw)
+		if err != nil {
+			t.Fatalf("name:%s, err:%v", c.name, err.Error())
+		}
+		modifiedGroup := &lbcfapi.BackendGroup{}
+		if err := json.Unmarshal(modified, modifiedGroup); err != nil {
+			t.Fatalf(err.Error())
+		}
+
+		// check labels
+		if len(modifiedGroup.Labels) != len(c.expectedLabels) {
+			t.Fatalf("case: %s, expect %d, get %d", c.name, len(c.expectedLabels), len(modifiedGroup.Labels))
+		}
+		for ek, ev := range c.expectedLabels {
+			if v, ok := modifiedGroup.Labels[ek]; !ok {
+				t.Fatalf("missing label %s: %s", ek, ev)
+			} else if v != ev {
+				t.Fatalf("expected label value %s, get %s", ev, v)
+			}
+		}
+	}
+}
+
+func TestAdmitter_MutateBackendGroupConvertLoadBalancers(t *testing.T) {
+	a := fakeAdmitter(
+		&alwaysSuccLBLister{},
+		&alwaysSuccDriverLister{},
+		nil,
+		&alwaysSuccBackendLister{},
+		&fakeSuccInvoker{})
+	type testCase struct {
+		name                  string
+		bg                    *lbcfapi.BackendGroup
+		expectedLoadBalancers []string
+	}
+	cases := []testCase{
+		{
+			name: "lbName set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bg",
+					Namespace: "test",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName: toStringPtr("test-lb"),
+				},
+			},
+			expectedLoadBalancers: []string{"test-lb"},
+		},
+		{
+			name: "loadBalancers set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bg",
+					Namespace: "test",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LoadBalancers: []string{"test-lb"},
+				},
+			},
+			expectedLoadBalancers: []string{"test-lb"},
+		},
+		{
+			name: "both lbName and loadBalancers set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bg",
+					Namespace: "test",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName:        toStringPtr("test-lb"),
+					LoadBalancers: []string{"test-lb2"},
+				},
+			},
+			expectedLoadBalancers: []string{"test-lb", "test-lb2"},
+		},
+		{
+			name: "lbName and loadBalancers need merge",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bg",
+					Namespace: "test",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					LBName:        toStringPtr("test-lb2"),
+					LoadBalancers: []string{"test-lb2", "test-lb3"},
+				},
+			},
+			expectedLoadBalancers: []string{"test-lb2", "test-lb3"},
+		},
+	}
+	for _, c := range cases {
+		raw, _ := json.Marshal(c.bg)
+		rsp := a.MutateBackendGroup(&v1beta1.AdmissionReview{
+			Request: &v1beta1.AdmissionRequest{
+				Object: runtime.RawExtension{
+					Raw: raw,
+				},
+			},
+		})
+		if !rsp.Allowed {
+			t.Fatalf("expect always allow")
+		}
+		patch, err := jsonpatch.DecodePatch(rsp.Patch)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		modified, err := patch.Apply(raw)
+		if err != nil {
+			t.Fatalf("name:%s, err:%v", c.name, err.Error())
+		}
+		modifiedGroup := &lbcfapi.BackendGroup{}
+		if err := json.Unmarshal(modified, modifiedGroup); err != nil {
+			t.Fatalf(err.Error())
+		}
+		if modifiedGroup.Spec.LBName != nil {
+			t.Fatalf("case %s: spec.lbName should be empty", c.name)
+		}
+		if len(modifiedGroup.Spec.LoadBalancers) != len(c.expectedLoadBalancers) {
+			t.Fatalf("case %s: expect %d, get %d",
+				c.name, len(c.expectedLoadBalancers), len(modifiedGroup.Spec.LoadBalancers))
+		}
+		for _, expect := range c.expectedLoadBalancers {
+			found := false
+			for _, get := range modifiedGroup.Spec.LoadBalancers {
+				if expect == get {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("case %s: %s missing", c.name, expect)
+			}
+		}
+	}
+}
+
+func TestAdmitter_MutateBackendGroupConvertPortSelector(t *testing.T) {
+	a := fakeAdmitter(
+		&alwaysSuccLBLister{},
+		&alwaysSuccDriverLister{},
+		nil,
+		&alwaysSuccBackendLister{},
+		&fakeSuccInvoker{})
+	type testCase struct {
+		name          string
+		bg            *lbcfapi.BackendGroup
+		expectedPorts []*lbcfapi.PortSelector
+	}
+	cases := []testCase{
+		{
+			name: "spec.pods.port set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: &lbcfapi.PortSelector{
+							PortNumber: int32Ptr(80),
+						},
 					},
 				},
 			},
-		},
-	}
-	raw, _ := json.Marshal(group)
-	rsp := a.MutateBackendGroup(&v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: raw,
-			},
-		},
-	})
-	if !rsp.Allowed {
-		t.Fatalf("expect always allow")
-	}
-	patch, err := jsonpatch.DecodePatch(rsp.Patch)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	modified, err := patch.Apply(raw)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	modifiedGroup := &lbcfapi.BackendGroup{}
-	if err := json.Unmarshal(modified, modifiedGroup); err != nil {
-		t.Fatalf(err.Error())
-	}
-
-	if modifiedGroup.Labels[lbcfapi.LabelLBName] != group.Spec.LBName {
-		t.Fatalf("expect label value %s, get %s", group.Spec.LBName, modifiedGroup.Labels[lbcfapi.LabelLBName])
-	} else if modifiedGroup.Spec.Pods.Port.Protocol != "TCP" {
-		t.Fatalf("get protocol %s", modifiedGroup.Spec.Pods.Port.Protocol)
-	}
-
-	extraKey := "key1"
-	extraValue := "v1"
-	group = &lbcfapi.BackendGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-backendgroup",
-			Namespace: "test",
-			Labels: map[string]string{
-				extraKey:            extraValue,
-				lbcfapi.LabelLBName: "a-random-value",
-			},
-		},
-		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-lb",
-			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
+			expectedPorts: []*lbcfapi.PortSelector{
+				{
+					Port:     80,
+					Protocol: "TCP",
 				},
-				ByLabel: &lbcfapi.SelectPodByLabel{
-					Selector: map[string]string{
-						"key1": "value1",
+			},
+		},
+		{
+			name: "spec.pods.ports set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Ports: []lbcfapi.PortSelector{
+							{PortNumber: int32Ptr(70)},
+							{Port: 80},
+							{Port: 90, Protocol: "UDP"},
+						},
 					},
 				},
 			},
-		},
-	}
-	raw, _ = json.Marshal(group)
-	rsp = a.MutateBackendGroup(&v1beta1.AdmissionReview{
-		Request: &v1beta1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: raw,
+			expectedPorts: []*lbcfapi.PortSelector{
+				{
+					Port:     70,
+					Protocol: "TCP",
+				},
+				{
+					Port:     80,
+					Protocol: "TCP",
+				},
+				{
+					Port:     90,
+					Protocol: "UDP",
+				},
 			},
 		},
-	})
-	if !rsp.Allowed {
-		t.Fatalf("expect always allow")
+		{
+			name: "both spec.pods.port and ports set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Pods: &lbcfapi.PodBackend{
+						Port: &lbcfapi.PortSelector{
+							PortNumber: int32Ptr(80),
+						},
+						Ports: []lbcfapi.PortSelector{
+							{
+								Port:     90,
+								Protocol: "UDP",
+							},
+						},
+					},
+				},
+			},
+			expectedPorts: []*lbcfapi.PortSelector{
+				{
+					Port:     80,
+					Protocol: "TCP",
+				},
+				{
+					Port:     90,
+					Protocol: "UDP",
+				},
+			},
+		},
+		{
+			name: "spec.service.port.portNumber set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Service: &lbcfapi.ServiceBackend{
+						Port: lbcfapi.PortSelector{
+							PortNumber: int32Ptr(80),
+						},
+					},
+				},
+			},
+			expectedPorts: []*lbcfapi.PortSelector{
+				{
+					Port:     80,
+					Protocol: "TCP",
+				},
+			},
+		},
+		{
+			name: "spec.service.port.protocol not set",
+			bg: &lbcfapi.BackendGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bg",
+				},
+				Spec: lbcfapi.BackendGroupSpec{
+					Service: &lbcfapi.ServiceBackend{
+						Port: lbcfapi.PortSelector{
+							Port: 80,
+						},
+					},
+				},
+			},
+			expectedPorts: []*lbcfapi.PortSelector{
+				{
+					Port:     80,
+					Protocol: "TCP",
+				},
+			},
+		},
 	}
-	patch, err = jsonpatch.DecodePatch(rsp.Patch)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	modified, err = patch.Apply(raw)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	modifiedGroup = &lbcfapi.BackendGroup{}
-	if err := json.Unmarshal(modified, modifiedGroup); err != nil {
-		t.Fatalf(err.Error())
-	}
-	if modifiedGroup.Labels[extraKey] != extraValue {
-		t.Fatalf("key value lost")
-	} else if modifiedGroup.Labels[lbcfapi.LabelLBName] != group.Spec.LBName {
-		t.Fatalf("expect label value %s, get %s", group.Spec.LBName, modifiedGroup.Labels[lbcfapi.LabelLBName])
-	} else if modifiedGroup.Spec.Pods.Port.Protocol != "TCP" {
-		t.Fatalf("get protocol %s", modifiedGroup.Spec.Pods.Port.Protocol)
+	for _, c := range cases {
+		raw, _ := json.Marshal(c.bg)
+		rsp := a.MutateBackendGroup(&v1beta1.AdmissionReview{
+			Request: &v1beta1.AdmissionRequest{
+				Object: runtime.RawExtension{
+					Raw: raw,
+				},
+			},
+		})
+		if !rsp.Allowed {
+			t.Fatalf("expect always allow")
+		}
+		patch, err := jsonpatch.DecodePatch(rsp.Patch)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		modified, err := patch.Apply(raw)
+		if err != nil {
+			t.Fatalf("name:%s, err:%v", c.name, err.Error())
+		}
+		modifiedGroup := &lbcfapi.BackendGroup{}
+		if err := json.Unmarshal(modified, modifiedGroup); err != nil {
+			t.Fatalf(err.Error())
+		}
+		if c.bg.Spec.Pods != nil {
+			if modifiedGroup.Spec.Pods.Port != nil {
+				t.Fatalf("case %s: port not nil", c.name)
+			}
+			if len(modifiedGroup.Spec.Pods.Ports) != len(c.expectedPorts) {
+				t.Fatalf("case %s: expect %d, get %d",
+					c.name, len(c.expectedPorts), len(modifiedGroup.Spec.Pods.Ports))
+			}
+			b, _ := json.MarshalIndent(modifiedGroup.Spec.Pods, "", "  ")
+			t.Logf("%s", string(b))
+			for _, expect := range c.expectedPorts {
+				found := false
+				for _, get := range modifiedGroup.Spec.Pods.Ports {
+					if get.PortNumber != nil {
+						t.Fatalf("case %s: portNumber not nil", c.name)
+					}
+					if expect.Port == get.Port && expect.Protocol == get.Protocol {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Fatalf("case %s: %#v missiong", c.name, expect)
+				}
+			}
+		} else if c.bg.Spec.Service != nil {
+			b, _ := json.MarshalIndent(modifiedGroup.Spec.Service, "", "  ")
+			t.Logf("%s", string(b))
+			if modifiedGroup.Spec.Service.Port.PortNumber != nil {
+				t.Fatalf("case %s: service.port.portNumber not nil", c.name)
+			}
+			get := modifiedGroup.Spec.Service.Port
+			expect := c.expectedPorts[0]
+			if get.Port != expect.Port || get.Protocol != expect.Protocol {
+				t.Fatalf("case %s: expect %#v, get %#v", c.name, expect, get)
+			}
+		}
 	}
 }
 
@@ -1366,11 +1696,17 @@ func TestAdmitter_ValidateLoadBalancerDelete(t *testing.T) {
 func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-lb",
+			LoadBalancers: []string{"test-lb"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-					Protocol:   "TCP",
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     80,
+						Protocol: "TCP",
+					},
+					{
+						Port:     90,
+						Protocol: "UDP",
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1404,7 +1740,7 @@ func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      group.Spec.LBName,
+					Name:      "test-lb",
 					Namespace: group.Namespace,
 				},
 				Spec: lbcfapi.LoadBalancerSpec{
@@ -1431,11 +1767,13 @@ func TestAdmitter_ValidateBackendGroupCreate(t *testing.T) {
 func TestAdmitter_ValidateBackendGroupCreate_InvalidGroup(t *testing.T) {
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-lb",
+			LoadBalancers: []string{"test-lb"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 0,
-					Protocol:   "TCP",
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     0,
+						Protocol: "TCP",
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1475,11 +1813,13 @@ func TestAdmitter_ValidateBackendGroupCreate_InvalidGroup(t *testing.T) {
 func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-lb",
+			LoadBalancers: []string{"test-lb"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-					Protocol:   "TCP",
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     80,
+						Protocol: "TCP",
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1519,11 +1859,13 @@ func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
 func TestAdmitter_ValidateBackendGroupCreate_LBDeleting(t *testing.T) {
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-lb",
+			LoadBalancers: []string{"test-lb"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-					Protocol:   "TCP",
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     80,
+						Protocol: "TCP",
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1570,11 +1912,13 @@ func TestAdmitter_ValidateBackendGroupCreate_LBDeleting(t *testing.T) {
 func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
 	group := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-lb",
+			LoadBalancers: []string{"test-lb"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-					Protocol:   "TCP",
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     80,
+						Protocol: "TCP",
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1608,7 +1952,7 @@ func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
 		&alwaysSuccLBLister{
 			get: &lbcfapi.LoadBalancer{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      group.Spec.LBName,
+					Name:      "test-lb",
 					Namespace: group.Namespace,
 				},
 				Spec: lbcfapi.LoadBalancerSpec{
@@ -1635,11 +1979,13 @@ func TestAdmitter_ValidateBackendGroupCreate_WebHookFail(t *testing.T) {
 func TestAdmitter_ValidateBackendGroupUpdate(t *testing.T) {
 	old := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
+			LoadBalancers: []string{"test-loadbalancer"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-					Protocol:   "TCP",
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     80,
+						Protocol: "TCP",
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1654,11 +2000,13 @@ func TestAdmitter_ValidateBackendGroupUpdate(t *testing.T) {
 	}
 	cur := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
+			LoadBalancers: []string{"test-loadbalancer"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 8080,
-					Protocol:   "TCP",
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     8080,
+						Protocol: "TCP",
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1704,10 +2052,12 @@ func TestAdmitter_ValidateBackendGroupUpdate(t *testing.T) {
 func TestAdmitter_ValidateBackendGroupUpdate_UpdatedForbiddenField(t *testing.T) {
 	old := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
+			LoadBalancers: []string{"test-loadbalancer"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port: 80,
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1722,7 +2072,7 @@ func TestAdmitter_ValidateBackendGroupUpdate_UpdatedForbiddenField(t *testing.T)
 	}
 	cur := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
+			LoadBalancers: []string{"test-loadbalancer"},
 			Static: []string{
 				"pod-0",
 			},
@@ -1761,10 +2111,12 @@ func TestAdmitter_ValidateBackendGroupUpdate_UpdatedForbiddenField(t *testing.T)
 func TestAdmitter_ValidateBackendGroupUpdate_CurObjInvalid(t *testing.T) {
 	old := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
+			LoadBalancers: []string{"test-loadbalancer"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port: 80,
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -1779,10 +2131,12 @@ func TestAdmitter_ValidateBackendGroupUpdate_CurObjInvalid(t *testing.T) {
 	}
 	cur := &lbcfapi.BackendGroup{
 		Spec: lbcfapi.BackendGroupSpec{
-			LBName: "test-loadbalancer",
+			LoadBalancers: []string{"test-loadbalancer"},
 			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port: 80,
+					},
 				},
 				ByLabel: &lbcfapi.SelectPodByLabel{
 					Selector: map[string]string{
@@ -2125,6 +2479,7 @@ func deletingDriverLister() lbcflister.LoadBalancerDriverLister {
 		},
 	}
 }
+
 func fakeAdmitter(
 	lbLister lbcflister.LoadBalancerLister,
 	driverLister lbcflister.LoadBalancerDriverLister,
@@ -2138,4 +2493,12 @@ func fakeAdmitter(
 		backendLister:  beLister,
 		webhookInvoker: invoker,
 	}
+}
+
+func toStringPtr(s string) *string {
+	return &s
+}
+
+func int32Ptr(i int32) *int32 {
+	return &i
 }
