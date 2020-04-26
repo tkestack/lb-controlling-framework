@@ -18,12 +18,12 @@ package admission
 
 import (
 	"encoding/json"
-	"github.com/evanphx/json-patch"
-	"k8s.io/api/core/v1"
+	"testing"
+
+	jsonpatch "github.com/evanphx/json-patch"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"testing"
-	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 )
 
 func TestAddLabel(t *testing.T) {
@@ -186,77 +186,5 @@ func TestAddFinalizer(t *testing.T) {
 				t.Fatalf("%s not added", c.newFinalizer)
 			}
 		}
-	}
-}
-
-func TestDefaultProtocolOfPodBackend(t *testing.T) {
-	podGroup := &lbcfapi.BackendGroup{
-		Spec: lbcfapi.BackendGroupSpec{
-			Pods: &lbcfapi.PodBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-				},
-			},
-		},
-	}
-	origin, err := json.Marshal(podGroup)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	p, err := json.Marshal([]Patch{defaultPodProtocol()})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	patch, err := jsonpatch.DecodePatch(p)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	modified, err := patch.Apply(origin)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	modifiedObj := &lbcfapi.BackendGroup{}
-	if err := json.Unmarshal(modified, modifiedObj); err != nil {
-		t.Fatal(err.Error())
-	}
-	ps := modifiedObj.Spec.Pods.Port
-	if ps.PortNumber != podGroup.Spec.Pods.Port.PortNumber || ps.Protocol != "TCP" {
-		t.Fatalf("expect %d/%s, get %d/%s", podGroup.Spec.Pods.Port.PortNumber, "TCP", ps.PortNumber, ps.Protocol)
-	}
-}
-
-func TestDefaultProtocolOfSvcBackend(t *testing.T) {
-	svcGroup := &lbcfapi.BackendGroup{
-		Spec: lbcfapi.BackendGroupSpec{
-			Service: &lbcfapi.ServiceBackend{
-				Port: lbcfapi.PortSelector{
-					PortNumber: 80,
-				},
-			},
-		},
-	}
-	origin, err := json.Marshal(svcGroup)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	p, err := json.Marshal([]Patch{defaultSvcProtocol()})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	patch, err := jsonpatch.DecodePatch(p)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	modified, err := patch.Apply(origin)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	modifiedObj := &lbcfapi.BackendGroup{}
-	if err := json.Unmarshal(modified, modifiedObj); err != nil {
-		t.Fatal(err.Error())
-	}
-	ps := modifiedObj.Spec.Service.Port
-	if ps.PortNumber != svcGroup.Spec.Service.Port.PortNumber || ps.Protocol != "TCP" {
-		t.Fatalf("expect %d/%s, get %d/%s", svcGroup.Spec.Service.Port.PortNumber, "TCP", ps.PortNumber, ps.Protocol)
 	}
 }
