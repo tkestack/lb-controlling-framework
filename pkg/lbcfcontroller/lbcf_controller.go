@@ -21,15 +21,15 @@ import (
 	"reflect"
 	"time"
 
-	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
-	"tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
-	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
+	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	"tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"tkestack.io/lb-controlling-framework/pkg/metrics"
 )
 
 // NewController creates a new LBCF-controller
@@ -186,6 +186,7 @@ func (c *Controller) processNextItem(kind string, queue util.ConditionalRateLimi
 	}
 
 	go func() {
+		metrics.WorkingKeysInc(kind)
 		// in dry-run mode, each key is processed only once
 		if !c.dryRun {
 			defer queue.Done(key)
@@ -215,6 +216,7 @@ func (c *Controller) processNextItem(kind string, queue util.ConditionalRateLimi
 
 		elapsed := time.Since(startTime)
 		klog.V(3).Infof("sync %s %s, took %s", kind, key, elapsed.String())
+		metrics.WorkingKeysDec(kind)
 	}()
 	return true
 }

@@ -22,14 +22,15 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/spf13/pflag"
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/config"
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/admission"
 	"tkestack.io/lb-controlling-framework/pkg/version"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 )
@@ -54,6 +55,7 @@ func NewServer() *cobra.Command {
 			mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("ok"))
 			})
+			mux.Handle("/metrics", promhttp.Handler())
 			go http.ListenAndServe(":11029", mux)
 
 			<-wait.NeverStop

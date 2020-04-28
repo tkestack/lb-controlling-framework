@@ -27,6 +27,7 @@ import (
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	"tkestack.io/lb-controlling-framework/pkg/metrics"
 
 	"github.com/parnurzeal/gorequest"
 	"k8s.io/klog"
@@ -61,51 +62,87 @@ type WebhookInvokerImpl struct{}
 
 // CallValidateLoadBalancer calls webhook validateLoadBalancer on driver
 func (w *WebhookInvokerImpl) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer")
 	rsp := &webhooks.ValidateLoadBalancerResponse{}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.ValidateLoadBalancer, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer", time.Since(start))
+	if !rsp.Succ {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer")
 	}
 	return rsp, nil
 }
 
 // CallCreateLoadBalancer calls webhook createLoadBalancer on driver
 func (w *WebhookInvokerImpl) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer")
 	rsp := &webhooks.CreateLoadBalancerResponse{}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.CreateLoadBalancer, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer", time.Since(start))
+	if rsp.Status == webhooks.StatusFail {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer")
 	}
 	return rsp, nil
 }
 
 // CallEnsureLoadBalancer calls webhook ensureLoadBalancer on driver
 func (w *WebhookInvokerImpl) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.EnsureLoadBalancerRequest) (*webhooks.EnsureLoadBalancerResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer")
 	rsp := &webhooks.EnsureLoadBalancerResponse{}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.EnsureLoadBalancer, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer", time.Since(start))
+	if rsp.Status == webhooks.StatusFail {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer")
 	}
 	return rsp, nil
 }
 
 // CallDeleteLoadBalancer calls webhook deleteLoadBalancer on driver
 func (w *WebhookInvokerImpl) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.DeleteLoadBalancerRequest) (*webhooks.DeleteLoadBalancerResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer")
 	rsp := &webhooks.DeleteLoadBalancerResponse{}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.DeleteLoadBalancer, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer", time.Since(start))
+	if rsp.Status == webhooks.StatusFail {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer")
 	}
 	return rsp, nil
 }
 
 // CallValidateBackend calls webhook validateBackend on driver
 func (w *WebhookInvokerImpl) CallValidateBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateBackendRequest) (*webhooks.ValidateBackendResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend")
 	rsp := &webhooks.ValidateBackendResponse{}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.ValidateBackend, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend", time.Since(start))
+	if !rsp.Succ {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend")
 	}
 	return rsp, nil
 }
 
 // CallGenerateBackendAddr calls webhook generateBackendAddr on driver
 func (w *WebhookInvokerImpl) CallGenerateBackendAddr(driver *lbcfapi.LoadBalancerDriver, req *webhooks.GenerateBackendAddrRequest) (*webhooks.GenerateBackendAddrResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr")
 	rsp := &webhooks.GenerateBackendAddrResponse{}
 	// In lbcf v1.1.x and before, we use portNumber instead of port in the CRD and request.
 	// The portNumber in CRD is deprecated, but the portNumber in the request is kept so that old drivers can still read it.
@@ -114,26 +151,46 @@ func (w *WebhookInvokerImpl) CallGenerateBackendAddr(driver *lbcfapi.LoadBalance
 	} else if req.ServiceBackend != nil {
 		req.ServiceBackend.Port.PortNumber = &req.ServiceBackend.Port.Port
 	}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.GenerateBackendAddr, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr", time.Since(start))
+	if rsp.Status == webhooks.StatusFail {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr")
 	}
 	return rsp, nil
 }
 
 // CallEnsureBackend calls webhook ensureBackend on driver
 func (w *WebhookInvokerImpl) CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend")
 	rsp := &webhooks.BackendOperationResponse{}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.EnsureBackend, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend", time.Since(start))
+	if rsp.Status == webhooks.StatusFail {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend")
 	}
 	return rsp, nil
 }
 
 // CallDeregisterBackend calls webhook deregisterBackend on driver
 func (w *WebhookInvokerImpl) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend")
 	rsp := &webhooks.BackendOperationResponse{}
+	start := time.Now()
 	if err := callWebhook(driver, webhooks.DeregBackend, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend")
 		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend", time.Since(start))
+	if rsp.Status == webhooks.StatusFail {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend")
 	}
 	return rsp, nil
 }
