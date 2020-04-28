@@ -345,7 +345,7 @@ func (c *Controller) addLoadBalancer(obj interface{}) {
 	c.enqueue(obj, c.loadBalancerQueue)
 
 	for key := range c.backendGroupCtrl.listRelatedBackendGroupsForLB(lb) {
-		c.backendGroupQueue.Add(key)
+		c.enqueue(key, c.backendGroupQueue)
 	}
 }
 
