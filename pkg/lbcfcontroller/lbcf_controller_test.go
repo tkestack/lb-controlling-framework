@@ -1321,10 +1321,10 @@ func TestLBCFControllerDeleteBackendRecord(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemSucc(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
+	q := util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
 		return util.FinishedResult()
 	})
 	if q.Len() != 0 || q.LenWaitingForFilter() != 0 {
@@ -1346,9 +1346,9 @@ func TestLBCFControllerProcessNextItemSucc(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemError(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
+	q := util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second)
 	ctrl.enqueue("key", q)
-	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
 		return util.ErrorResult(fmt.Errorf("fake error"))
 	})
 	if get, done := q.Get(); done {
@@ -1362,12 +1362,12 @@ func TestLBCFControllerProcessNextItemError(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewConditionalDelayingQueue(nil, time.Millisecond, time.Millisecond, 2*time.Second)
+	q := util.NewConditionalDelayingQueue("test", nil, time.Millisecond, time.Millisecond, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
 		return util.FailResult(500*time.Millisecond, "")
 	})
 	if get, done := q.Get(); done {
@@ -1379,12 +1379,12 @@ func TestLBCFControllerProcessNextItemFailed(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemRunning(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
+	q := util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
 		return util.AsyncResult(500 * time.Millisecond)
 	})
 	if get, done := q.Get(); done {
@@ -1396,12 +1396,12 @@ func TestLBCFControllerProcessNextItemRunning(t *testing.T) {
 
 func TestLBCFControllerProcessNextItemPeriodic(t *testing.T) {
 	ctrl := &Controller{}
-	q := util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second)
+	q := util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second)
 	obj := newFakeDriver("", "driver")
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 
 	ctrl.enqueue(obj, q)
-	ctrl.processNextItem("test", q, func(key string) *util.SyncResult {
+	ctrl.processNextItem(q, func(key string) *util.SyncResult {
 		return util.PeriodicResult(500 * time.Millisecond)
 	})
 	if get, done := q.Get(); done {
@@ -1594,10 +1594,10 @@ func newFakeLBCFController(driverCtrl *driverController, lbCtrl *loadBalancerCon
 		backendCtrl:      backendCtrl,
 		backendGroupCtrl: bgCtrl,
 
-		driverQueue:       util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
-		loadBalancerQueue: util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
-		backendGroupQueue: util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
-		backendQueue:      util.NewConditionalDelayingQueue(nil, time.Second, time.Second, 2*time.Second),
+		driverQueue:       util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second),
+		loadBalancerQueue: util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second),
+		backendGroupQueue: util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second),
+		backendQueue:      util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second),
 	}
 }
 

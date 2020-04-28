@@ -18,20 +18,21 @@ package util
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/workqueue"
-	"testing"
-	"time"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 )
 
 func TestConditionalRateLimitingQueueAddAfterMinimumDelay(t *testing.T) {
-	q := NewConditionalDelayingQueue(nil, time.Millisecond, time.Millisecond, time.Millisecond)
+	q := NewConditionalDelayingQueue("test", nil, time.Millisecond, time.Millisecond, time.Millisecond)
 	startTime := time.Now()
 	q.AddAfterMinimumDelay(struct{}{}, time.Second)
 	_, quit := q.Get()
@@ -45,7 +46,7 @@ func TestConditionalRateLimitingQueueAddAfterMinimumDelay(t *testing.T) {
 }
 
 func TestConditionalRateLimitingQueueAddAfterMinimumDelayWithEmptyValue(t *testing.T) {
-	q := NewConditionalDelayingQueue(nil, time.Second, time.Second, time.Second)
+	q := NewConditionalDelayingQueue("test", nil, time.Second, time.Second, time.Second)
 	startTime := time.Now()
 	q.AddAfterMinimumDelay(struct{}{}, 0)
 	_, quit := q.Get()
