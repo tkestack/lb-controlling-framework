@@ -12,6 +12,7 @@ var (
 	webhookErrors  *prometheus.CounterVec
 	webhookFails   *prometheus.CounterVec
 	webhookLatency *prometheus.HistogramVec
+	pendingKeys    *prometheus.GaugeVec
 	workingKeys    *prometheus.GaugeVec
 )
 
@@ -52,6 +53,13 @@ func init() {
 		},
 		[]string{labelDriverName, labelWebhookName})
 
+	pendingKeys = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "pending_key",
+			Help: "The number of keys waiting to be processed",
+		},
+		[]string{labelKeyKind})
+
 	workingKeys = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "working_key",
@@ -90,6 +98,13 @@ func WebhookLatencyObserve(driverName, webhookName string, elapsed time.Duration
 		labelWebhookName: webhookName,
 	}
 	webhookLatency.With(l).Observe(elapsed.Seconds())
+}
+
+func PendingKeysSet(kind string, value float64) {
+	l := prometheus.Labels{
+		labelKeyKind: kind,
+	}
+	pendingKeys.With(l).Set(value)
 }
 
 func WorkingKeysInc(kind string) {

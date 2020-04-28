@@ -144,6 +144,7 @@ func (c *Controller) run() {
 	go wait.Until(c.driverWorker, time.Second, wait.NeverStop)
 	go wait.Until(c.backendGroupWorker, time.Second, wait.NeverStop)
 	go wait.Until(c.backendWorker, time.Second, wait.NeverStop)
+	go wait.Until(c.updateQueuePendingMetric, 10*time.Second, wait.NeverStop)
 }
 
 func (c *Controller) enqueue(obj interface{}, queue util.ConditionalRateLimitingInterface) {
@@ -449,4 +450,11 @@ func (c *Controller) deleteBackendRecord(obj interface{}) {
 	if controllerRef := metav1.GetControllerOf(backend); controllerRef != nil {
 		c.enqueue(util.NamespacedNameKeyFunc(backend.Namespace, controllerRef.Name), c.backendGroupQueue)
 	}
+}
+
+func (c *Controller) updateQueuePendingMetric() {
+	metrics.PendingKeysSet(c.driverQueue.GetName(), float64(c.driverQueue.Len()))
+	metrics.PendingKeysSet(c.loadBalancerQueue.GetName(), float64(c.driverQueue.Len()))
+	metrics.PendingKeysSet(c.backendGroupQueue.GetName(), float64(c.driverQueue.Len()))
+	metrics.PendingKeysSet(c.backendQueue.GetName(), float64(c.driverQueue.Len()))
 }
