@@ -18,10 +18,11 @@
 package util
 
 import (
+	"time"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
-	"time"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 
 	"golang.org/x/time/rate"
@@ -35,10 +36,11 @@ type ConditionalRateLimitingInterface interface {
 	Forget(item interface{})
 	AddAfterFiltered(item interface{}, duration time.Duration)
 	LenWaitingForFilter() int
+	GetName() string
 }
 
 // NewConditionalDelayingQueue returns a new instance of ConditionalRateLimitingInterface. If minDelay is less than step, the real minimum delay is step.
-func NewConditionalDelayingQueue(filter QueueFilter, minDelay time.Duration, step time.Duration, maxDelay time.Duration) ConditionalRateLimitingInterface {
+func NewConditionalDelayingQueue(name string, filter QueueFilter, minDelay time.Duration, step time.Duration, maxDelay time.Duration) ConditionalRateLimitingInterface {
 	rateLimiter := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(step, maxDelay),
 		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
@@ -50,6 +52,7 @@ func NewConditionalDelayingQueue(filter QueueFilter, minDelay time.Duration, ste
 		waitingWithFilterQueue: workqueue.NewDelayingQueue(),
 		filter:                 filter,
 		minDelay:               minDelay,
+		name:                   name,
 	}
 
 	go q.run()
@@ -63,6 +66,7 @@ type conditionalRateLimitingQueue struct {
 	waitingWithFilterQueue workqueue.DelayingInterface
 	filter                 QueueFilter
 	minDelay               time.Duration
+	name                   string
 }
 
 // AddAfterMinimumDelay adds item after at least the indicated minDelay has passed
@@ -85,6 +89,10 @@ func (q *conditionalRateLimitingQueue) AddAfterFiltered(item interface{}, durati
 		duration = q.minDelay
 	}
 	q.waitingWithFilterQueue.AddAfter(item, duration)
+}
+
+func (q *conditionalRateLimitingQueue) GetName() string {
+	return q.name
 }
 
 // LenWaitingForFilter returns the number of items that not yet filtered
