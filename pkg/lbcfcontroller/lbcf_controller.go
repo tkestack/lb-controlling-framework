@@ -36,10 +36,10 @@ import (
 func NewController(ctx *context.Context) *Controller {
 	c := &Controller{
 		context:           ctx,
-		driverQueue:       util.NewConditionalDelayingQueue(nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
-		loadBalancerQueue: util.NewConditionalDelayingQueue(util.QueueFilterForLB(ctx.LBInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
-		backendGroupQueue: util.NewConditionalDelayingQueue(nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
-		backendQueue:      util.NewConditionalDelayingQueue(util.QueueFilterForBackend(ctx.BRInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		driverQueue:       util.NewConditionalDelayingQueue("LoadBalancerDriver", nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		loadBalancerQueue: util.NewConditionalDelayingQueue("LoadBalancer", util.QueueFilterForLB(ctx.LBInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		backendGroupQueue: util.NewConditionalDelayingQueue("BackendGroup", nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		backendQueue:      util.NewConditionalDelayingQueue("BackendRecord", util.QueueFilterForBackend(ctx.BRInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 		dryRun:            ctx.IsDryRun(),
 	}
 
@@ -160,39 +160,39 @@ func (c *Controller) enqueue(obj interface{}, queue util.ConditionalRateLimiting
 }
 
 func (c *Controller) lbWorker() {
-	for c.processNextItem("LoadBalancer", c.loadBalancerQueue, c.lbCtrl.syncLB) {
+	for c.processNextItem(c.loadBalancerQueue, c.lbCtrl.syncLB) {
 	}
 }
 
 func (c *Controller) driverWorker() {
-	for c.processNextItem("LoadBalancerDriver", c.driverQueue, c.driverCtrl.syncDriver) {
+	for c.processNextItem(c.driverQueue, c.driverCtrl.syncDriver) {
 	}
 }
 
 func (c *Controller) backendGroupWorker() {
-	for c.processNextItem("BackendGroup", c.backendGroupQueue, c.backendGroupCtrl.syncBackendGroup) {
+	for c.processNextItem(c.backendGroupQueue, c.backendGroupCtrl.syncBackendGroup) {
 	}
 }
 
 func (c *Controller) backendWorker() {
-	for c.processNextItem("BackendRecord", c.backendQueue, c.backendCtrl.syncBackendRecord) {
+	for c.processNextItem(c.backendQueue, c.backendCtrl.syncBackendRecord) {
 	}
 }
 
-func (c *Controller) processNextItem(kind string, queue util.ConditionalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
+func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface, syncFunc func(string) *util.SyncResult) bool {
 	key, quit := queue.Get()
 	if quit {
 		return false
 	}
 
 	go func() {
-		metrics.WorkingKeysInc(kind)
+		metrics.WorkingKeysInc(queue.GetName())
 		// in dry-run mode, each key is processed only once
 		if !c.dryRun {
 			defer queue.Done(key)
 		}
 
-		klog.V(3).Infof("sync %s %s start", kind, key)
+		klog.V(3).Infof("sync %s %s start", queue.GetName(), key)
 		startTime := time.Now()
 		result := syncFunc(key.(string))
 
@@ -202,21 +202,21 @@ func (c *Controller) processNextItem(kind string, queue util.ConditionalRateLimi
 		}
 		// handle result
 		if result.IsFailed() {
-			klog.Infof("Failed %s %s, reason: %v", kind, key, result.GetFailReason())
+			klog.Infof("Failed %s %s, reason: %v", queue.GetName(), key, result.GetFailReason())
 			queue.AddAfterMinimumDelay(key, result.GetNextRun())
 		} else if result.IsRunning() {
-			klog.Infof("Async %s %s", kind, key)
+			klog.Infof("Async %s %s", queue.GetName(), key)
 			queue.AddAfterMinimumDelay(key, result.GetNextRun())
 		} else if result.IsPeriodic() {
-			klog.Infof("Periodic %s %s", kind, key)
+			klog.Infof("Periodic %s %s", queue.GetName(), key)
 			queue.AddAfterFiltered(key, result.GetNextRun())
 		} else {
-			klog.Infof("Successfully Finished %s %s", kind, key)
+			klog.Infof("Successfully Finished %s %s", queue.GetName(), key)
 		}
 
 		elapsed := time.Since(startTime)
-		klog.V(3).Infof("sync %s %s, took %s", kind, key, elapsed.String())
-		metrics.WorkingKeysDec(kind)
+		klog.V(3).Infof("sync %s %s, took %s", queue.GetName(), key, elapsed.String())
+		metrics.WorkingKeysDec(queue.GetName())
 	}()
 	return true
 }
