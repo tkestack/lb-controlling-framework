@@ -110,9 +110,9 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 		if !util.LBCreated(lb) {
 			continue
 		}
-		var expectedBackends []*lbcfapi.BackendRecord
+		var expectedBackends, doNotDelete []*lbcfapi.BackendRecord
 		if group.Spec.Pods != nil {
-			expectedBackends, err = c.expectedPodBackends(group, lb)
+			expectedBackends, doNotDelete, err = c.expectedPodBackends(group, lb)
 		} else if group.Spec.Service != nil {
 			expectedBackends, err = c.expectedServiceBackends(group, lb)
 		} else {
@@ -124,7 +124,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 					group.Namespace, group.Name, err))
 			continue
 		}
-		if err := c.update(group, lbName, expectedBackends); err != nil {
+		if err := c.update(group, lbName, expectedBackends, doNotDelete); err != nil {
 			errList = append(errList, err)
 		}
 	}
@@ -134,13 +134,15 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	return util.FinishedResult()
 }
 
-func (c *backendGroupController) expectedPodBackends(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
+func (c *backendGroupController) expectedPodBackends(
+	group *lbcfapi.BackendGroup,
+	lb *lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, []*lbcfapi.BackendRecord, error) {
 	var pods []*v1.Pod
 	if group.Spec.Pods.ByLabel != nil {
 		var err error
 		pods, err = c.podLister.List(labels.SelectorFromSet(labels.Set(group.Spec.Pods.ByLabel.Selector)))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		filter := func(p *v1.Pod) bool {
 			if p.Namespace != group.Namespace {
@@ -162,11 +164,21 @@ func (c *backendGroupController) expectedPodBackends(group *lbcfapi.BackendGroup
 		}
 	}
 
+	// even if the deregisterPolicy of BackendGroup is IfNotRunning,
+	// the standard of registering a Pod is still status.conditions[].Ready = True
 	var expectedRecords []*lbcfapi.BackendRecord
 	for _, pod := range util.FilterPods(pods, util.PodAvailable) {
 		expectedRecords = append(expectedRecords, util.ConstructPodBackendRecord(lb, group, pod)...)
 	}
-	return expectedRecords, nil
+	// if deregisterPolicy of BackendGroup is IfNotRunning,
+	// all running pods should not be deregistered
+	var doNotDelete []*lbcfapi.BackendRecord
+	if util.DeregIfNotRunning(group) {
+		for _, pod := range util.FilterPods(pods, util.PodAvailableByRunning) {
+			doNotDelete = append(doNotDelete, util.ConstructPodBackendRecord(lb, group, pod)...)
+		}
+	}
+	return expectedRecords, doNotDelete, nil
 }
 
 func (c *backendGroupController) expectedServiceBackends(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
@@ -209,7 +221,8 @@ func (c *backendGroupController) expectedStaticBackends(group *lbcfapi.BackendGr
 func (c *backendGroupController) update(
 	group *lbcfapi.BackendGroup,
 	lbName string,
-	expectedBackends []*lbcfapi.BackendRecord) error {
+	expectedBackends []*lbcfapi.BackendRecord,
+	doNotDelete []*lbcfapi.BackendRecord) error {
 	existingRecords, err := c.listBackendRecords(group.Namespace, lbName, group.Name)
 	if err != nil {
 		return err
@@ -231,7 +244,8 @@ func (c *backendGroupController) update(
 		}
 	}
 
-	needCreate, needUpdate, needDelete := util.CompareBackendRecords(expectedBackends, existingRecords)
+	needCreate, needUpdate, needDelete := util.CompareBackendRecords(expectedBackends, existingRecords, doNotDelete)
+
 	var errs util.ErrorList
 	if err := util.IterateBackends(needDelete, c.deleteBackendRecord); err != nil {
 		errs = append(errs, err)

@@ -143,6 +143,7 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 	bgPatch.addLabel()
 	bgPatch.convertLoadBalancers()
 	bgPatch.convertPortSelector()
+	bgPatch.setDefaultDeregisterPolicy()
 
 	p, err := json.Marshal(bgPatch.patch())
 	if err != nil {

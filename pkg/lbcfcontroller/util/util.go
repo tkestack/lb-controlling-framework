@@ -83,6 +83,12 @@ func GetPodConditionFromList(conditions []v1.PodCondition, conditionType v1.PodC
 	return -1, nil
 }
 
+// PodAvailableByRunning indicates the given pod is ready to bind to load balancers,
+// by checking pod.status.phase
+func PodAvailableByRunning(obj *v1.Pod) bool {
+	return obj.Status.PodIP != "" && obj.DeletionTimestamp == nil && obj.Status.Phase == v1.PodRunning
+}
+
 // PodAvailable indicates the given pod is ready to bind to load balancers
 func PodAvailable(obj *v1.Pod) bool {
 	return obj.Status.PodIP != "" && obj.DeletionTimestamp == nil && IsPodReady(obj)
@@ -532,7 +538,10 @@ func IsSvcMatchBackendGroup(group *lbcfapi.BackendGroup, svc *v1.Service) bool {
 // needUpdate: BackendsReocrds in this slice already exist in K8S and should be update to k8s
 //
 // needDelete: BackendsRecords in this slice should be deleted from k8s
-func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.BackendRecord) (needCreate, needUpdate, needDelete []*lbcfapi.BackendRecord) {
+func CompareBackendRecords(
+	expect []*lbcfapi.BackendRecord,
+	have []*lbcfapi.BackendRecord,
+	doNotDelete []*lbcfapi.BackendRecord) (needCreate, needUpdate, needDelete []*lbcfapi.BackendRecord) {
 	expectedRecords := make(map[string]*lbcfapi.BackendRecord)
 	for _, e := range expect {
 		expectedRecords[e.Name] = e
@@ -540,6 +549,10 @@ func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.Back
 	haveRecords := make(map[string]*lbcfapi.BackendRecord)
 	for _, h := range have {
 		haveRecords[h.Name] = h
+	}
+	doNotDeleteRecords := sets.NewString()
+	for _, dnd := range doNotDelete {
+		doNotDeleteRecords.Insert(dnd.Name)
 	}
 	for k, v := range expectedRecords {
 		cur, ok := haveRecords[k]
@@ -555,7 +568,9 @@ func CompareBackendRecords(expect []*lbcfapi.BackendRecord, have []*lbcfapi.Back
 	}
 	for k, v := range haveRecords {
 		if _, ok := expectedRecords[k]; !ok {
-			needDelete = append(needDelete, v)
+			if !doNotDeleteRecords.Has(v.Name) {
+				needDelete = append(needDelete, v)
+			}
 		}
 	}
 	return
@@ -617,6 +632,14 @@ func NeedPeriodicEnsure(cfg *lbcfapi.EnsurePolicyConfig, deleting bool) bool {
 		return false
 	}
 	if cfg != nil && cfg.Policy == lbcfapi.PolicyAlways {
+		return true
+	}
+	return false
+}
+
+// DeregIfNotRunning returns true if backend should be deregistered when not running, instead of not ready
+func DeregIfNotRunning(bg *lbcfapi.BackendGroup) bool {
+	if bg.Spec.DeregisterPolicy != nil && *bg.Spec.DeregisterPolicy == lbcfapi.DeregisterIfNotRunning {
 		return true
 	}
 	return false

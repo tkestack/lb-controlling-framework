@@ -125,11 +125,20 @@ type BackendGroup struct {
 	Status BackendGroupStatus `json:"status,omitempty"`
 }
 
+type DeregPolicy string
+
+const (
+	DeregisterIfNotRunning DeregPolicy = "IfNotRunning"
+	DeregisterIfNotReady   DeregPolicy = "IfNotReady"
+)
+
 type BackendGroupSpec struct {
 	// +optional
 	// Deprecated: use loadBalancers instead
 	LBName        *string  `json:"lbName"`
 	LoadBalancers []string `json:"loadBalancers"`
+	// +optional
+	DeregisterPolicy *DeregPolicy `json:"deregisterPolicy"`
 	// +optional
 	Service *ServiceBackend `json:"service,omitempty"`
 	// +optional
