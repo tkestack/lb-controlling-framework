@@ -1296,10 +1296,34 @@ func TestCompareBackendRecords(t *testing.T) {
 			Parameters: map[string]string{},
 		},
 	}
-	expect := []*lbcfapi.BackendRecord{expectAdd, expectSame, expectUpdate1, expectUpdate2, expectUpdate3}
-	have := []*lbcfapi.BackendRecord{expectDelete, expectSame, update1, update2, update3}
 
-	getAdd, getUpdate, getDelete := CompareBackendRecords(expect, have)
+	expectDoNotDelete := &lbcfapi.BackendRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "expect-do-not-delete",
+		},
+		Spec: lbcfapi.BackendRecordSpec{
+			LBName:   "lb",
+			LBDriver: "driver",
+			LBInfo: map[string]string{
+				"lbID": "1234",
+			},
+			LBAttributes: map[string]string{
+				"attr1": "v1",
+			},
+			PodBackendInfo: &lbcfapi.PodBackendRecord{
+				Name: "my-pod-0",
+				Port: lbcfapi.PortSelector{
+					Port: 8080,
+				},
+			},
+			Parameters: map[string]string{},
+		},
+	}
+
+	expect := []*lbcfapi.BackendRecord{expectAdd, expectSame, expectUpdate1, expectUpdate2, expectUpdate3}
+	have := []*lbcfapi.BackendRecord{expectDelete, expectSame, update1, update2, update3, expectDoNotDelete}
+
+	getAdd, getUpdate, getDelete := CompareBackendRecords(expect, have, []*lbcfapi.BackendRecord{expectDoNotDelete})
 	if len(getAdd) != 1 {
 		t.Fatalf("expect 1, get %d", len(getAdd))
 	} else if getAdd[0] != expectAdd {

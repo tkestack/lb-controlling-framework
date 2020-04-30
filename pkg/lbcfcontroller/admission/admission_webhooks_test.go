@@ -664,6 +664,67 @@ func TestAdmitter_MutateBackendGroupConvertPortSelector(t *testing.T) {
 	}
 }
 
+func TestAdmitter_MutateBackendGroupDeregisterPolicy(t *testing.T) {
+	a := fakeAdmitter(
+		&alwaysSuccLBLister{},
+		&alwaysSuccDriverLister{},
+		nil,
+		&alwaysSuccBackendLister{},
+		&fakeSuccInvoker{})
+	type testCase struct {
+		name           string
+		bg             *lbcfapi.BackendGroup
+		expectedPolicy lbcfapi.DeregPolicy
+	}
+	ifNotRunning := lbcfapi.DeregisterIfNotRunning
+	cases := []testCase{
+		{
+			name:           "set default policy",
+			bg:             &lbcfapi.BackendGroup{},
+			expectedPolicy: lbcfapi.DeregisterIfNotReady,
+		},
+		{
+			name: "user specified policy not changed",
+			bg: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					DeregisterPolicy: &ifNotRunning,
+				},
+			},
+			expectedPolicy: lbcfapi.DeregisterIfNotRunning,
+		},
+	}
+	for _, c := range cases {
+		raw, _ := json.Marshal(c.bg)
+		rsp := a.MutateBackendGroup(&v1beta1.AdmissionReview{
+			Request: &v1beta1.AdmissionRequest{
+				Object: runtime.RawExtension{
+					Raw: raw,
+				},
+			},
+		})
+		if !rsp.Allowed {
+			t.Fatalf("expect always allow")
+		}
+		patch, err := jsonpatch.DecodePatch(rsp.Patch)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		modified, err := patch.Apply(raw)
+		if err != nil {
+			t.Fatalf("name:%s, err:%v", c.name, err.Error())
+		}
+		modifiedGroup := &lbcfapi.BackendGroup{}
+		if err := json.Unmarshal(modified, modifiedGroup); err != nil {
+			t.Fatalf(err.Error())
+		}
+		if modifiedGroup.Spec.DeregisterPolicy == nil {
+			t.Fatalf("should be set")
+		} else if *modifiedGroup.Spec.DeregisterPolicy != c.expectedPolicy {
+			t.Fatalf("case %s: expect %v, get %v", c.name, c.expectedPolicy, *modifiedGroup.Spec.DeregisterPolicy)
+		}
+	}
+}
+
 func TestAdmitter_ValidateDriverCreate(t *testing.T) {
 	type testCase struct {
 		name        string
