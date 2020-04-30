@@ -448,7 +448,7 @@ func TestValidateBackendGroup(t *testing.T) {
 	tcp := "TCP"
 	udp := "UDP"
 	invalid := "invalid"
-
+	ifNotRunning := lbcfapi.DeregisterIfNotRunning
 	cases := []testCase{
 		{
 			name: "valid-empty-group",
@@ -566,6 +566,37 @@ func TestValidateBackendGroup(t *testing.T) {
 						MinPeriod: &lbcfapi.Duration{
 							Duration: 30 * time.Second,
 						},
+					},
+				},
+			},
+			expectValid: true,
+		},
+		{
+			name: "valid-deregisterPolicy",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LoadBalancers: []string{"test-lb"},
+					Static: []string{
+						"1.1.1.1:80",
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+					DeregisterPolicy: &ifNotRunning,
+				},
+			},
+			expectValid: true,
+		},
+		{
+			name: "valid-deregisterPolicy-empty",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					LoadBalancers: []string{"test-lb"},
+					Static: []string{
+						"1.1.1.1:80",
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
 					},
 				},
 			},
