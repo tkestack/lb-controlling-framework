@@ -321,6 +321,17 @@ func (bp *backendGroupPatch) convertLoadBalancers() {
 	}
 }
 
+func (bp *backendGroupPatch) setDefaultDeregisterPolicy() {
+	if bp.obj.Spec.DeregisterPolicy != nil {
+		return
+	}
+	bp.patches = append(bp.patches, Patch{
+		OP:    patchOpAdd,
+		Path:  "/spec/deregisterPolicy",
+		Value: lbcfapi.DeregisterIfNotReady,
+	})
+}
+
 func (bp *backendGroupPatch) patch() []Patch {
 	return bp.patches
 }
