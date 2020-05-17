@@ -48,6 +48,9 @@ const (
 
 	// DeregBackend is the name and URL path of webhook deregisterBackend
 	DeregBackend = "deregisterBackend"
+
+	// JudgePodDeregister is the name and URL path of webhook judgePodDeregister
+	JudgePodDeregister = "judgePodDeregister"
 )
 
 // KnownWebhooks is a set contains all supported webhooks
@@ -223,4 +226,15 @@ type BackendOperationRequest struct {
 type BackendOperationResponse struct {
 	ResponseForFailRetryHooks
 	InjectedInfo map[string]string `json:"injectedInfo"`
+}
+
+// JudgePodDeregisterRequest is the request for webhook judgePodDeregister
+type JudgePodDeregisterRequest struct {
+	DryRun       bool      `json:"dryRun"`
+	NotReadyPods []*v1.Pod `json:"notReadyPods"`
+}
+
+// JudgePodDeregisterResponse is the response for for webhook judgePodDeregister
+type JudgePodDeregisterResponse struct {
+	DoNotDeregister []*v1.Pod `json:"doNotDeregister"`
 }

@@ -130,6 +130,7 @@ type DeregPolicy string
 const (
 	DeregisterIfNotRunning DeregPolicy = "IfNotRunning"
 	DeregisterIfNotReady   DeregPolicy = "IfNotReady"
+	DeregisterWebhook      DeregPolicy = "Webhook"
 )
 
 type BackendGroupSpec struct {
@@ -139,6 +140,8 @@ type BackendGroupSpec struct {
 	LoadBalancers []string `json:"loadBalancers"`
 	// +optional
 	DeregisterPolicy *DeregPolicy `json:"deregisterPolicy"`
+	// +optional
+	DeregisterWebhook *DeregisterWebhookSpec `json:"deregisterWebhook"`
 	// +optional
 	Service *ServiceBackend `json:"service,omitempty"`
 	// +optional
@@ -158,6 +161,20 @@ func (bgSpec BackendGroupSpec) GetLoadBalancers() []string {
 		return []string{*bgSpec.LBName}
 	}
 	return nil
+}
+
+type deregFailurePolicy string
+
+const (
+	FailurePolicyDoNothing    deregFailurePolicy = "DoNothing"
+	FailurePolicyIfNotReady   deregFailurePolicy = "IfNotReady"
+	FailurePolicyIfNotRunning deregFailurePolicy = "IfNotRunning"
+)
+
+type DeregisterWebhookSpec struct {
+	DriverName string `json:"driverName"`
+	// +optional
+	FailurePolicy *deregFailurePolicy `json:"failurePolicy"`
 }
 
 type ServiceBackend struct {

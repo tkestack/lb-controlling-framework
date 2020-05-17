@@ -26,6 +26,7 @@ import (
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,27 +35,34 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 )
 
 func newBackendGroupController(
 	client lbcfclient.Interface,
+	driverLister lbcflister.LoadBalancerDriverLister,
 	lbLister lbcflister.LoadBalancerLister,
 	bgLister lbcflister.BackendGroupLister,
 	brLister lbcflister.BackendRecordLister,
 	podLister corev1.PodLister,
 	svcLister corev1.ServiceLister,
 	nodeLister corev1.NodeLister,
+	invoker util.WebhookInvoker,
+	recorder record.EventRecorder,
 	dryRun bool) *backendGroupController {
 	return &backendGroupController{
 		client:              client,
+		driverLister:        driverLister,
 		lbLister:            lbLister,
 		bgLister:            bgLister,
 		brLister:            brLister,
 		podLister:           podLister,
 		serviceLister:       svcLister,
 		nodeLister:          nodeLister,
+		webhookInvoker:      invoker,
+		eventRecorder:       recorder,
 		relatedLoadBalancer: &sync.Map{},
 		relatedPod:          &sync.Map{},
 		dryRun:              dryRun,
@@ -64,6 +72,7 @@ func newBackendGroupController(
 type backendGroupController struct {
 	client lbcfclient.Interface
 
+	driverLister  lbcflister.LoadBalancerDriverLister
 	lbLister      lbcflister.LoadBalancerLister
 	bgLister      lbcflister.BackendGroupLister
 	brLister      lbcflister.BackendRecordLister
@@ -71,6 +80,8 @@ type backendGroupController struct {
 	serviceLister corev1.ServiceLister
 	nodeLister    corev1.NodeLister
 
+	webhookInvoker      util.WebhookInvoker
+	eventRecorder       record.EventRecorder
 	relatedLoadBalancer *sync.Map
 	relatedPod          *sync.Map
 	dryRun              bool
@@ -170,13 +181,20 @@ func (c *backendGroupController) expectedPodBackends(
 	for _, pod := range util.FilterPods(pods, util.PodAvailable) {
 		expectedRecords = append(expectedRecords, util.ConstructPodBackendRecord(lb, group, pod)...)
 	}
-	// if deregisterPolicy of BackendGroup is IfNotRunning,
-	// all running pods should not be deregistered
+
+	// handle deregister policy
+	// There are 3 available policies:
+	// 1. IfNotReady: the default one, save as K8S.
+	// 2. IfNotRunning: deregister pods only if pod.status.phase is not "Running"
+	// 3. Webhook: webhook "judgePodDeregister" is invoked, where drivers can implement their own policy
 	var doNotDelete []*lbcfapi.BackendRecord
+	notReadyPods := util.FilterPods(pods, func(pod *v1.Pod) bool {
+		return !util.PodAvailable(pod)
+	})
 	if util.DeregIfNotRunning(group) {
-		for _, pod := range util.FilterPods(pods, util.PodAvailableByRunning) {
-			doNotDelete = append(doNotDelete, util.ConstructPodBackendRecord(lb, group, pod)...)
-		}
+		doNotDelete = deregIfNotRunning(lb, group, notReadyPods)
+	} else if util.DeregByWebhook(group) {
+		doNotDelete = deregByWebhook(group.Spec.DeregisterWebhook, lb, group, notReadyPods, c.webhookInvoker, c.driverLister, c.eventRecorder, c.dryRun)
 	}
 	return expectedRecords, doNotDelete, nil
 }
@@ -416,4 +434,85 @@ func (c *backendGroupController) updateStatus(group *lbcfapi.BackendGroup, statu
 		}
 		return updateErr
 	})
+}
+
+func deregIfNotRunning(
+	lb *lbcfapi.LoadBalancer,
+	group *lbcfapi.BackendGroup,
+	notReadyPods []*v1.Pod) (doNotDelete []*lbcfapi.BackendRecord) {
+	for _, pod := range util.FilterPods(notReadyPods, util.PodAvailableByRunning) {
+		doNotDelete = append(doNotDelete, util.ConstructPodBackendRecord(lb, group, pod)...)
+	}
+	return
+}
+
+func deregByWebhook(
+	spec *lbcfapi.DeregisterWebhookSpec,
+	lb *lbcfapi.LoadBalancer,
+	group *lbcfapi.BackendGroup,
+	notReadyPods []*v1.Pod,
+	invoker util.WebhookInvoker,
+	driverLister lbcflister.LoadBalancerDriverLister,
+	recorder record.EventRecorder,
+	dryRun bool) (doNotDelete []*lbcfapi.BackendRecord) {
+	driver, err := driverLister.
+		LoadBalancerDrivers(util.GetDriverNamespace(spec.DriverName, group.Namespace)).
+		Get(spec.DriverName)
+	if err != nil {
+		klog.Errorf(
+			"BackendGroup %s/%s get driver %s failed, no pods will be deregistered, err: %v",
+			group.Namespace, group.Name, spec.DriverName, err)
+		if recorder != nil {
+			recorder.Eventf(group,
+				v1.EventTypeWarning,
+				"GetDriverFailed",
+				"get driver %s failed, use failure policy %v, err: %v",
+				spec.DriverName, spec.FailurePolicy, err)
+		}
+		doNotDelete = handleFailurePolicy(spec, lb, group, notReadyPods)
+		return
+	}
+	if dryRun && !driver.Spec.AcceptDryRunCall {
+		doNotDelete = handleFailurePolicy(spec, lb, group, notReadyPods)
+		return
+	}
+	req := &webhooks.JudgePodDeregisterRequest{
+		DryRun:       dryRun,
+		NotReadyPods: notReadyPods,
+	}
+	judgeRsp, err := invoker.CallJudgePodDeregister(driver, req)
+	if err != nil {
+		klog.Errorf(
+			"BackendGroup %s/%s call webhook %s failed, no pods will be deregistered, err: %v",
+			group.Namespace, group.Name, webhooks.JudgePodDeregister, err)
+		if recorder != nil {
+			recorder.Eventf(group,
+				v1.EventTypeWarning,
+				"WebhookFailed",
+				"webhook %s failed, use failure policy %v, err: %v",
+				webhooks.JudgePodDeregister, spec.FailurePolicy, err)
+		}
+		doNotDelete = handleFailurePolicy(spec, lb, group, notReadyPods)
+		return
+	}
+	for _, pod := range judgeRsp.DoNotDeregister {
+		doNotDelete = append(doNotDelete, util.ConstructPodBackendRecord(lb, group, pod)...)
+	}
+	return
+}
+
+func handleFailurePolicy(
+	spec *lbcfapi.DeregisterWebhookSpec,
+	lb *lbcfapi.LoadBalancer,
+	group *lbcfapi.BackendGroup,
+	notReadyPods []*v1.Pod) (doNotDelete []*lbcfapi.BackendRecord) {
+	if spec.FailurePolicy == nil || *spec.FailurePolicy == lbcfapi.FailurePolicyDoNothing {
+		for _, pod := range notReadyPods {
+			doNotDelete = append(doNotDelete, util.ConstructPodBackendRecord(lb, group, pod)...)
+		}
+		return
+	} else if spec.FailurePolicy != nil && *spec.FailurePolicy == lbcfapi.FailurePolicyIfNotRunning {
+		doNotDelete = deregIfNotRunning(lb, group, notReadyPods)
+	}
+	return
 }
