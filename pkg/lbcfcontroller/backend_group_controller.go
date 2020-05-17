@@ -94,6 +94,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	}
 
 	var errList util.ErrorList
+	var availableLBs []*lbcfapi.LoadBalancer
 	for _, lbName := range group.Spec.GetLoadBalancers() {
 		lb, err := c.lbLister.LoadBalancers(namespace).Get(lbName)
 		lbNotFound := errors.IsNotFound(err)
@@ -110,23 +111,19 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 		if !util.LBCreated(lb) {
 			continue
 		}
-		var expectedBackends []*lbcfapi.BackendRecord
-		if group.Spec.Pods != nil {
-			expectedBackends, err = c.expectedPodBackends(group, lb)
-		} else if group.Spec.Service != nil {
-			expectedBackends, err = c.expectedServiceBackends(group, lb)
-		} else {
-			expectedBackends, err = c.expectedStaticBackends(group, lb)
-		}
-		if err != nil {
-			errList = append(errList,
-				fmt.Errorf("analyze expected backends for BackendGroup %s/%s failed: %v",
-					group.Namespace, group.Name, err))
-			continue
-		}
-		if err := c.update(group, lbName, expectedBackends); err != nil {
-			errList = append(errList, err)
-		}
+		availableLBs = append(availableLBs, lb)
+	}
+
+	var expectedBackends []*lbcfapi.BackendRecord
+	if group.Spec.Pods != nil {
+		expectedBackends, err = c.expectedPodBackends(group, availableLBs)
+	} else if group.Spec.Service != nil {
+		expectedBackends, err = c.expectedServiceBackends(group, availableLBs)
+	} else {
+		expectedBackends, err = c.expectedStaticBackends(group, availableLBs)
+	}
+	if err := c.update(group, availableLBs, expectedBackends); err != nil {
+		errList = append(errList, err)
 	}
 	if len(errList) > 0 {
 		return util.ErrorResult(errList)
@@ -134,7 +131,9 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	return util.FinishedResult()
 }
 
-func (c *backendGroupController) expectedPodBackends(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
+func (c *backendGroupController) expectedPodBackends(
+	group *lbcfapi.BackendGroup,
+	lbList []*lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
 	var pods []*v1.Pod
 	if group.Spec.Pods.ByLabel != nil {
 		var err error
@@ -163,13 +162,16 @@ func (c *backendGroupController) expectedPodBackends(group *lbcfapi.BackendGroup
 	}
 
 	var expectedRecords []*lbcfapi.BackendRecord
-	for _, pod := range util.FilterPods(pods, util.PodAvailable) {
-		expectedRecords = append(expectedRecords, util.ConstructPodBackendRecord(lb, group, pod)...)
+	for _, lb := range lbList {
+		for _, pod := range util.FilterPods(pods, util.PodAvailable) {
+			expectedRecords = append(expectedRecords, util.ConstructPodBackendRecord(lb, group, pod)...)
+		}
 	}
 	return expectedRecords, nil
 }
 
-func (c *backendGroupController) expectedServiceBackends(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
+func (c *backendGroupController) expectedServiceBackends(
+	group *lbcfapi.BackendGroup, lbList []*lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
 	nodes, err := c.nodeLister.List(labels.SelectorFromSet(labels.Set(group.Spec.Service.NodeSelector)))
 	if err != nil {
 		return nil, err
@@ -185,34 +187,43 @@ func (c *backendGroupController) expectedServiceBackends(group *lbcfapi.BackendG
 		return nil, nil
 	}
 	var expectedRecords []*lbcfapi.BackendRecord
-	for _, node := range nodes {
-		backend := util.ConstructServiceBackendRecord(lb, group, svc, node)
-		if backend == nil {
-			klog.Infof("servicePort not found in svc %s/%s. looking for: %d/%s",
-				svc.Namespace, svc.Name,
-				group.Spec.Service.Port.PortNumber, group.Spec.Service.Port.Protocol)
-			continue
+	for _, lb := range lbList {
+		for _, node := range nodes {
+			backend := util.ConstructServiceBackendRecord(lb, group, svc, node)
+			if backend == nil {
+				klog.Infof("servicePort not found in svc %s/%s. looking for: %d/%s",
+					svc.Namespace, svc.Name,
+					group.Spec.Service.Port.PortNumber, group.Spec.Service.Port.Protocol)
+				continue
+			}
+			expectedRecords = append(expectedRecords, backend)
 		}
-		expectedRecords = append(expectedRecords, backend)
 	}
 	return expectedRecords, nil
 }
 
-func (c *backendGroupController) expectedStaticBackends(group *lbcfapi.BackendGroup, lb *lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
+func (c *backendGroupController) expectedStaticBackends(
+	group *lbcfapi.BackendGroup, lbList []*lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, error) {
 	var backends []*lbcfapi.BackendRecord
-	for _, sa := range group.Spec.Static {
-		backends = append(backends, util.ConstructStaticBackend(lb, group, sa))
+	for _, lb := range lbList {
+		for _, sa := range group.Spec.Static {
+			backends = append(backends, util.ConstructStaticBackend(lb, group, sa))
+		}
 	}
 	return backends, nil
 }
 
 func (c *backendGroupController) update(
 	group *lbcfapi.BackendGroup,
-	lbName string,
+	lbList []*lbcfapi.LoadBalancer,
 	expectedBackends []*lbcfapi.BackendRecord) error {
-	existingRecords, err := c.listBackendRecords(group.Namespace, lbName, group.Name)
-	if err != nil {
-		return err
+	var existingRecords []*lbcfapi.BackendRecord
+	for _, lb := range lbList {
+		records, err := c.listBackendRecords(group.Namespace, lb.Name, group.Name)
+		if err != nil {
+			return err
+		}
+		existingRecords = append(existingRecords, records...)
 	}
 	// update status
 	curTotal := len(expectedBackends)
