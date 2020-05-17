@@ -203,7 +203,7 @@ func callWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload
 		return e
 	}
 	u.Path = path.Join(webHookName)
-	var timeout time.Duration
+	timeout := 10 * time.Second
 	for _, h := range driver.Spec.Webhooks {
 		if h.Name == webHookName {
 			timeout = h.Timeout.Duration
