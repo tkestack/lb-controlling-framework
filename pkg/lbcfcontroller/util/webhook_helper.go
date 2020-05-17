@@ -50,6 +50,8 @@ type WebhookInvoker interface {
 	CallEnsureBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error)
 
 	CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriver, req *webhooks.BackendOperationRequest) (*webhooks.BackendOperationResponse, error)
+
+	CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error)
 }
 
 // NewWebhookInvoker creates a new instance of WebhookInvoker
@@ -192,6 +194,18 @@ func (w *WebhookInvokerImpl) CallDeregisterBackend(driver *lbcfapi.LoadBalancerD
 	if rsp.Status == webhooks.StatusFail {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend")
 	}
+	return rsp, nil
+}
+
+func (w *WebhookInvokerImpl) CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister")
+	rsp := &webhooks.JudgePodDeregisterResponse{}
+	start := time.Now()
+	if err := callWebhook(driver, webhooks.JudgePodDeregister, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister")
+		return nil, err
+	}
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister", time.Since(start))
 	return rsp, nil
 }
 

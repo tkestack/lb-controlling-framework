@@ -68,6 +68,7 @@ func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 	}
 	if raw.Spec.DeregisterPolicy != nil {
 		allErrs = append(allErrs, validateDeregisterPolicy(*raw.Spec.DeregisterPolicy, field.NewPath("spec").Child("deregisterPolicy"))...)
+		allErrs = append(allErrs, validateDeregWebhookSpec(raw.Spec.DeregisterWebhook, *raw.Spec.DeregisterPolicy, field.NewPath("spec").Child("deregisterPolicy"))...)
 	}
 	allErrs = append(allErrs, validateBackends(&raw.Spec, field.NewPath("spec"))...)
 	return allErrs
@@ -122,8 +123,34 @@ func validateEnsurePolicy(raw lbcfapi.EnsurePolicyConfig, path *field.Path) fiel
 
 func validateDeregisterPolicy(raw lbcfapi.DeregPolicy, path *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if raw != lbcfapi.DeregisterIfNotReady && raw != lbcfapi.DeregisterIfNotRunning {
-		allErrs = append(allErrs, field.Invalid(path, raw, fmt.Sprintf("deregisterPolicy must be one of %s and %s", lbcfapi.DeregisterIfNotReady, lbcfapi.DeregisterIfNotRunning)))
+	if raw != lbcfapi.DeregisterIfNotReady &&
+		raw != lbcfapi.DeregisterIfNotRunning &&
+		raw != lbcfapi.DeregisterWebhook {
+		allErrs = append(allErrs, field.Invalid(path, raw, fmt.Sprintf("deregisterPolicy must be one of [%s, %s, %s]",
+			lbcfapi.DeregisterIfNotReady, lbcfapi.DeregisterIfNotRunning, lbcfapi.DeregisterWebhook)))
+	}
+	return allErrs
+}
+
+func validateDeregWebhookSpec(raw *lbcfapi.DeregisterWebhookSpec, policy lbcfapi.DeregPolicy, path *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if policy != lbcfapi.DeregisterWebhook {
+		return allErrs
+	}
+	if raw == nil {
+		allErrs = append(allErrs, field.Required(path,
+			fmt.Sprintf("deregisterWebhook must be specified when spec.deregisterPolicy is %s", lbcfapi.DeregisterWebhook)))
+		return allErrs
+	}
+	if raw.FailurePolicy != nil &&
+		*raw.FailurePolicy != lbcfapi.FailurePolicyDoNothing &&
+		*raw.FailurePolicy != lbcfapi.FailurePolicyIfNotRunning &&
+		*raw.FailurePolicy != lbcfapi.FailurePolicyIfNotReady {
+		allErrs = append(allErrs,
+			field.Invalid(path.Child("failurePolicy"),
+				*raw.FailurePolicy,
+				fmt.Sprintf("deregisterPolicy must be one of [%s, %s, %s]",
+					lbcfapi.FailurePolicyDoNothing, lbcfapi.FailurePolicyIfNotRunning, lbcfapi.FailurePolicyIfNotReady)))
 	}
 	return allErrs
 }

@@ -64,12 +64,15 @@ func NewController(ctx *context.Context) *Controller {
 	)
 	c.backendGroupCtrl = newBackendGroupController(
 		c.context.LbcfClient,
+		c.context.LBDriverInformer.Lister(),
 		c.context.LBInformer.Lister(),
 		c.context.BGInformer.Lister(),
 		c.context.BRInformer.Lister(),
 		c.context.PodInformer.Lister(),
 		c.context.SvcInformer.Lister(),
 		c.context.NodeInformer.Lister(),
+		util.NewWebhookInvoker(),
+		ctx.EventRecorder,
 		ctx.IsDryRun(),
 	)
 
