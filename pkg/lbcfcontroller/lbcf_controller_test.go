@@ -53,6 +53,7 @@ func TestLBCFControllerAddPod(t *testing.T) {
 	bg2 := newFakeBackendGroupOfPods("", "bg-2", "", 80, "tcp", nil, nil, []string{"pod-2"})
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg1, bg2},
@@ -61,6 +62,7 @@ func TestLBCFControllerAddPod(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
@@ -114,6 +116,7 @@ func TestLBCFControllerUpdatePod_PodStatusChange(t *testing.T) {
 
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg1},
@@ -122,6 +125,7 @@ func TestLBCFControllerUpdatePod_PodStatusChange(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
@@ -201,6 +205,7 @@ func TestLBCFControllerUpdatePod_PodLabelChange(t *testing.T) {
 
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg1, bg2},
@@ -209,6 +214,7 @@ func TestLBCFControllerUpdatePod_PodLabelChange(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
@@ -290,6 +296,7 @@ func TestLBCFControllerDeletePod(t *testing.T) {
 
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg1},
@@ -298,6 +305,7 @@ func TestLBCFControllerDeletePod(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
@@ -334,12 +342,14 @@ func TestLBCFControllerDeletePod(t *testing.T) {
 func TestLBCFControllerAddBackendGroup(t *testing.T) {
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{},
 		&fakeBackendLister{},
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
 	bg := newFakeBackendGroupOfPods("", "bg", "", 80, "tcp", nil, nil, nil)
@@ -361,12 +371,14 @@ func TestLBCFControllerAddBackendGroup(t *testing.T) {
 func TestLBCFControllerUpdateBackendGroup(t *testing.T) {
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{},
 		&fakeBackendLister{},
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
 	oldGroup := newFakeBackendGroupOfPods("", "bg", "", 80, "tcp", nil, nil, nil)
@@ -396,12 +408,14 @@ func TestLBCFControllerUpdateBackendGroup(t *testing.T) {
 func TestLBCFControllerDeleteBackendGroup(t *testing.T) {
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{},
 		&fakeBackendLister{},
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
 	bg := newFakeBackendGroupOfPods("", "bg", "", 80, "tcp", nil, nil, nil)
@@ -443,6 +457,7 @@ func TestLBCFControllerAddService(t *testing.T) {
 
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg, bg2},
@@ -451,6 +466,7 @@ func TestLBCFControllerAddService(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
 
@@ -480,6 +496,7 @@ func TestLBCFControllerUpdateService(t *testing.T) {
 
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg, bg2},
@@ -488,6 +505,7 @@ func TestLBCFControllerUpdateService(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
 
@@ -524,6 +542,7 @@ func TestLBCFControllerDeleteService(t *testing.T) {
 
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg, bg2},
@@ -532,6 +551,7 @@ func TestLBCFControllerDeleteService(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
 
@@ -574,6 +594,7 @@ func TestLBCFControllerAddLoadBalancer(t *testing.T) {
 	lbCtrl := newLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{}, false)
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg, bg2},
@@ -582,6 +603,7 @@ func TestLBCFControllerAddLoadBalancer(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, lbCtrl, nil, bgCtrl)
 
@@ -618,6 +640,7 @@ func TestLBCFControllerUpdateLoadBalancer(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "bg", "lb", 80, "TCP", nil, nil, nil)
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg},
@@ -626,6 +649,7 @@ func TestLBCFControllerUpdateLoadBalancer(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	type testCase struct {
 		name          string
@@ -833,6 +857,7 @@ func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
 	lbCtrl := newLoadBalancerController(fake.NewSimpleClientset(), &fakeLBLister{}, &fakeDriverLister{}, &fakeEventRecorder{}, &fakeSuccInvoker{}, false)
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg, bg2},
@@ -841,6 +866,7 @@ func TestLBCFControllerDeleteLoadBalancer(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	c := newFakeLBCFController(nil, lbCtrl, nil, bgCtrl)
 
@@ -1033,6 +1059,7 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 	bg := newFakeBackendGroupOfPods("", "bg", "lb", 80, "TCP", nil, nil, nil)
 	bgCtrl := newBackendGroupController(
 		fake.NewSimpleClientset(),
+		&fakeDriverLister{},
 		&fakeLBLister{},
 		&fakeBackendGroupLister{
 			list: []*lbcfapi.BackendGroup{bg},
@@ -1041,6 +1068,7 @@ func TestLBCFControllerUpdateBackendRecord(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false)
 	cases := []testCase{
 		{
@@ -1924,6 +1952,14 @@ func (c *fakeSuccInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriv
 	}, nil
 }
 
+func (c *fakeSuccInvoker) CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error) {
+	return &webhooks.JudgePodDeregisterResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: true,
+			Msg:  "fake succ",
+		}}, nil
+}
+
 type fakeFailInvoker struct{}
 
 func (c *fakeFailInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
@@ -1996,6 +2032,14 @@ func (c *fakeFailInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriv
 			Msg:    "fake fail",
 		},
 	}, nil
+}
+
+func (c *fakeFailInvoker) CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error) {
+	return &webhooks.JudgePodDeregisterResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: false,
+			Msg:  "fake fail",
+		}}, nil
 }
 
 type fakeRunningInvoker struct{}
@@ -2078,6 +2122,12 @@ func (c *fakeRunningInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerD
 	}, nil
 }
 
+func (c *fakeRunningInvoker) CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error) {
+	return &webhooks.JudgePodDeregisterResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Msg: "this webhook can NOT return running"}}, nil
+}
+
 type fakeInvalidInvoker struct{}
 
 func (c *fakeInvalidInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
@@ -2156,6 +2206,10 @@ func (c *fakeInvalidInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerD
 			MinRetryDelayInSeconds: 60,
 		},
 	}, nil
+}
+
+func (c *fakeInvalidInvoker) CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error) {
+	return &webhooks.JudgePodDeregisterResponse{}, nil
 }
 
 type fakeEventRecorder struct {

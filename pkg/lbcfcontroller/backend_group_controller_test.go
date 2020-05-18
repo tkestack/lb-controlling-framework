@@ -39,6 +39,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(group)
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  lb,
 			list: []*lbcfapi.LoadBalancer{lb},
@@ -53,6 +54,7 @@ func TestBackendGroupCreateRecord(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
@@ -98,6 +100,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(group)
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  lb,
 			list: []*lbcfapi.LoadBalancer{lb},
@@ -112,6 +115,7 @@ func TestBackendGroupCreateRecordByPodName(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
@@ -146,6 +150,7 @@ func TestBackendGroupCreateRecordByService(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(group)
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  lb,
 			list: []*lbcfapi.LoadBalancer{lb},
@@ -166,6 +171,7 @@ func TestBackendGroupCreateRecordByService(t *testing.T) {
 				"node2": newFakeNode("", "node2"),
 			},
 		},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
@@ -232,6 +238,7 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 		}
 		ctrl := newBackendGroupController(
 			fakeClient,
+			&fakeDriverLister{},
 			&fakeLBLister{
 				get:  lb,
 				list: []*lbcfapi.LoadBalancer{lb},
@@ -247,6 +254,7 @@ func TestBackendGroupCreateRecordByServiceNotAvailable(t *testing.T) {
 			&fakeNodeListerWithStore{
 				store: nodeStore,
 			},
+			nil, nil,
 			false,
 		)
 		key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(c.group)
@@ -278,6 +286,7 @@ func TestBackendGroupCreateRecordByStatic(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(group)
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  lb,
 			list: []*lbcfapi.LoadBalancer{lb},
@@ -289,6 +298,7 @@ func TestBackendGroupCreateRecordByStatic(t *testing.T) {
 		&fakePodLister{},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
@@ -325,6 +335,7 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(curGroup, oldBackend1[0], oldBackend2[0])
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  lb,
 			list: []*lbcfapi.LoadBalancer{lb},
@@ -344,6 +355,7 @@ func TestBackendGroupUpdateRecordCausedByGroupUpdate(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(curGroup)
@@ -397,6 +409,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  curLB,
 			list: []*lbcfapi.LoadBalancer{curLB},
@@ -416,6 +429,7 @@ func TestBackendGroupUpdateRecordCausedByLBUpdate(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
@@ -467,6 +481,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(group, existingBackend1[0], existingBackend2[0])
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  lb,
 			list: []*lbcfapi.LoadBalancer{lb},
@@ -483,6 +498,7 @@ func TestBackendGroupDeleteRecordCausedByPodStatusChange(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
@@ -522,6 +538,7 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(group, existingBackend1[0], existingBackend2[0])
 	ctrl := newBackendGroupController(
 		fakeClient,
+		&fakeDriverLister{},
 		&fakeLBLister{
 			get:  lb,
 			list: []*lbcfapi.LoadBalancer{lb},
@@ -541,6 +558,7 @@ func TestBackendGroupDeleteRecordCausedByLBDeleted(t *testing.T) {
 		},
 		&fakeSvcListerWithStore{},
 		&fakeNodeListerWithStore{},
+		nil, nil,
 		false,
 	)
 	key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(group)
