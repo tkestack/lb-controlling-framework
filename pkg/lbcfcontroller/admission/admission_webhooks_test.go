@@ -2442,6 +2442,14 @@ func (c *fakeSuccInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriv
 	}, nil
 }
 
+func (c *fakeSuccInvoker) CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error) {
+	return &webhooks.JudgePodDeregisterResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Succ: true,
+			Msg:  "fake succ",
+		}}, nil
+}
+
 type fakeFailInvoker struct{}
 
 func (c *fakeFailInvoker) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {
@@ -2514,6 +2522,13 @@ func (c *fakeFailInvoker) CallDeregisterBackend(driver *lbcfapi.LoadBalancerDriv
 			Msg:    "fake fail",
 		},
 	}, nil
+}
+
+func (c *fakeFailInvoker) CallJudgePodDeregister(driver *lbcfapi.LoadBalancerDriver, req *webhooks.JudgePodDeregisterRequest) (*webhooks.JudgePodDeregisterResponse, error) {
+	return &webhooks.JudgePodDeregisterResponse{
+		ResponseForNoRetryHooks: webhooks.ResponseForNoRetryHooks{
+			Msg: "fake fail",
+		}}, nil
 }
 
 func drainingDriverLister() lbcflister.LoadBalancerDriverLister {
