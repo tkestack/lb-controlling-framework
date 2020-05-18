@@ -205,6 +205,9 @@ func (w *WebhookInvokerImpl) CallJudgePodDeregister(driver *lbcfapi.LoadBalancer
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister")
 		return nil, err
 	}
+	if !rsp.Succ {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister")
+	}
 	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister", time.Since(start))
 	return rsp, nil
 }
