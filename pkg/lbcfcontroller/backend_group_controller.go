@@ -202,6 +202,16 @@ func (c *backendGroupController) expectedPodBackends(
 			doNotDelete = append(doNotDelete, util.ConstructPodBackendRecord(lb, group, pod)...)
 		}
 	}
+	if klog.V(3) {
+		for _, r := range expectedRecords {
+			klog.V(3).Infof("expect record ==> LB: %s, BG: %s/%s, Pod: %s",
+				r.Spec.LBName, group.Namespace, group.Name, r.Spec.PodBackendInfo.Name)
+		}
+		for _, r := range doNotDelete {
+			klog.V(3).Infof("not delete record ==> LB: %s, BG: %s/%s, Pod: %s",
+				r.Spec.LBName, group.Namespace, group.Name, r.Spec.PodBackendInfo.Name)
+		}
+	}
 	return expectedRecords, doNotDelete, nil
 }
 
@@ -471,16 +481,23 @@ func judgeByDriver(
 	driverLister lbcflister.LoadBalancerDriverLister,
 	recorder record.EventRecorder,
 	dryRun bool) (doNotDereg []*v1.Pod) {
+	if len(notReadyPods) == 0 {
+		return nil
+	}
 	driver, err := driverLister.
 		LoadBalancerDrivers(util.GetDriverNamespace(spec.DriverName, group.Namespace)).
 		Get(spec.DriverName)
 	if err != nil {
+		fp := lbcfapi.FailurePolicyDoNothing
+		if spec.FailurePolicy != nil {
+			fp = *spec.FailurePolicy
+		}
 		klog.Errorf(
-			"BackendGroup %s/%s get driver %s failed, no pods will be deregistered, err: %v",
-			group.Namespace, group.Name, spec.DriverName, err)
+			"BackendGroup %s/%s get driver %s failed, use failure policy %v, err: %v",
+			group.Namespace, group.Name, spec.DriverName, fp, err)
 		event(recorder, group, v1.EventTypeWarning, "GetDriverFailed",
 			"get driver %s failed, use failure policy %v, err: %v",
-			spec.DriverName, spec.FailurePolicy, err)
+			spec.DriverName, fp, err)
 		return handleFailurePolicy(spec, notReadyPods)
 	}
 	if dryRun && !driver.Spec.AcceptDryRunCall {
@@ -492,12 +509,16 @@ func judgeByDriver(
 	}
 	judgeRsp, err := invoker.CallJudgePodDeregister(driver, req)
 	if err != nil {
+		fp := lbcfapi.FailurePolicyDoNothing
+		if spec.FailurePolicy != nil {
+			fp = *spec.FailurePolicy
+		}
 		klog.Errorf(
-			"BackendGroup %s/%s call webhook %s failed, no pods will be deregistered, err: %v",
-			group.Namespace, group.Name, webhooks.JudgePodDeregister, err)
+			"BackendGroup %s/%s call webhook %s failed, use failure policy %v, err: %v",
+			group.Namespace, group.Name, webhooks.JudgePodDeregister, fp, err)
 		event(recorder, group, v1.EventTypeWarning, "WebhookFailed",
 			"webhook %s failed, use failure policy %v, err: %v",
-			webhooks.JudgePodDeregister, spec.FailurePolicy, err)
+			webhooks.JudgePodDeregister, fp, err)
 		return handleFailurePolicy(spec, notReadyPods)
 	}
 	return judgeRsp.DoNotDeregister
