@@ -500,6 +500,9 @@ func judgeByDriver(
 	if err != nil {
 		return handleFailurePolicy(group, notReadyPods, recorder,
 			fmt.Sprintf("call webhook %s failed, err: %v", webhooks.JudgePodDeregister, err))
+	} else if !judgeRsp.Succ {
+		return handleFailurePolicy(group, notReadyPods, recorder,
+			fmt.Sprintf("webhook %s response not SUCC, msg: %v", webhooks.JudgePodDeregister, err))
 	}
 	return judgeRsp.DoNotDeregister
 }
