@@ -148,7 +148,7 @@ func (c *backendGroupController) expectedPodBackends(
 	lbList []*lbcfapi.LoadBalancer) ([]*lbcfapi.BackendRecord, []*lbcfapi.BackendRecord, error) {
 	var pods []*v1.Pod
 	if group.Spec.Pods.ByLabel != nil {
-		pods, err := c.podLister.List(labels.SelectorFromSet(labels.Set(group.Spec.Pods.ByLabel.Selector)))
+		podsInAllNameSpaces, err := c.podLister.List(labels.SelectorFromSet(labels.Set(group.Spec.Pods.ByLabel.Selector)))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -159,7 +159,7 @@ func (c *backendGroupController) expectedPodBackends(
 			except := sets.NewString(group.Spec.Pods.ByLabel.Except...)
 			return !except.Has(p.Name)
 		}
-		pods = util.FilterPods(pods, filter)
+		pods = util.FilterPods(podsInAllNameSpaces, filter)
 	} else if len(group.Spec.Pods.ByName) > 0 {
 		for _, podName := range group.Spec.Pods.ByName {
 			pod, err := c.podLister.Pods(group.Namespace).Get(podName)
