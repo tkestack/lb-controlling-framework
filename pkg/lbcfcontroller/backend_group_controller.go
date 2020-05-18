@@ -179,7 +179,12 @@ func (c *backendGroupController) expectedPodBackends(
 	// 3. Webhook: webhook "judgePodDeregister" is invoked, where drivers can implement their own policies
 	var podsDoNotDereg []*v1.Pod
 	notReadyPods := util.FilterPods(pods, func(pod *v1.Pod) bool {
-		return !util.PodAvailable(pod)
+		podNotReady := !util.PodAvailable(pod)
+		podNotDeleting := pod.DeletionTimestamp == nil
+		if podNotReady && podNotDeleting {
+			return true
+		}
+		return false
 	})
 	if util.DeregIfNotRunning(group) {
 		podsDoNotDereg = util.FilterPods(notReadyPods, util.PodAvailableByRunning)
