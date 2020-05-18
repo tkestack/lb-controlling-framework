@@ -646,7 +646,9 @@ func DeregIfNotRunning(bg *lbcfapi.BackendGroup) bool {
 }
 
 func DeregByWebhook(bg *lbcfapi.BackendGroup) bool {
-	if bg.Spec.DeregisterPolicy != nil && *bg.Spec.DeregisterPolicy == lbcfapi.DeregisterWebhook {
+	if bg.Spec.DeregisterPolicy != nil &&
+		*bg.Spec.DeregisterPolicy == lbcfapi.DeregisterWebhook &&
+		bg.Spec.DeregisterWebhook != nil {
 		return true
 	}
 	return false

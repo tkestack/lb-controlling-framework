@@ -189,13 +189,7 @@ func (c *backendGroupController) expectedPodBackends(
 	if util.DeregIfNotRunning(group) {
 		podsDoNotDereg = util.FilterPods(notReadyPods, util.PodAvailableByRunning)
 	} else if util.DeregByWebhook(group) {
-		podsDoNotDereg = judgeByDriver(
-			group.Spec.DeregisterWebhook,
-			group, notReadyPods,
-			c.webhookInvoker,
-			c.driverLister,
-			c.eventRecorder,
-			c.dryRun)
+		podsDoNotDereg = judgeByDriver(group, notReadyPods, c.webhookInvoker, c.driverLister, c.eventRecorder, c.dryRun)
 	}
 	var expectedRecords, doNotDelete []*lbcfapi.BackendRecord
 	for _, lb := range lbList {
@@ -479,7 +473,6 @@ func event(
 }
 
 func judgeByDriver(
-	spec *lbcfapi.DeregisterWebhookSpec,
 	group *lbcfapi.BackendGroup,
 	notReadyPods []*v1.Pod,
 	invoker util.WebhookInvoker,
@@ -490,23 +483,14 @@ func judgeByDriver(
 		return nil
 	}
 	driver, err := driverLister.
-		LoadBalancerDrivers(util.GetDriverNamespace(spec.DriverName, group.Namespace)).
-		Get(spec.DriverName)
+		LoadBalancerDrivers(util.GetDriverNamespace(group.Spec.DeregisterWebhook.DriverName, group.Namespace)).
+		Get(group.Spec.DeregisterWebhook.DriverName)
 	if err != nil {
-		fp := lbcfapi.FailurePolicyDoNothing
-		if spec.FailurePolicy != nil {
-			fp = *spec.FailurePolicy
-		}
-		klog.Errorf(
-			"BackendGroup %s/%s get driver %s failed, use failure policy %v, err: %v",
-			group.Namespace, group.Name, spec.DriverName, fp, err)
-		event(recorder, group, v1.EventTypeWarning, "GetDriverFailed",
-			"get driver %s failed, use failure policy %v, err: %v",
-			spec.DriverName, fp, err)
-		return handleFailurePolicy(spec, notReadyPods)
+		return handleFailurePolicy(group, notReadyPods, recorder,
+			fmt.Sprintf("get driver %s failed, err: %v", group.Spec.DeregisterWebhook.DriverName, err))
 	}
 	if dryRun && !driver.Spec.AcceptDryRunCall {
-		return handleFailurePolicy(spec, notReadyPods)
+		return handleFailurePolicy(group, notReadyPods, recorder, "driver doesn't accept dry-run call")
 	}
 	req := &webhooks.JudgePodDeregisterRequest{
 		DryRun:       dryRun,
@@ -514,22 +498,22 @@ func judgeByDriver(
 	}
 	judgeRsp, err := invoker.CallJudgePodDeregister(driver, req)
 	if err != nil {
-		fp := lbcfapi.FailurePolicyDoNothing
-		if spec.FailurePolicy != nil {
-			fp = *spec.FailurePolicy
-		}
-		klog.Errorf(
-			"BackendGroup %s/%s call webhook %s failed, use failure policy %v, err: %v",
-			group.Namespace, group.Name, webhooks.JudgePodDeregister, fp, err)
-		event(recorder, group, v1.EventTypeWarning, "WebhookFailed",
-			"webhook %s failed, use failure policy %v, err: %v",
-			webhooks.JudgePodDeregister, fp, err)
-		return handleFailurePolicy(spec, notReadyPods)
+		return handleFailurePolicy(group, notReadyPods, recorder,
+			fmt.Sprintf("call webhook %s failed, err: %v", webhooks.JudgePodDeregister, err))
 	}
 	return judgeRsp.DoNotDeregister
 }
 
-func handleFailurePolicy(spec *lbcfapi.DeregisterWebhookSpec, notReadyPods []*v1.Pod) (doNotDereg []*v1.Pod) {
+func handleFailurePolicy(group *lbcfapi.BackendGroup, notReadyPods []*v1.Pod, recorder record.EventRecorder, msg string) (doNotDereg []*v1.Pod) {
+	spec := group.Spec.DeregisterWebhook
+
+	fp := lbcfapi.FailurePolicyDoNothing
+	if group.Spec.DeregisterWebhook.FailurePolicy != nil {
+		fp = *group.Spec.DeregisterWebhook.FailurePolicy
+	}
+	klog.Errorf("BackendGroup %s/%s use failure policy %v. reason: %s", group.Namespace, group.Name, fp, msg)
+	event(recorder, group, v1.EventTypeWarning, "WebhookFailed", "use failure policy %v. reason: %s", fp, msg)
+
 	if spec.FailurePolicy == nil || *spec.FailurePolicy == lbcfapi.FailurePolicyDoNothing {
 		return notReadyPods
 	} else if spec.FailurePolicy != nil && *spec.FailurePolicy == lbcfapi.FailurePolicyIfNotRunning {

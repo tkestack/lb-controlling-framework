@@ -236,5 +236,6 @@ type JudgePodDeregisterRequest struct {
 
 // JudgePodDeregisterResponse is the response for for webhook judgePodDeregister
 type JudgePodDeregisterResponse struct {
+	ResponseForNoRetryHooks
 	DoNotDeregister []*v1.Pod `json:"doNotDeregister"`
 }
