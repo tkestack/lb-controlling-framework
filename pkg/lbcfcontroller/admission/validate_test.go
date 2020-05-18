@@ -449,6 +449,8 @@ func TestValidateBackendGroup(t *testing.T) {
 	udp := "UDP"
 	invalid := "invalid"
 	ifNotRunning := lbcfapi.DeregisterIfNotRunning
+	deregWebhook := lbcfapi.DeregisterWebhook
+	doNothing := lbcfapi.FailurePolicyDoNothing
 	cases := []testCase{
 		{
 			name: "valid-empty-group",
@@ -601,6 +603,77 @@ func TestValidateBackendGroup(t *testing.T) {
 				},
 			},
 			expectValid: true,
+		},
+		{
+			name: "valid-deregisterPolicy-webhook-1",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					DeregisterPolicy: &deregWebhook,
+					DeregisterWebhook: &lbcfapi.DeregisterWebhookSpec{
+						DriverName:    "test-driver",
+						FailurePolicy: nil,
+					},
+					LoadBalancers: []string{"test-lb"},
+					Static: []string{
+						"1.1.1.1:80",
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+				},
+			},
+			expectValid: true,
+		},
+		{
+			name: "valid-deregisterPolicy-webhook-2",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					DeregisterPolicy: &deregWebhook,
+					DeregisterWebhook: &lbcfapi.DeregisterWebhookSpec{
+						DriverName:    "test-driver",
+						FailurePolicy: &doNothing,
+					},
+					LoadBalancers: []string{"test-lb"},
+					Static: []string{
+						"1.1.1.1:80",
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+				},
+			},
+			expectValid: true,
+		},
+		{
+			name: "invalid-missing-webhook",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					DeregisterPolicy: &deregWebhook,
+					LoadBalancers:    []string{"test-lb"},
+					Static: []string{
+						"1.1.1.1:80",
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+				},
+			},
+		},
+		{
+			name: "invalid-missing-driver-name",
+			group: &lbcfapi.BackendGroup{
+				Spec: lbcfapi.BackendGroupSpec{
+					DeregisterPolicy:  &deregWebhook,
+					DeregisterWebhook: &lbcfapi.DeregisterWebhookSpec{},
+					LoadBalancers:     []string{"test-lb"},
+					Static: []string{
+						"1.1.1.1:80",
+					},
+					Parameters: map[string]string{
+						"p1": "v1",
+					},
+				},
+			},
 		},
 		{
 			name: "invalid-multi-backend-svc-pod",
