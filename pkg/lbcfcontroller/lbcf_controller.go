@@ -220,6 +220,7 @@ func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface
 
 		elapsed := time.Since(startTime)
 		klog.V(3).Infof("sync %s %s, took %s", queue.GetName(), key, elapsed.String())
+		metrics.KeyProcessLatencyObserve(queue.GetName(), elapsed)
 		metrics.WorkingKeysDec(queue.GetName())
 	}()
 	return true

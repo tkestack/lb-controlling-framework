@@ -21,12 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	"tkestack.io/lb-controlling-framework/pkg/metrics"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -371,7 +373,9 @@ func (c *backendGroupController) createBackendRecord(record *lbcfapi.BackendReco
 		return nil
 	}
 
+	start := time.Now()
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Create(record)
+	metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpCreate, time.Since(start))
 	if err != nil {
 		return fmt.Errorf("create BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
 	}
@@ -390,7 +394,9 @@ func (c *backendGroupController) updateBackendRecord(record *lbcfapi.BackendReco
 		return nil
 	}
 
+	start := time.Now()
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Update(record)
+	metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdate, time.Since(start))
 	if err != nil {
 		return fmt.Errorf("update BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
 	}
@@ -407,7 +413,9 @@ func (c *backendGroupController) deleteBackendRecord(record *lbcfapi.BackendReco
 		return nil
 	}
 
+	start := time.Now()
 	err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Delete(record.Name, nil)
+	metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpDelete, time.Since(start))
 	if err != nil {
 		return fmt.Errorf("delete BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
 	}

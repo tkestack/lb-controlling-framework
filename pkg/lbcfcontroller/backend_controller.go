@@ -20,12 +20,14 @@ package lbcfcontroller
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	"tkestack.io/lb-controlling-framework/pkg/metrics"
 
 	apicore "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -133,7 +135,9 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 	case webhooks.StatusSucc:
 		cpy := backend.DeepCopy()
 		cpy.Status.BackendAddr = rsp.BackendAddr
+		start := time.Now()
 		_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
+		metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
 		if err != nil {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "update status failed: %v", err)
 			return util.ErrorResult(err)
@@ -211,7 +215,9 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 			LastTransitionTime: v1.Now(),
 			Message:            rsp.Msg,
 		})
+		start := time.Now()
 		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
+		metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
 		if err != nil {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
 			return util.ErrorResult(err)
@@ -230,7 +236,9 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 			Reason:             lbcfapi.ReasonOperationFailed.String(),
 			Message:            rsp.Msg,
 		})
+		start := time.Now()
 		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
+		metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
 		if err != nil {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
 			return util.ErrorResult(err)
