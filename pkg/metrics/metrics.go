@@ -133,14 +133,14 @@ func K8sOPLatencyObserve(obj, op string, elapsed time.Duration) {
 		labelK8sOpObj:  obj,
 		labelK8sOpType: op,
 	}
-	webhookLatency.With(l).Observe(elapsed.Seconds())
+	k8sOpLatency.With(l).Observe(elapsed.Seconds())
 }
 
 func KeyProcessLatencyObserve(crd string, elapsed time.Duration) {
 	l := prometheus.Labels{
 		labelCRD: crd,
 	}
-	webhookLatency.With(l).Observe(elapsed.Seconds())
+	keyProcessLatency.With(l).Observe(elapsed.Seconds())
 }
 
 func PendingKeysSet(kind string, value float64) {
