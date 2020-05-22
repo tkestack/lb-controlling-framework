@@ -1,7 +1,8 @@
 # Issues of common controllers
 Many controllers are developed based on K8S service controller, these controllers have several issues:  
-1. Pods under a service can NOT share the load balancers with servers from other environment. Since the controller keeps comparing endpoints in K8S cluster and servers in the load balancer, it keeps deleting all servers that not in the endpoint list.  
-2. One can NOT manipulate the load balancer manually. If the controller makes a mistake, the mistake is kept until the controller is killed, for the controller periodically sync the load balancer servers with endpoints in the K8S cluster.
+1. When the Service was delete and the controller some how missed the event, such as the controller was down, the controller will never know which load balancer it was handling, and the Pods will not be deregistered.  
+2. Pods under a service can NOT share the load balancers with servers from other environment. Since the controller keeps comparing endpoints in K8S cluster and servers in the load balancer, it keeps deleting all servers that not in the endpoint list.  
+3. One can NOT manipulate the load balancer manually. If the controller makes a mistake, the mistake is kept until the controller is killed, for the controller periodically sync the load balancer servers with endpoints in the K8S cluster.
 
 Some controllers tries to solve above issues by watching and reacting to events, which is unreliable because events in K8S are never re-sent. Once the controller got killed or hangs, the events are lost forever.
     
