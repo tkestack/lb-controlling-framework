@@ -293,10 +293,10 @@ spec:
         protocol: TCP
     byLabel:
       app: my-web-server 
-    except: 
-      # Pods in except will not be registered, or will be deregistered
-      - my-pod-3
-      - my-pod-4
+      except: 
+        # Pods in except will not be registered, or will be deregistered
+        - my-pod-3
+        - my-pod-4
   parameters: 
     weight: 50
 ```
