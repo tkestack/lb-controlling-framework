@@ -1399,3 +1399,96 @@ func TestFilterBackendGroup(t *testing.T) {
 		t.Fatalf("expect: %v, get %v", expect.List(), get.List())
 	}
 }
+
+func TestIsLoadBalancerAllowedForBackendGroup(t *testing.T) {
+	type testCase struct {
+		name  string
+		lb    *lbcfapi.LoadBalancer
+		bgns  string
+		allow bool
+	}
+
+	cases := []testCase{
+		{
+			name: "shared-in-all-ns",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lbcf-shared",
+					Namespace: "kube-system",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					Scope: []string{"*"},
+				},
+			},
+			bgns:  "my-ns",
+			allow: true,
+		},
+		{
+			name: "shared-and-same-ns",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lbcf-shared",
+					Namespace: "kube-system",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					Scope: []string{"ns-a"},
+				},
+			},
+			bgns:  "ns-a",
+			allow: true,
+		},
+		{
+			name: "not-shared-same-ns",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-lb",
+					Namespace: "ns-a",
+				},
+			},
+			bgns:  "ns-a",
+			allow: true,
+		},
+		{
+			name: "shared-but-not-included",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lbcf-shared",
+					Namespace: "kube-system",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					Scope: []string{"ns-a"},
+				},
+			},
+			bgns: "my-ns",
+		},
+		{
+			name: "shared-same-ns-but-not-included",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lbcf-shared",
+					Namespace: "kube-system",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					Scope: []string{"ns-a"},
+				},
+			},
+			bgns: "kube-system",
+		},
+		{
+			name: "not-shared-diffenrent-ns",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-lb",
+					Namespace: "ns-a",
+				},
+			},
+			bgns: "my-ns",
+		},
+	}
+	for _, c := range cases {
+		get := IsLoadBalancerAllowedForBackendGroup(c.lb, c.bgns)
+		if get != c.allow {
+			t.Errorf("case %s: expect %v, get %v", c.name, c.allow, get)
+		}
+	}
+}

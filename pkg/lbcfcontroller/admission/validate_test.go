@@ -381,6 +381,23 @@ func TestValidateLoadBalancer(t *testing.T) {
 			expectValid: true,
 		},
 		{
+			name: "valid-shared",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lbcf-my-lb",
+					Namespace: "kube-system",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					LBDriver: "test-driver",
+					LBSpec: map[string]string{
+						"k1": "v1",
+					},
+					Scope: []string{"*"},
+				},
+			},
+			expectValid: true,
+		},
+		{
 			name: "invalid-empty-lbDriver",
 			lb: &lbcfapi.LoadBalancer{
 				Spec: lbcfapi.LoadBalancerSpec{
@@ -424,6 +441,59 @@ func TestValidateLoadBalancer(t *testing.T) {
 						MinPeriod: &lbcfapi.Duration{
 							Duration: 29 * time.Second,
 						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid-shared-name",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-lb",
+					Namespace: "kube-system",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					LBDriver: "test-driver",
+					LBSpec: map[string]string{
+						"k1": "v1",
+					},
+					Scope: []string{"*"},
+				},
+			},
+		},
+		{
+			name: "invalid-shared-namespace",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lbcf-my-lb",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					LBDriver: "test-driver",
+					LBSpec: map[string]string{
+						"k1": "v1",
+					},
+					Scope: []string{"*"},
+				},
+			},
+		},
+		{
+			name: "invalid-name-with-lbcf-",
+			lb: &lbcfapi.LoadBalancer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lbcf-my-lb",
+					Namespace: "default",
+				},
+				Spec: lbcfapi.LoadBalancerSpec{
+					LBDriver: "test-driver",
+					LBSpec: map[string]string{
+						"k1": "v1",
+					},
+					Attributes: map[string]string{
+						"a1": "v1",
+					},
+					EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+						Policy: lbcfapi.PolicyIfNotSucc,
 					},
 				},
 			},
