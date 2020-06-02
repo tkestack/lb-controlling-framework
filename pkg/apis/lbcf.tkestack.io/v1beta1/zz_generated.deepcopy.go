@@ -622,6 +622,11 @@ func (in *LoadBalancerSpec) DeepCopyInto(out *LoadBalancerSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.Scope != nil {
+		in, out := &in.Scope, &out.Scope
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.EnsurePolicy != nil {
 		in, out := &in.EnsurePolicy, &out.EnsurePolicy
 		*out = new(EnsurePolicyConfig)
