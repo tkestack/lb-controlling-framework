@@ -105,7 +105,7 @@ func (c *backendController) syncBackendRecord(key string) *util.SyncResult {
 }
 
 func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) *util.SyncResult {
-	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.NamespaceOfSharedObj(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
@@ -171,7 +171,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		return util.AsyncResult(util.CalculateRetryInterval(0))
 	}
 
-	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.NamespaceOfSharedObj(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}
@@ -265,7 +265,7 @@ func (c *backendController) deregisterBackend(backend *lbcfapi.BackendRecord) *u
 		return c.removeFinalizer(backend)
 	}
 
-	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.NamespaceOfSharedObj(backend.Spec.LBDriver, backend.Namespace)).Get(backend.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for BackendRecord %s failed: %v", backend.Spec.LBDriver, backend.Name, err))
 	}

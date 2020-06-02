@@ -476,7 +476,7 @@ func TestGetDriverNamespace(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if get := GetDriverNamespace(c.driverName, c.namespace); get != c.expectNamespace {
+		if get := NamespaceOfSharedObj(c.driverName, c.namespace); get != c.expectNamespace {
 			t.Fatalf("case %s: expect %s, get %s", c.name, c.expectNamespace, get)
 		}
 	}

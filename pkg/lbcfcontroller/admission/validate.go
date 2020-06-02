@@ -53,6 +53,19 @@ func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
 	if raw.Spec.LBDriver == "" {
 		allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("lbDriver"), "lbDriver must be specified"))
 	}
+	if strings.HasPrefix(raw.Name, "lbcf-") && raw.Namespace != "kube-system" {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), raw.Name,
+			"LoadBalancer that has name begins with \"lbcf-\" must be create in namespace kube-system"))
+	}
+	if len(raw.Spec.Scope) > 0 {
+		if !strings.HasPrefix(raw.Name, "lbcf-") {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), raw.Name,
+				"name of LoadBalancer that has non-empty scope must begins with \"lbcf-\""))
+		} else if raw.Namespace != "kube-system" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("namespace"), raw.Name,
+				"namespace of LoadBalancer that has non-empty scope must be kube-system"))
+		}
+	}
 	if raw.Spec.EnsurePolicy != nil {
 		allErrs = append(allErrs, validateEnsurePolicy(*raw.Spec.EnsurePolicy, field.NewPath("spec").Child("ensurePolicy"))...)
 	}
