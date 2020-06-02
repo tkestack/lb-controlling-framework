@@ -109,7 +109,8 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	var errList util.ErrorList
 	var availableLBs []*lbcfapi.LoadBalancer
 	for _, lbName := range group.Spec.GetLoadBalancers() {
-		lb, err := c.lbLister.LoadBalancers(namespace).Get(lbName)
+		lbNamespace := util.NamespaceOfSharedObj(lbName, namespace)
+		lb, err := c.lbLister.LoadBalancers(lbNamespace).Get(lbName)
 		lbNotFound := errors.IsNotFound(err)
 		lbDeleting := err == nil && lb.DeletionTimestamp != nil
 		if lbNotFound || lbDeleting {
@@ -121,8 +122,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 					group.Namespace, lbName, group.Namespace, group.Name, err))
 			event(c.eventRecorder, group, v1.EventTypeWarning, "GetLoadBalancerFailed", "%v", err)
 			continue
-		}
-		if !util.LBCreated(lb) {
+		} else if !util.LBCreated(lb) || !util.IsLoadBalancerAllowedForBackendGroup(lb, group.Namespace) {
 			continue
 		}
 		availableLBs = append(availableLBs, lb)
@@ -491,7 +491,7 @@ func judgeByDriver(
 		return nil
 	}
 	driver, err := driverLister.
-		LoadBalancerDrivers(util.GetDriverNamespace(group.Spec.DeregisterWebhook.DriverName, group.Namespace)).
+		LoadBalancerDrivers(util.NamespaceOfSharedObj(group.Spec.DeregisterWebhook.DriverName, group.Namespace)).
 		Get(group.Spec.DeregisterWebhook.DriverName)
 	if err != nil {
 		return handleFailurePolicy(group, notReadyPods, recorder,

@@ -89,7 +89,7 @@ func (c *loadBalancerController) syncLB(key string) *util.SyncResult {
 }
 
 func (c *loadBalancerController) createLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.NamespaceOfSharedObj(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
@@ -168,7 +168,7 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 		return util.FinishedResult()
 	}
 
-	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.NamespaceOfSharedObj(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}
@@ -242,7 +242,7 @@ func (c *loadBalancerController) ensureLoadBalancer(lb *lbcfapi.LoadBalancer) *u
 }
 
 func (c *loadBalancerController) deleteLoadBalancer(lb *lbcfapi.LoadBalancer) *util.SyncResult {
-	driver, err := c.driverLister.LoadBalancerDrivers(util.GetDriverNamespace(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
+	driver, err := c.driverLister.LoadBalancerDrivers(util.NamespaceOfSharedObj(lb.Spec.LBDriver, lb.Namespace)).Get(lb.Spec.LBDriver)
 	if err != nil {
 		return util.ErrorResult(fmt.Errorf("retrieve driver %q for LoadBalancer %s failed: %v", lb.Spec.LBDriver, lb.Name, err))
 	}

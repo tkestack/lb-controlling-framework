@@ -70,6 +70,8 @@ type LoadBalancerSpec struct {
 	// +optional
 	Attributes map[string]string `json:"attributes,omitempty"`
 	// +optional
+	Scope []string `json:"scope"`
+	// +optional
 	EnsurePolicy *EnsurePolicyConfig `json:"ensurePolicy,omitempty"`
 }
 

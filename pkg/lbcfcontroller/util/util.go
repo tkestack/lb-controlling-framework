@@ -191,13 +191,28 @@ func GetBackendType(bg *lbcfapi.BackendGroup) BackendType {
 	return TypeStatic
 }
 
-// GetDriverNamespace returns the namespace where the driver is created.
-// It returns "kube-system" if driverName starts with "lbcf-", otherwise the defaultNamespace is returned
-func GetDriverNamespace(driverName string, defaultNamespace string) string {
-	if strings.HasPrefix(driverName, lbcfapi.SystemDriverPrefix) {
+// NamespaceOfSharedObj returns the namespace of shared LBCF objects, including LoadBalancerDriver and LoadBalancer, by name.
+// It returns "kube-system" if the name starts with "lbcf-", otherwise the defaultNamespace is returned
+func NamespaceOfSharedObj(name string, defaultNamespace string) string {
+	if strings.HasPrefix(name, lbcfapi.SystemDriverPrefix) {
 		return metav1.NamespaceSystem
 	}
 	return defaultNamespace
+}
+
+// IsLoadBalancerAllowedForBackendGroup returns true if lb is allowed to be used in bgNamespace.
+//
+// Note: If a LoadBalancer has non empty scope, namespace of the LoadBalancer must be included in order to use it in its own namespace
+func IsLoadBalancerAllowedForBackendGroup(lb *lbcfapi.LoadBalancer, bgNamespace string) bool {
+	if len(lb.Spec.Scope) > 0 {
+		for _, ns := range lb.Spec.Scope {
+			if ns == "*" || ns == bgNamespace {
+				return true
+			}
+		}
+		return false
+	}
+	return lb.Namespace == bgNamespace
 }
 
 // IsDriverDraining indicates whether driver is draining
