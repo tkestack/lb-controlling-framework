@@ -548,7 +548,7 @@ func (a *Admitter) getLBForBackendGroup(lbName string, bg *lbcfapi.BackendGroup)
 	if lb.DeletionTimestamp != nil {
 		return nil, fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name)
 	}
-	if lb.Namespace != bg.Namespace && !util.IsLoadBalancerAllowedForBackendGroup(lb, bg.Namespace) {
+	if !util.IsLoadBalancerAllowedForBackendGroup(lb, bg.Namespace) {
 		return nil, fmt.Errorf("LoadBalancer %s/%s is not allowed in namespace %s", lb.Namespace, lb.Name, bg.Namespace)
 	}
 	return lb, nil
