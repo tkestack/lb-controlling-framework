@@ -21,7 +21,8 @@ spec:
     attr: xxxxx 
 ```
 Specification:  
-1. `name` must prefixed with `lbcf-`
+1. `name` must begin with `lbcf-`
 2. `namespace` must be `kube-system`
-3. `scope` consists of namespaces. `*` indicates all namespaces, including the ones not yet created. If not specifed, 
+3. if `name` begins with `lbcf-`, the `namespace` must be `kube-system` 
+4. `scope` consists of namespaces. `*` indicates all namespaces, including the ones not yet created. If not specifed, 
 the LoadBalancer is only available in `kube-system`.
