@@ -219,7 +219,7 @@ func callWebhook(driver *lbcfapi.LoadBalancerDriver, webHookName string, payload
 		klog.Errorf("callwebhook failed: %v. driver: %s, webhookName: %s", e, driver.Name, webHookName)
 		return e
 	}
-	u.Path = path.Join(webHookName)
+	u.Path = path.Join(u.Path, webHookName)
 	timeout := 10 * time.Second
 	for _, h := range driver.Spec.Webhooks {
 		if h.Name == webHookName {
