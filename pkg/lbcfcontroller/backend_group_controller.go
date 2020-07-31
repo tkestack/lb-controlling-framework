@@ -136,7 +136,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	} else {
 		expectedBackends, err = c.expectedStaticBackends(group, availableLBs)
 	}
-	if err := c.update(group, availableLBs, expectedBackends, doNotDelete); err != nil {
+	if err := c.update(group, expectedBackends, doNotDelete); err != nil {
 		errList = append(errList, err)
 	}
 	if len(errList) > 0 {
@@ -261,17 +261,13 @@ func (c *backendGroupController) expectedStaticBackends(
 
 func (c *backendGroupController) update(
 	group *lbcfapi.BackendGroup,
-	lbList []*lbcfapi.LoadBalancer,
 	expectedBackends []*lbcfapi.BackendRecord,
 	doNotDelete []*lbcfapi.BackendRecord) error {
-	var existingRecords []*lbcfapi.BackendRecord
-	for _, lb := range lbList {
-		records, err := c.listBackendRecords(group.Namespace, lb.Name, group.Name)
-		if err != nil {
-			return err
-		}
-		existingRecords = append(existingRecords, records...)
+	existingRecords, err := c.listBackendRecords(group.Namespace, nil, group.Name)
+	if err != nil {
+		return err
 	}
+
 	// update status
 	curTotal := len(expectedBackends)
 	var curRegistered int32
@@ -423,7 +419,7 @@ func (c *backendGroupController) deleteBackendRecord(record *lbcfapi.BackendReco
 }
 
 func (c *backendGroupController) deleteAllBackend(namespace, lbName, groupName string) []error {
-	backends, err := c.listBackendRecords(namespace, lbName, groupName)
+	backends, err := c.listBackendRecords(namespace, &lbName, groupName)
 	if err != nil {
 		return []error{err}
 	}
@@ -436,10 +432,15 @@ func (c *backendGroupController) deleteAllBackend(namespace, lbName, groupName s
 	return errList
 }
 
-func (c *backendGroupController) listBackendRecords(namespace string, lbName string, groupName string) ([]*lbcfapi.BackendRecord, error) {
+// listBackendRecords retrieves BackendRecords under the BackendGroup "groupName",
+// it returns all BackendRecords if lbName is nil,
+// otherwise only the BackendRecords registering to the given LoadBalancer "lbName" are return
+func (c *backendGroupController) listBackendRecords(namespace string, lbName *string, groupName string) ([]*lbcfapi.BackendRecord, error) {
 	label := map[string]string{
-		lbcfapi.LabelLBName:    lbName,
 		lbcfapi.LabelGroupName: groupName,
+	}
+	if lbName != nil {
+		label[lbcfapi.LabelLBName] = *lbName
 	}
 	selector := labels.SelectorFromSet(labels.Set(label))
 	list, err := c.brLister.BackendRecords(namespace).List(selector)
