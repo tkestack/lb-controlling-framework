@@ -413,6 +413,9 @@ func (c *backendGroupController) deleteBackendRecord(record *lbcfapi.BackendReco
 	err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Delete(record.Name, nil)
 	metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpDelete, time.Since(start))
 	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
 		return fmt.Errorf("delete BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
 	}
 	return nil
