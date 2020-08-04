@@ -148,9 +148,9 @@ func (w *WebhookInvokerImpl) CallGenerateBackendAddr(driver *lbcfapi.LoadBalance
 	rsp := &webhooks.GenerateBackendAddrResponse{}
 	// In lbcf v1.1.x and before, we use portNumber instead of port in the CRD and request.
 	// The portNumber in CRD is deprecated, but the portNumber in the request is kept so that old drivers can still read it.
-	if req.PodBackend != nil {
+	if req.PodBackend != nil && req.PodBackend.Port.Port > 0 {
 		req.PodBackend.Port.PortNumber = &req.PodBackend.Port.Port
-	} else if req.ServiceBackend != nil {
+	} else if req.ServiceBackend != nil && req.ServiceBackend.Port.Port > 0 {
 		req.ServiceBackend.Port.PortNumber = &req.ServiceBackend.Port.Port
 	}
 	start := time.Now()
