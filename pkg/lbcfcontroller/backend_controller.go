@@ -154,12 +154,6 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 }
 
 func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.SyncResult {
-	alwaysEnsure := backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == lbcfapi.PolicyAlways
-	if !alwaysEnsure && util.BackendRegistered(backend) {
-		klog.Infof("skip BackendRecord %s: already registered", util.NamespacedNameKeyFunc(backend.Namespace, backend.Name))
-		return util.FinishedResult()
-	}
-
 	if name, deleting := c.sameAddrDeleting(backend); deleting {
 		if !c.dryRun {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeNormal, "DelayedEnsureBackend", "ensureBackend will start once %s is finished", name)

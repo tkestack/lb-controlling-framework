@@ -414,7 +414,10 @@ func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {
 }
 
 func (c *Controller) addBackendRecord(obj interface{}) {
-	c.enqueue(obj, c.backendQueue)
+	backend := obj.(*v1beta1.BackendRecord)
+	if !util.BackendRegistered(backend) {
+		c.enqueue(obj, c.backendQueue)
+	}
 }
 
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
