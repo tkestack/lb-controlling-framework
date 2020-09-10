@@ -18,3 +18,12 @@
     * `IfNotReady`: The default policy, same as K8S, pods are deregistered if `pod.status.condition[].Ready` is not `True`
     * `IfNotRunning`: Pods are deregistered if `pod.status.phase` is not `Running`. [#618c9](https://github.com/tkestack/lb-controlling-framework/commit/618c9c16414e70107474265ed71120c2fd396abe)
     * `Webhook`: A hightly customizable policy, driver developers may implement their own policy based on Pod. [#3a6c1](https://github.com/tkestack/lb-controlling-framework/commit/3a6c12529d297b7a3f76d9b87b39c5a4de312c72), [#9c037](https://github.com/tkestack/lb-controlling-framework/commit/9c0370290a116ad8c145d65994f57ac170abad37), [#6cd79](https://github.com/tkestack/lb-controlling-framework/commit/6cd7951fadc8a11948b7d68a9a3125c5581111ae), [#ab517](https://github.com/tkestack/lb-controlling-framework/commit/ab517ebecc07ae3e89f0d6cc8f9ab5d57a949873), [#bc406](https://github.com/tkestack/lb-controlling-framework/commit/bc40676818d5ae764c9cb39c7965a896aeebe0d7), [#43751](https://github.com/tkestack/lb-controlling-framework/commit/4375126156f5b54cbd2724936fc10e1962a01e15), [#4ca73](https://github.com/tkestack/lb-controlling-framework/commit/4ca73a2d4416a66ca61a194c2324e05a2d334342)  
+
+* `Added`: allow user specified path prefix in webhook calls. [#1cebb](https://github.com/tkestack/lb-controlling-framework/commit/1cebb40515d2ec5ebf3593e1ed288664ec59e3c2)  
+
+### Other changes:  
+* `Fixed`: set portNumber in generateBackendAddr webhook request. [#1ae6a](https://github.com/tkestack/lb-controlling-framework/commit/1ae6ab13736f2d1c174ae55d97c36f3845b09038)  
+* `Fixed`: deleteBackendRecord handles not found error. [#447c1](https://github.com/tkestack/lb-controlling-framework/commit/447c17a078e95e6fff9c1549d43335890e1c3742)  
+* `Fixed`: registered backend not enqueued in add event & backendrecord update triggers ensureBackend webhook. [#1e55e](https://github.com/tkestack/lb-controlling-framework/commit/1e55e330043fecad9c110723b3f81107f904d03d)
+
+
