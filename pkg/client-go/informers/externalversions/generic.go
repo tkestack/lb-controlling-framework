@@ -25,6 +25,7 @@ import (
 
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
+	v1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
 	v1beta1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 )
 
@@ -54,7 +55,11 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=lbcf.tkestack.io, Version=v1beta1
+	// Group=lbcf.tkestack.io, Version=v1
+	case v1.SchemeGroupVersion.WithResource("binds"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Lbcf().V1().Binds().Informer()}, nil
+
+		// Group=lbcf.tkestack.io, Version=v1beta1
 	case v1beta1.SchemeGroupVersion.WithResource("backendgroups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Lbcf().V1beta1().BackendGroups().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("backendrecords"):
