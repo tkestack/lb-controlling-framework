@@ -27,6 +27,8 @@ import (
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/testing"
 	clientset "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tkestack.io/v1"
+	fakelbcfv1 "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tkestack.io/v1/fake"
 	lbcfv1beta1 "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tkestack.io/v1beta1"
 	fakelbcfv1beta1 "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tkestack.io/v1beta1/fake"
 )
@@ -77,6 +79,11 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 }
 
 var _ clientset.Interface = &Clientset{}
+
+// LbcfV1 retrieves the LbcfV1Client
+func (c *Clientset) LbcfV1() lbcfv1.LbcfV1Interface {
+	return &fakelbcfv1.FakeLbcfV1{Fake: &c.Fake}
+}
 
 // LbcfV1beta1 retrieves the LbcfV1beta1Client
 func (c *Clientset) LbcfV1beta1() lbcfv1beta1.LbcfV1beta1Interface {

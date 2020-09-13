@@ -26,11 +26,13 @@ import (
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
+	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tkestack.io/v1"
 	lbcfv1beta1 "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/typed/lbcf.tkestack.io/v1beta1"
 )
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
+	LbcfV1() lbcfv1.LbcfV1Interface
 	LbcfV1beta1() lbcfv1beta1.LbcfV1beta1Interface
 }
 
@@ -38,7 +40,13 @@ type Interface interface {
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
+	lbcfV1      *lbcfv1.LbcfV1Client
 	lbcfV1beta1 *lbcfv1beta1.LbcfV1beta1Client
+}
+
+// LbcfV1 retrieves the LbcfV1Client
+func (c *Clientset) LbcfV1() lbcfv1.LbcfV1Interface {
+	return c.lbcfV1
 }
 
 // LbcfV1beta1 retrieves the LbcfV1beta1Client
@@ -67,6 +75,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
+	cs.lbcfV1, err = lbcfv1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.lbcfV1beta1, err = lbcfv1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -83,6 +95,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
+	cs.lbcfV1 = lbcfv1.NewForConfigOrDie(c)
 	cs.lbcfV1beta1 = lbcfv1beta1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
@@ -92,6 +105,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
+	cs.lbcfV1 = lbcfv1.New(c)
 	cs.lbcfV1beta1 = lbcfv1beta1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
