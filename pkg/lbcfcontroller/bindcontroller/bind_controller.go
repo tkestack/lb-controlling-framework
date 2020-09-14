@@ -8,6 +8,16 @@ import (
 	"sync"
 	"time"
 
+	bindutil "tkestack.io/lb-controlling-framework/pkg/api/bind"
+	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
+	"tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
+	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
+	v1 "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1"
+	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
+	"tkestack.io/lb-controlling-framework/pkg/metrics"
+
 	apicorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,16 +28,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
-	lbcfmacv1 "tkestack.io/lb-controlling-framework/pkg/apimachinery/v1"
-	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
-	"tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
-	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
-	v1 "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1"
-	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
-	bindutil "tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/bindcontroller/utils"
-	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
-	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
-	"tkestack.io/lb-controlling-framework/pkg/metrics"
 )
 
 func NewController(
@@ -298,7 +298,7 @@ func (c *Controller) handleBackends(bind *lbcfv1.Bind) (needResync bool) {
 			err.Error())
 		return true
 	}
-	needCreate, needUpdate, needDelete := bindutil.CompareBackendRecords(expected, existBackendRecords, doNotDelete)
+	needCreate, needUpdate, needDelete := compareBackendRecords(expected, existBackendRecords, doNotDelete)
 	var errs util.ErrorList
 	if err := util.IterateBackends(needDelete, c.deleteBackendRecord); err != nil {
 		klog.Errorf("delete BackendRecords for Bind %s/%s failed: %v",
@@ -396,11 +396,11 @@ func (c *Controller) expectedPodBackends(bind *lbcfv1.Bind) (expected []*v1beta1
 	for _, pod := range pods {
 		if util.PodAvailable(pod) {
 			readyPods = append(readyPods, pod)
-		} else if lbcfmacv1.DeregIfNotRunning(bind) {
+		} else if bindutil.DeregIfNotRunning(bind) {
 			if util.PodAvailableByRunning(pod) {
 				podsDoNotDelete = append(podsDoNotDelete, pod)
 			}
-		} else if lbcfmacv1.DeregByWebhook(bind) {
+		} else if bindutil.DeregByWebhook(bind) {
 			// todo
 		}
 	}
@@ -820,7 +820,7 @@ func generateBackendRecord(
 					port.Protocol,
 					fmt.Sprintf("%d", port.Port)),
 				Namespace: bind.Namespace,
-				Labels:    bindutil.MakeBackendLabels(lb.Driver, bind.Name, lb.Name, pod.Name),
+				Labels:    makeBackendLabels(lb.Driver, bind.Name, lb.Name, pod.Name),
 				Finalizers: []string{
 					lbcfv1.FinalizerDeregisterBackend,
 				},
@@ -859,4 +859,58 @@ func getBRName(segments ...string) string {
 	raw := strings.Join(segments, "-")
 	h := md5.Sum([]byte(raw))
 	return fmt.Sprintf("%x", h)
+}
+
+// makeBackendLabels generates labels for BackendRecord
+func makeBackendLabels(driverName, bindName, lbName, podName string) map[string]string {
+	ret := make(map[string]string)
+	ret[lbcfv1.LabelDriverName] = driverName
+	ret[lbcfv1.LabelBindName] = bindName
+	ret[lbcfv1.LabelLBName] = lbName
+	ret[lbcfv1.LabelPodName] = podName
+	return ret
+}
+
+// compareBackendRecords compares expect with have and returns actions should be taken to meet the expect.
+//
+// The actions are return in 3 BackendRecord slices:
+//
+// needCreate: BackendsRecords in this slice doesn't exist in K8S and should be created
+//
+// needUpdate: BackendsReocrds in this slice already exist in K8S and should be update to k8s
+//
+// needDelete: BackendsRecords in this slice should be deleted from k8s
+func compareBackendRecords(
+	expect []*v1beta1.BackendRecord,
+	have []*v1beta1.BackendRecord,
+	doNotDelete sets.String) (needCreate, needUpdate, needDelete []*v1beta1.BackendRecord) {
+	expectedRecords := make(map[string]*v1beta1.BackendRecord)
+	for _, e := range expect {
+		expectedRecords[e.Name] = e
+	}
+	haveRecords := make(map[string]*v1beta1.BackendRecord)
+	for _, h := range have {
+		haveRecords[h.Name] = h
+	}
+	for k, expect := range expectedRecords {
+		have, ok := haveRecords[k]
+		if !ok {
+			needCreate = append(needCreate, expect)
+			continue
+		}
+		//if !util.EqualStringMap(v.Spec.Parameters, cur.Spec.Parameters) {
+		if bindutil.NeedUpdateRecord(have, expect) {
+			update := have.DeepCopy()
+			update.Spec = expect.Spec
+			needUpdate = append(needUpdate, update)
+		}
+	}
+	for k, v := range haveRecords {
+		if _, ok := expectedRecords[k]; !ok {
+			if !doNotDelete.Has(v.Name) {
+				needDelete = append(needDelete, v)
+			}
+		}
+	}
+	return
 }
