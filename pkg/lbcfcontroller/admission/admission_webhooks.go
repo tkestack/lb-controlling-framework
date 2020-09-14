@@ -20,6 +20,10 @@ package admission
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"sync"
+
+	v1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
 
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
@@ -53,6 +57,10 @@ type ValidatingAdmissionWebhook interface {
 	ValidateBackendGroupCreate(*admission.AdmissionReview) *admission.AdmissionResponse
 	ValidateBackendGroupUpdate(*admission.AdmissionReview) *admission.AdmissionResponse
 	ValidateBackendGroupDelete(*admission.AdmissionReview) *admission.AdmissionResponse
+
+	ValidateBindCreate(*admission.AdmissionReview) *admission.AdmissionResponse
+	ValidateBindUpdate(*admission.AdmissionReview) *admission.AdmissionResponse
+	ValidateBindDelete(*admission.AdmissionReview) *admission.AdmissionResponse
 }
 
 // MutatingAdmissionWebhook is an abstract interface for testability
@@ -430,6 +438,142 @@ func (a *Admitter) ValidateBackendGroupDelete(ar *admission.AdmissionReview) *ad
 		return dryRunResponse()
 	}
 	return toAdmissionResponse(nil)
+}
+
+// ValidateBindCreate implements ValidatingWebHook for Bind creating
+func (a *Admitter) ValidateBindCreate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	bind := &v1.Bind{}
+	if err := json.Unmarshal(ar.Request.Object.Raw, bind); err != nil {
+		return toAdmissionResponse(fmt.Errorf("decode Bind failed: %v", err))
+	}
+	errList := ValidateBind(bind)
+	if len(errList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
+	}
+	if a.dryRun {
+		return dryRunResponse()
+	}
+	return toAdmissionResponse(a.validateBindByDriver(nil, bind))
+}
+
+// ValidateBindUpdate implements ValidatingWebHook for Bind updating
+func (a *Admitter) ValidateBindUpdate(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	curObj := &v1.Bind{}
+	oldObj := &v1.Bind{}
+
+	if err := json.Unmarshal(ar.Request.Object.Raw, curObj); err != nil {
+		return toAdmissionResponse(fmt.Errorf("decode Bind failed: %v", err))
+	}
+	if err := json.Unmarshal(ar.Request.OldObject.Raw, oldObj); err != nil {
+		return toAdmissionResponse(fmt.Errorf("decode Bind failed: %v", err))
+	}
+	if reflect.DeepEqual(oldObj.Spec, curObj.Spec) {
+		return toAdmissionResponse(nil)
+	}
+	errList := ValidateBind(curObj)
+	if len(errList) > 0 {
+		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
+	}
+	return toAdmissionResponse(a.validateBindByDriver(oldObj, curObj))
+}
+
+// ValidateBindDelete implements ValidatingWebHook for Bind deleting
+func (a *Admitter) ValidateBindDelete(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	return toAdmissionResponse(nil)
+}
+
+func (a *Admitter) validateBindByDriver(oldBind, curbind *v1.Bind) error {
+	wg := sync.WaitGroup{}
+	resultChan := make(chan error, len(curbind.Spec.LoadBalancers)*2)
+	defer close(resultChan)
+	for _, lb := range curbind.Spec.LoadBalancers {
+		driverNamespace := util.NamespaceOfSharedObj(lb.Driver, curbind.Namespace)
+		driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Driver)
+		if err != nil {
+			return fmt.Errorf("retrieve driver %s/%s failed: %v", driverNamespace, lb.Driver, err)
+		}
+		if util.IsDriverDraining(driver) {
+			return fmt.Errorf("driver %q is draining, all LoadBalancer creating operation for that dirver is denied",
+				lb.Driver)
+		} else if driver.DeletionTimestamp != nil {
+			return fmt.Errorf("driver %q is deleting, all LoadBalancer creating operation for that dirver is denied",
+				lb.Driver)
+		}
+		wg.Add(1)
+		go func(lb v1.TargetLoadBalancer, driver *lbcfapi.LoadBalancerDriver) {
+			defer wg.Done()
+			req := &webhooks.ValidateLoadBalancerRequest{
+				LBSpec:     lb.Spec,
+				Attributes: lb.Attributes,
+				DryRun:     a.dryRun,
+			}
+			if oldBind != nil {
+				req.Operation = webhooks.OperationUpdate
+				var oa map[string]string
+				for _, oldLB := range oldBind.Spec.LoadBalancers {
+					if oldLB.Name == lb.Name {
+						oa = oldLB.Attributes
+						break
+					}
+				}
+				req.OldAttributes = oa
+			} else {
+				req.Operation = webhooks.OperationCreate
+			}
+			rsp, err := a.webhookInvoker.CallValidateLoadBalancer(driver, req)
+			if err != nil {
+				resultChan <- fmt.Errorf("call webhook validateLoadBalancer for LoadBalancer %s failed: %v",
+					lb.Name, err)
+			} else if !rsp.Succ {
+				resultChan <- fmt.Errorf("LoadBalancer %s is invalid: %s", lb.Name, rsp.Msg)
+			} else {
+				resultChan <- nil
+			}
+		}(lb, driver)
+
+		wg.Add(1)
+		go func(lb v1.TargetLoadBalancer, driver *lbcfapi.LoadBalancerDriver) {
+			defer wg.Done()
+			req := &webhooks.ValidateBackendRequest{
+				BackendType: string(util.TypePod),
+				LBInfo:      lb.Spec,
+				Parameters:  curbind.Spec.Parameters,
+				DryRun:      a.dryRun,
+			}
+			if oldBind != nil {
+				req.Operation = webhooks.OperationUpdate
+				req.OldParameters = oldBind.Spec.Parameters
+			} else {
+				req.Operation = webhooks.OperationCreate
+			}
+			rsp, err := a.webhookInvoker.CallValidateBackend(driver, req)
+			if err != nil {
+				resultChan <- fmt.Errorf("call webhook validateBackend for LoadBalancer %s failed: %v",
+					lb.Name, err)
+			} else if !rsp.Succ {
+				resultChan <- fmt.Errorf("backend parameters for LoadBalancer %s is invalid: %s", lb.Name, rsp.Msg)
+			} else {
+				resultChan <- nil
+			}
+		}(lb, driver)
+	}
+	wg.Wait()
+	var errs []error
+loop:
+	for {
+		select {
+		case err := <-resultChan:
+			if err != nil {
+				errs = append(errs, err)
+			}
+		default:
+			break loop
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return util.ErrorList(errs)
 }
 
 func (a *Admitter) listLoadBalancerByDriver(driverName string, driverNamespace string) ([]*lbcfapi.LoadBalancer, error) {
