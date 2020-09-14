@@ -21,6 +21,10 @@ import (
 	"reflect"
 	"time"
 
+	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
+
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/bindcontroller"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -40,6 +44,7 @@ func NewController(ctx *context.Context) *Controller {
 		loadBalancerQueue: util.NewConditionalDelayingQueue("LoadBalancer", util.QueueFilterForLB(ctx.LBInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 		backendGroupQueue: util.NewConditionalDelayingQueue("BackendGroup", nil, ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 		backendQueue:      util.NewConditionalDelayingQueue("BackendRecord", util.QueueFilterForBackend(ctx.BRInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
+		bindQueue:         util.NewConditionalDelayingQueue("Bind", util.QueueFilterForBackend(ctx.BRInformer.Lister()), ctx.Cfg.MinRetryDelay, ctx.Cfg.RetryDelayStep, ctx.Cfg.MaxRetryDelay),
 		dryRun:            ctx.IsDryRun(),
 	}
 
@@ -71,6 +76,16 @@ func NewController(ctx *context.Context) *Controller {
 		c.context.PodInformer.Lister(),
 		c.context.SvcInformer.Lister(),
 		c.context.NodeInformer.Lister(),
+		util.NewWebhookInvoker(),
+		ctx.EventRecorder,
+		ctx.IsDryRun(),
+	)
+	c.bindController = bindcontroller.NewController(
+		c.context.LbcfClient,
+		c.context.LBDriverInformer.Lister(),
+		c.context.BindInformer.Lister(),
+		c.context.BRInformer.Lister(),
+		c.context.PodInformer.Lister(),
 		util.NewWebhookInvoker(),
 		ctx.EventRecorder,
 		ctx.IsDryRun(),
@@ -117,6 +132,12 @@ func NewController(ctx *context.Context) *Controller {
 		UpdateFunc: c.updateBackendRecord,
 		DeleteFunc: c.deleteBackendRecord,
 	}, c.context.Cfg.InformerResyncPeriod)
+
+	c.context.BindInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		AddFunc:    c.addBind,
+		UpdateFunc: c.updateBind,
+		DeleteFunc: c.deleteBind,
+	}, c.context.Cfg.InformerResyncPeriod)
 	return c
 }
 
@@ -128,11 +149,13 @@ type Controller struct {
 	lbCtrl           *loadBalancerController
 	backendCtrl      *backendController
 	backendGroupCtrl *backendGroupController
+	bindController   *bindcontroller.Controller
 
 	driverQueue       util.ConditionalRateLimitingInterface
 	loadBalancerQueue util.ConditionalRateLimitingInterface
 	backendGroupQueue util.ConditionalRateLimitingInterface
 	backendQueue      util.ConditionalRateLimitingInterface
+	bindQueue         util.ConditionalRateLimitingInterface
 	dryRun            bool
 }
 
@@ -148,6 +171,7 @@ func (c *Controller) run() {
 	go wait.Until(c.backendGroupWorker, time.Second, wait.NeverStop)
 	go wait.Until(c.backendWorker, time.Second, wait.NeverStop)
 	go wait.Until(c.updateQueuePendingMetric, 10*time.Second, wait.NeverStop)
+	go wait.Until(c.bindWorker, time.Second, wait.NeverStop)
 }
 
 func (c *Controller) enqueue(obj interface{}, queue util.ConditionalRateLimitingInterface) {
@@ -180,6 +204,11 @@ func (c *Controller) backendGroupWorker() {
 
 func (c *Controller) backendWorker() {
 	for c.processNextItem(c.backendQueue, c.backendCtrl.syncBackendRecord) {
+	}
+}
+
+func (c *Controller) bindWorker() {
+	for c.processNextItem(c.bindQueue, c.bindController.Sync) {
 	}
 }
 
@@ -246,9 +275,16 @@ func (c *Controller) updatePod(old, cur interface{}) {
 	if labelChanged || statusChanged {
 		oldGroups := c.backendGroupCtrl.listRelatedBackendGroupsForPod(oldPod)
 		groups := c.backendGroupCtrl.listRelatedBackendGroupsForPod(curPod)
-		groups = util.DetermineNeededBackendGroupUpdates(oldGroups, groups, statusChanged)
+		groups = util.UnionOrDifferenceUnion(oldGroups, groups, statusChanged)
 		for key := range groups {
 			c.enqueue(key, c.backendGroupQueue)
+		}
+
+		oldBinds := c.bindController.ListRelatedBindForPod(oldPod)
+		curBinds := c.bindController.ListRelatedBindForPod(curPod)
+		curBinds = util.UnionOrDifferenceUnion(oldBinds, curBinds, statusChanged)
+		for key := range curBinds {
+			c.enqueue(key, c.bindQueue)
 		}
 	}
 }
@@ -458,6 +494,23 @@ func (c *Controller) deleteBackendRecord(obj interface{}) {
 	if controllerRef := metav1.GetControllerOf(backend); controllerRef != nil {
 		c.enqueue(util.NamespacedNameKeyFunc(backend.Namespace, controllerRef.Name), c.backendGroupQueue)
 	}
+}
+
+func (c *Controller) addBind(obj interface{}) {
+	c.enqueue(obj, c.bindQueue)
+}
+
+func (c *Controller) updateBind(old, cur interface{}) {
+	oldBind := old.(*lbcfv1.Bind)
+	curBind := cur.(*lbcfv1.Bind)
+	if util.NeedEnqueueBind(oldBind, curBind) {
+		c.enqueue(curBind, c.bindQueue)
+
+	}
+}
+
+func (c *Controller) deleteBind(obj interface{}) {
+	c.addBind(obj)
 }
 
 func (c *Controller) updateQueuePendingMetric() {
