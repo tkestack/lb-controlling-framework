@@ -68,6 +68,8 @@ func (s *Server) Start() {
 	ws.Route(ws.POST("validate-backend-group").To(s.ValidateAdmitBackendGroup).
 		Consumes(restful.MIME_JSON))
 
+	ws.Route(ws.POST("validate-bind").To(s.ValidateAdminBind).
+		Consumes(restful.MIME_JSON))
 	restful.Add(ws)
 
 	go func() {
@@ -89,6 +91,11 @@ func (s *Server) ValidateAdmitLoadBalancerDriver(req *restful.Request, rsp *rest
 // ValidateAdmitBackendGroup implements ValidatingWebHook for BackendGroup
 func (s *Server) ValidateAdmitBackendGroup(req *restful.Request, rsp *restful.Response) {
 	serveValidate(req, rsp, s.admitWebhook.ValidateBackendGroupCreate, s.admitWebhook.ValidateBackendGroupUpdate, s.admitWebhook.ValidateBackendGroupDelete)
+}
+
+// ValidateAdminBind implements ValidatingWebHook for Bind
+func (s *Server) ValidateAdminBind(req *restful.Request, rsp *restful.Response) {
+	serveValidate(req, rsp, s.admitWebhook.ValidateBindCreate, s.admitWebhook.ValidateBindUpdate, s.admitWebhook.ValidateBindDelete)
 }
 
 // MutateAdmitLoadBalancer implements MutatingWebHook for LoadBalancer

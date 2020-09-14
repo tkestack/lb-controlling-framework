@@ -24,6 +24,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
+	lbcfapiv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
+
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 
@@ -84,6 +88,182 @@ func ValidateBackendGroup(raw *lbcfapi.BackendGroup) field.ErrorList {
 		allErrs = append(allErrs, validateDeregWebhookSpec(raw.Spec.DeregisterWebhook, *raw.Spec.DeregisterPolicy, field.NewPath("spec").Child("deregisterWebhook"))...)
 	}
 	allErrs = append(allErrs, validateBackends(&raw.Spec, field.NewPath("spec"))...)
+	return allErrs
+}
+
+// ValidateBind validates Bind
+func ValidateBind(bind *lbcfapiv1.Bind) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if len(bind.Spec.LoadBalancers) == 0 {
+		allErrs = append(
+			allErrs,
+			field.Required(field.NewPath("spec").Child("loadbalancers"), "loadbalancers must be set"))
+		return allErrs
+	}
+
+	// validate load balancers
+	lbNames := sets.NewString()
+	for i, lb := range bind.Spec.LoadBalancers {
+		if lbNames.Has(lb.Name) {
+			allErrs = append(
+				allErrs,
+				field.Duplicate(field.NewPath("spec").Child(fmt.Sprintf("loadbalancers[%d]", i)), lb.Name))
+			continue
+		}
+		lbNames.Insert(lb.Name)
+		if strings.TrimSpace(lb.Driver) == "" {
+			allErrs = append(allErrs,
+				field.Required(
+					field.NewPath("spec").
+						Child(fmt.Sprintf("loadbalancers[%d]", i), "driver"),
+					"driver must be set"))
+			continue
+		}
+		if len(lb.Spec) == 0 {
+			allErrs = append(allErrs,
+				field.Required(
+					field.NewPath("spec").
+						Child(fmt.Sprintf("loadbalancers[%d]", i), "spec"),
+					"spec must be set"))
+			continue
+		}
+	}
+
+	// validate pods
+	if bind.Spec.Pods.ByLabel == nil && len(bind.Spec.Pods.ByName) == 0 {
+		allErrs = append(allErrs,
+			field.Required(
+				field.NewPath("spec").
+					Child("pods", "byLabel"),
+				"one of byLabel and byName must be set"))
+	}
+
+	// validate pods.byLabel
+	if bind.Spec.Pods.ByLabel != nil {
+		if len(bind.Spec.Pods.ByLabel.Selector) == 0 {
+			allErrs = append(allErrs,
+				field.Required(
+					field.NewPath("spec").
+						Child("pods", "byLabel", "selector"),
+					"selector must be set if byLabel is used"))
+		}
+	}
+
+	// validate pods.ports
+	if len(bind.Spec.Pods.Ports) == 0 {
+		allErrs = append(allErrs,
+			field.Required(
+				field.NewPath("spec").
+					Child("pods", "ports"),
+				"ports must be set for pods"))
+	}
+	for i, port := range bind.Spec.Pods.Ports {
+		if port.Port == 0 {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("spec").
+						Child("pods", fmt.Sprintf("ports[%d]", i), "port"),
+					port.Port,
+					"port must not be 0"))
+		}
+		if strings.TrimSpace(port.Protocol) == "" {
+			allErrs = append(allErrs,
+				field.Required(
+					field.NewPath("spec").
+						Child("pods", fmt.Sprintf("ports[%d]", i), "protocol"),
+					"protocol in port must be set, supported protocol: tcp, udp"))
+		}
+		protocol := strings.ToLower(port.Protocol)
+		if protocol != "tcp" && protocol != "udp" {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("spec").
+						Child("pods", fmt.Sprintf("ports[%d]", i), "protocol"),
+					port.Protocol,
+					fmt.Sprintf("supported protocol: tcp, udp")))
+		}
+	}
+
+	// validate deregisterPolicy
+	if bind.Spec.DeregisterPolicy != nil {
+		availablePolicies := sets.NewString(
+			string(lbcfapiv1.DeregisterIfNotReady),
+			string(lbcfapiv1.DeregisterIfNotRunning),
+			string(lbcfapiv1.DeregisterWebhook))
+		if availablePolicies.Has(string(*bind.Spec.DeregisterPolicy)) {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("spec").
+						Child("deregisterPolicy"),
+					*bind.Spec.DeregisterPolicy,
+					fmt.Sprintf("supported policy: %s", strings.Join(availablePolicies.List(), ","))))
+		}
+	}
+
+	// validate deregisterWebhook
+	if bind.Spec.DeregisterPolicy != nil &&
+		*bind.Spec.DeregisterPolicy == lbcfapiv1.DeregisterWebhook &&
+		bind.Spec.DeregisterWebhook == nil {
+		allErrs = append(allErrs,
+			field.Required(
+				field.NewPath("spec").
+					Child("deregisterWebhook"),
+				"deregisterWebhook must be set if deregisterPolicy is Webhook"))
+	}
+	if bind.Spec.DeregisterWebhook != nil {
+		if bind.Spec.DeregisterWebhook.DriverName == "" {
+			allErrs = append(allErrs,
+				field.Required(
+					field.NewPath("spec").
+						Child("deregisterWebhook", "driverName"),
+					"driverName must be set in deregisterWebhook"))
+		}
+		if bind.Spec.DeregisterWebhook.FailurePolicy != nil {
+			availablePolicies := sets.NewString(
+				string(lbcfapiv1.FailurePolicyDoNothing),
+				string(lbcfapiv1.FailurePolicyIfNotReady),
+				string(lbcfapiv1.FailurePolicyIfNotRunning))
+			if !availablePolicies.Has(string(*bind.Spec.DeregisterWebhook.FailurePolicy)) {
+				allErrs = append(allErrs,
+					field.Invalid(
+						field.NewPath("spec").
+							Child("deregisterWebhook", "failurePolicy"),
+						*bind.Spec.DeregisterWebhook.FailurePolicy,
+						fmt.Sprintf("supported policy: %s", strings.Join(availablePolicies.List(), ","))))
+			}
+		}
+	}
+
+	// validate ensurePolicy
+	if bind.Spec.EnsurePolicy != nil {
+		if bind.Spec.EnsurePolicy.Policy == "" {
+			allErrs = append(allErrs,
+				field.Required(
+					field.NewPath("spec").
+						Child("ensurePolicy", "policy"),
+					"policy must be set in ensurePolicy"))
+		} else {
+			availablePolicies := sets.NewString(
+				string(lbcfapiv1.PolicyIfNotSucc),
+				string(lbcfapiv1.PolicyAlways))
+			if !availablePolicies.Has(string(bind.Spec.EnsurePolicy.Policy)) {
+				allErrs = append(allErrs,
+					field.Invalid(
+						field.NewPath("spec").
+							Child("ensurePolicy", "policy"),
+						bind.Spec.EnsurePolicy.Policy,
+						fmt.Sprintf("supported policy: %s", strings.Join(availablePolicies.List(), ","))))
+			}
+		}
+		if bind.Spec.EnsurePolicy.ResyncPeriodInSeconds != nil && *bind.Spec.EnsurePolicy.ResyncPeriodInSeconds < 10 {
+			allErrs = append(allErrs,
+				field.Invalid(
+					field.NewPath("spec").
+						Child("ensurePolicy", "resyncPeriodInSeconds"),
+					*bind.Spec.EnsurePolicy.ResyncPeriodInSeconds,
+					"resyncPeriodInSeconds must be greater than or equal to 10"))
+		}
+	}
 	return allErrs
 }
 
