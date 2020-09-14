@@ -24,6 +24,9 @@ import (
 	"strings"
 	"time"
 
+	lbcfapiv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
+	bindutils "tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/bindcontroller/utils"
+
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 
 	v1 "k8s.io/api/core/v1"
@@ -280,10 +283,25 @@ type ErrorList []error
 // Error returns formats all errors into one error
 func (e ErrorList) Error() string {
 	var msg []string
-	for i, err := range e {
-		msg = append(msg, fmt.Sprintf("%d: %v", i+1, err))
+	seen := sets.NewString()
+	for _, err := range e {
+		if err == nil {
+			continue
+		}
+		m := fmt.Sprintf("[%s]", err.Error())
+		if seen.Has(m) {
+			continue
+		}
+		seen.Insert(m)
+		msg = append(msg, m)
 	}
-	return strings.Join(msg, "\n")
+	if len(msg) == 0 {
+		return ""
+	} else if len(msg) == 1 {
+		return msg[0]
+	} else {
+		return strings.Join(msg, ", ")
+	}
 }
 
 // MakePodBackendName generates a name for BackendRecord
@@ -600,14 +618,15 @@ func BackendRegistered(backend *lbcfapi.BackendRecord) bool {
 	return false
 }
 
-// DetermineNeededBackendGroupUpdates compares oldGroups with groups, and returns BackendGroups that should be
-func DetermineNeededBackendGroupUpdates(oldGroups, groups sets.String, podStatusChanged bool) sets.String {
-	if podStatusChanged {
-		groups = groups.Union(oldGroups)
+// UnionOrDifferenceUnion returns union or union of difference of setA and setB, by the union parameter
+func UnionOrDifferenceUnion(setA, setB sets.String, union bool) sets.String {
+	var ret sets.String
+	if union {
+		ret = setB.Union(setA)
 	} else {
-		groups = groups.Difference(oldGroups).Union(oldGroups.Difference(groups))
+		ret = setB.Difference(setA).Union(setA.Difference(setB))
 	}
-	return groups
+	return ret
 }
 
 // NeedEnqueueLB determines if the given LoadBalancer should be enqueue
@@ -641,6 +660,38 @@ func NeedEnqueueBackend(old *lbcfapi.BackendRecord, cur *lbcfapi.BackendRecord) 
 	return false
 }
 
+// NeedEnqueueBind determines if the given Bind should be enqueue
+func NeedEnqueueBind(old, cur *lbcfapiv1.Bind) bool {
+	if old.ResourceVersion == cur.ResourceVersion {
+		return false
+	}
+	if !reflect.DeepEqual(old.Spec, cur.Spec) {
+		return true
+	}
+	oldLBStatus := old.Status.LoadBalancerStatuses
+	curLBStatus := cur.Status.LoadBalancerStatuses
+	if len(oldLBStatus) != len(curLBStatus) {
+		return true
+	}
+	oldStsMap := make(map[string]lbcfapiv1.TargetLoadBalancerStatus)
+	for _, sts := range oldLBStatus {
+		oldStsMap[sts.Name] = sts
+	}
+	for _, curSts := range curLBStatus {
+		oldSts, ok := oldStsMap[curSts.Name]
+		if !ok {
+			return true
+		}
+		if !reflect.DeepEqual(curSts.DeletionTimestamp, oldSts.DeletionTimestamp) {
+			return true
+		}
+		if bindutils.IsLoadBalancerCreated(curSts) != bindutils.IsLoadBalancerCreated(oldSts) {
+			return true
+		}
+	}
+	return false
+}
+
 // NeedPeriodicEnsure tests if ensurePolicy is on
 func NeedPeriodicEnsure(cfg *lbcfapi.EnsurePolicyConfig, deleting bool) bool {
 	if deleting {
@@ -660,6 +711,7 @@ func DeregIfNotRunning(bg *lbcfapi.BackendGroup) bool {
 	return false
 }
 
+// DeregByWebhook returns true if the webhook should determine if the backend should be deregistered
 func DeregByWebhook(bg *lbcfapi.BackendGroup) bool {
 	if bg.Spec.DeregisterPolicy != nil &&
 		*bg.Spec.DeregisterPolicy == lbcfapi.DeregisterWebhook &&
@@ -667,4 +719,27 @@ func DeregByWebhook(bg *lbcfapi.BackendGroup) bool {
 		return true
 	}
 	return false
+}
+
+// GetLBStatusInBind returns status of load balancer by the given lbName
+func GetLBStatusInBind(bind *lbcfapiv1.Bind, lbName string) *lbcfapiv1.TargetLoadBalancerStatus {
+	for _, lb := range bind.Status.LoadBalancerStatuses {
+		if lb.Name == lbName {
+			return &lb
+		}
+	}
+	return nil
+}
+
+// EqualStringMap returns true if last and curr are equal
+func EqualStringMap(last, curr map[string]string) bool {
+	if len(last) != len(curr) {
+		return false
+	}
+	for lk, lv := range last {
+		if cv, ok := curr[lk]; !ok || cv != lv {
+			return false
+		}
+	}
+	return true
 }

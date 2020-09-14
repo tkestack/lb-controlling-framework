@@ -23,6 +23,7 @@ import (
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	lbcfclientset "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions"
+	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tkestack.io/v1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tkestack.io/v1beta1"
 
 	apicorev1 "k8s.io/api/core/v1"
@@ -57,6 +58,7 @@ func NewContext(cfg *config.Config) *Context {
 	c.LBDriverInformer = c.LbcfFactory.Lbcf().V1beta1().LoadBalancerDrivers()
 	c.BGInformer = c.LbcfFactory.Lbcf().V1beta1().BackendGroups()
 	c.BRInformer = c.LbcfFactory.Lbcf().V1beta1().BackendRecords()
+	c.BindInformer = c.LbcfFactory.Lbcf().V1().Binds()
 
 	c.EventBroadCaster = record.NewBroadcaster()
 	scheme := runtime.NewScheme()
@@ -85,6 +87,7 @@ type Context struct {
 	LBDriverInformer v1beta1.LoadBalancerDriverInformer
 	BGInformer       v1beta1.BackendGroupInformer
 	BRInformer       v1beta1.BackendRecordInformer
+	BindInformer     lbcfv1.BindInformer
 
 	EventBroadCaster record.EventBroadcaster
 	EventRecorder    record.EventRecorder
