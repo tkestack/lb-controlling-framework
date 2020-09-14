@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
+	bindutil "tkestack.io/lb-controlling-framework/pkg/api/bind"
 	lbcfapiv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
-	bindutils "tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/bindcontroller/utils"
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 
@@ -685,7 +685,7 @@ func NeedEnqueueBind(old, cur *lbcfapiv1.Bind) bool {
 		if !reflect.DeepEqual(curSts.DeletionTimestamp, oldSts.DeletionTimestamp) {
 			return true
 		}
-		if bindutils.IsLoadBalancerCreated(curSts) != bindutils.IsLoadBalancerCreated(oldSts) {
+		if bindutil.IsLoadBalancerCreated(curSts) != bindutil.IsLoadBalancerCreated(oldSts) {
 			return true
 		}
 	}
@@ -719,16 +719,6 @@ func DeregByWebhook(bg *lbcfapi.BackendGroup) bool {
 		return true
 	}
 	return false
-}
-
-// GetLBStatusInBind returns status of load balancer by the given lbName
-func GetLBStatusInBind(bind *lbcfapiv1.Bind, lbName string) *lbcfapiv1.TargetLoadBalancerStatus {
-	for _, lb := range bind.Status.LoadBalancerStatuses {
-		if lb.Name == lbName {
-			return &lb
-		}
-	}
-	return nil
 }
 
 // EqualStringMap returns true if last and curr are equal
