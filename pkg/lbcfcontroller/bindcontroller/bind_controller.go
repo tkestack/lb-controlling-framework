@@ -80,7 +80,20 @@ func (c *Controller) Sync(key string) *util.SyncResult {
 		if !util.HasFinalizer(bind.Finalizers, lbcfv1.FinalizerDeleteLB) {
 			return util.FinishedResult()
 		}
-		if len(bind.Status.LoadBalancerStatuses) == 0 {
+		existBackendRecords, err := c.brLister.BackendRecords(bind.Namespace).List(labels.SelectorFromSet(map[string]string{
+			lbcfv1.LabelBindName: bind.Name,
+		}))
+		if err != nil {
+			klog.Errorf("list BackendRecords for Bind %s/%s failed, can't delete bind",
+				bind.Namespace, bind.Name)
+			c.eventRecorder.Eventf(
+				bind,
+				apicorev1.EventTypeWarning,
+				"ListBackendRecordsFailed",
+				err.Error())
+			return util.AsyncResult(10 * time.Second)
+		}
+		if len(bind.Status.LoadBalancerStatuses) == 0 && len(existBackendRecords) == 0 {
 			if err := c.removeFinalizer(bind); err != nil {
 				return util.ErrorResult(err)
 			}
@@ -275,16 +288,40 @@ func (c *Controller) handleLoadBalancer(bind *lbcfv1.Bind) (needResync bool) {
 }
 
 func (c *Controller) handleBackends(bind *lbcfv1.Bind) (needResync bool) {
+	// delete all BackendRecordss by label
+	if bind.DeletionTimestamp != nil {
+		c.eventRecorder.Eventf(
+			bind,
+			apicorev1.EventTypeNormal,
+			"DeleteAllBackends",
+			"deleting all BackendRecords")
+
+		selector := labels.SelectorFromSet(map[string]string{
+			lbcfv1.LabelBindName: bind.Name,
+		})
+		listOption := metav1.ListOptions{
+			LabelSelector: selector.String(),
+		}
+		if err := c.client.LbcfV1beta1().BackendRecords(bind.Namespace).DeleteCollection(&metav1.DeleteOptions{}, listOption); err != nil {
+			klog.Errorf("deleteCollection for Bind %s/%s failed: %v",
+				bind.Namespace, bind.Name, err)
+			c.eventRecorder.Eventf(
+				bind,
+				apicorev1.EventTypeWarning,
+				"DeleteCollectionFailed",
+				err.Error())
+		}
+		return true
+	}
+
 	var expected []*v1beta1.BackendRecord
 	doNotDelete := sets.NewString()
-	if bind.DeletionTimestamp == nil {
-		var err error
-		expected, doNotDelete, err = c.expectedPodBackends(bind)
-		if err != nil {
-			klog.Errorf("handle Bind %s/%s failed: %v", bind.Namespace, bind.Name, err)
-			c.eventRecorder.Eventf(bind, apicorev1.EventTypeWarning, "HandleBackendFailed", err.Error())
-			return true
-		}
+	var err error
+	expected, doNotDelete, err = c.expectedPodBackends(bind)
+	if err != nil {
+		klog.Errorf("handle Bind %s/%s failed: %v", bind.Namespace, bind.Name, err)
+		c.eventRecorder.Eventf(bind, apicorev1.EventTypeWarning, "HandleBackendFailed", err.Error())
+		return true
 	}
 	existBackendRecords, err := c.brLister.BackendRecords(bind.Namespace).List(labels.SelectorFromSet(map[string]string{
 		lbcfv1.LabelBindName: bind.Name,
