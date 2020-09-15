@@ -203,3 +203,7 @@ spec:
                               type: string
                             reason:
                               type: string
+    # there's been a lot changes on CRD since v1.14 to v1.18, we put an empty version here to be compatible with all of them
+    - name: v2
+      served: false
+      storage: false

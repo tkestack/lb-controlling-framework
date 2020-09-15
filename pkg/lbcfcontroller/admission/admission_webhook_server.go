@@ -60,6 +60,8 @@ func (s *Server) Start() {
 		Consumes(restful.MIME_JSON))
 	ws.Route(ws.POST("mutate-backend-broup").To(s.MutateAdmitBackendGroup).
 		Consumes(restful.MIME_JSON))
+	ws.Route(ws.POST("mutate-bind").To(s.MutateAdmitBind).
+		Consumes(restful.MIME_JSON))
 
 	ws.Route(ws.POST("validate-load-balancer").To(s.ValidateAdmitLoadBalancer).
 		Consumes(restful.MIME_JSON))
@@ -111,6 +113,11 @@ func (s *Server) MutateAdmitLoadBalancerDriver(req *restful.Request, rsp *restfu
 // MutateAdmitBackendGroup implements MutatingWebHook for BackendGroup
 func (s *Server) MutateAdmitBackendGroup(req *restful.Request, rsp *restful.Response) {
 	serveMutate(req, rsp, s.admitWebhook.MutateBackendGroup)
+}
+
+// MutateAdmitBind implements MutatingWebHook for Bind
+func (s *Server) MutateAdmitBind(req *restful.Request, rsp *restful.Response) {
+	serveMutate(req, rsp, s.admitWebhook.MutateBind)
 }
 
 func parseAdmissionReview(req *restful.Request, rsp *restful.Response) *v1beta1.AdmissionReview {

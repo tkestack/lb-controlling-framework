@@ -68,6 +68,7 @@ type MutatingAdmissionWebhook interface {
 	MutateLB(*admission.AdmissionReview) *admission.AdmissionResponse
 	MutateDriver(*admission.AdmissionReview) *admission.AdmissionResponse
 	MutateBackendGroup(*admission.AdmissionReview) *admission.AdmissionResponse
+	MutateBind(*admission.AdmissionReview) *admission.AdmissionResponse
 }
 
 // NewAdmitter creates a new instance of Webhook
@@ -154,6 +155,28 @@ func (a *Admitter) MutateBackendGroup(ar *admission.AdmissionReview) *admission.
 	bgPatch.setDefaultDeregisterPolicy()
 
 	p, err := json.Marshal(bgPatch.patch())
+	if err != nil {
+		toAdmissionResponse(err)
+	}
+
+	reviewResponse := &admission.AdmissionResponse{}
+	reviewResponse.Allowed = true
+	reviewResponse.Patch = p
+	pt := admission.PatchTypeJSONPatch
+	reviewResponse.PatchType = &pt
+	return reviewResponse
+}
+
+// MutateBind implements MutatingWebHook for Bind
+func (a *Admitter) MutateBind(ar *admission.AdmissionReview) *admission.AdmissionResponse {
+	obj := &v1.Bind{}
+	err := json.Unmarshal(ar.Request.Object.Raw, obj)
+	if err != nil {
+		return toAdmissionResponse(err)
+	}
+	var patches []Patch
+	patches = append(patches, addFinalizer(len(obj.Finalizers) == 0, v1.FinalizerDeleteLB))
+	p, err := json.Marshal(patches)
 	if err != nil {
 		toAdmissionResponse(err)
 	}
