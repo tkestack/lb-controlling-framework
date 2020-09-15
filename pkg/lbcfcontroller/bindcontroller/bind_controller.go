@@ -72,6 +72,7 @@ func (c *Controller) Sync(key string) *util.SyncResult {
 	}
 	bind, err := c.bindLister.Binds(namespace).Get(name)
 	if errors.IsNotFound(err) {
+		klog.Infof("Bind %s/%s not found, finished", namespace, name)
 		return util.FinishedResult()
 	} else if err != nil {
 		return util.ErrorResult(err)
@@ -116,6 +117,12 @@ func (c *Controller) ListRelatedBindForPod(pod *apicorev1.Pod) sets.String {
 	}
 	ret := sets.NewString()
 	for _, bind := range bindList {
+		var key string
+		if len(bind.Namespace) > 0 {
+			key = bind.Namespace + "/" + bind.Name
+		} else {
+			key = bind.Name
+		}
 		if bind.Spec.Pods.ByLabel != nil {
 			except := sets.NewString(bind.Spec.Pods.ByLabel.Except...)
 			if except.Has(pod.Name) {
@@ -123,12 +130,12 @@ func (c *Controller) ListRelatedBindForPod(pod *apicorev1.Pod) sets.String {
 			}
 			selector := labels.SelectorFromSet(bind.Spec.Pods.ByLabel.Selector)
 			if selector.Matches(labels.Set(pod.Labels)) {
-				ret.Insert(bind.Name)
+				ret.Insert(key)
 			}
 		} else {
 			expect := sets.NewString(bind.Spec.Pods.ByName...)
 			if expect.Has(pod.Name) {
-				ret.Insert(bind.Name)
+				ret.Insert(key)
 			}
 		}
 	}
@@ -411,22 +418,6 @@ func (c *Controller) expectedPodBackends(bind *lbcfv1.Bind) (expected []*v1beta1
 				continue
 			}
 			pods = append(pods, pod)
-		}
-		expect := sets.NewString(bind.Spec.Pods.ByName...)
-		podList, err := c.podLister.Pods(bind.Namespace).List(labels.Everything())
-		if err != nil {
-			klog.Errorf("list pods for Bind %s/%s failed: %v", bind.Namespace, bind.Name, err)
-			c.eventRecorder.Eventf(
-				bind,
-				apicorev1.EventTypeWarning,
-				"K8SError",
-				fmt.Sprintf("list pods failed: %v", err))
-			return nil, nil, err
-		}
-		for _, pod := range podList {
-			if _, ok := expect[pod.Name]; ok {
-				pods = append(pods, pod)
-			}
 		}
 	}
 	var readyPods, podsDoNotDelete []*apicorev1.Pod

@@ -257,8 +257,14 @@ func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface
 
 func (c *Controller) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
+	// maybe we can ignore Added Pod? For
+	// 1. Added Pods are never ready
+	// 2. every time we restart, all LBCF CRDs are synced
 	for key := range c.backendGroupCtrl.listRelatedBackendGroupsForPod(pod) {
 		c.enqueue(key, c.backendGroupQueue)
+	}
+	for key := range c.bindController.ListRelatedBindForPod(pod) {
+		c.enqueue(key, c.bindQueue)
 	}
 }
 
