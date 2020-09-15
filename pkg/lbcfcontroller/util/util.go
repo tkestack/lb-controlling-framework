@@ -665,6 +665,9 @@ func NeedEnqueueBind(old, cur *lbcfapiv1.Bind) bool {
 	if old.ResourceVersion == cur.ResourceVersion {
 		return false
 	}
+	if old.DeletionTimestamp == nil && cur.DeletionTimestamp != nil {
+		return true
+	}
 	if !reflect.DeepEqual(old.Spec, cur.Spec) {
 		return true
 	}
