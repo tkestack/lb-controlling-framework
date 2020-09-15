@@ -19,11 +19,12 @@ package context
 
 import (
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/config"
+	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
 	lbcfv1beta "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	lbcfclient "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	lbcfclientset "tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions"
-	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tkestack.io/v1"
+	lbcfclientv1 "tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tkestack.io/v1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/informers/externalversions/lbcf.tkestack.io/v1beta1"
 
 	apicorev1 "k8s.io/api/core/v1"
@@ -65,6 +66,9 @@ func NewContext(cfg *config.Config) *Context {
 	if err := lbcfv1beta.SchemeBuilder.AddToScheme(scheme); err != nil {
 		klog.Fatal(err.Error())
 	}
+	if err := lbcfv1.SchemeBuilder.AddToScheme(scheme); err != nil {
+		klog.Fatal(err.Error())
+	}
 	c.EventRecorder = c.EventBroadCaster.NewRecorder(scheme, apicorev1.EventSource{
 		Component: "lbcf-controller",
 	})
@@ -87,7 +91,7 @@ type Context struct {
 	LBDriverInformer v1beta1.LoadBalancerDriverInformer
 	BGInformer       v1beta1.BackendGroupInformer
 	BRInformer       v1beta1.BackendRecordInformer
-	BindInformer     lbcfv1.BindInformer
+	BindInformer     lbcfclientv1.BindInformer
 
 	EventBroadCaster record.EventBroadcaster
 	EventRecorder    record.EventRecorder
