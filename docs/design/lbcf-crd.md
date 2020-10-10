@@ -1,28 +1,32 @@
-<!-- TOC -->
+<!--ts-->
+   * [LoadBalancerDriver](#loadbalancerdriver)
+      * [LoadBalancerDriver.Status](#loadbalancerdriverstatus)
+   * [Bind](#bind)
+      * [范例](#范例)
+      * [Bind.Status](#bindstatus)
+   * [LoadBalancer](#loadbalancer)
+      * [范例](#范例-1)
+         * [范例1：使用已存在的负载均衡](#范例1使用已存在的负载均衡)
+         * [范例2：动态创建负载均衡](#范例2动态创建负载均衡)
+         * [范例3：由系统管理员限定每个namespace可用的负载均衡](#范例3由系统管理员限定每个namespace可用的负载均衡)
+      * [LoadBalancer.Status](#loadbalancerstatus)
+   * [BackendGroup](#backendgroup)
+      * [范例](#范例-2)
+         * [范例1：使用Service NodePort作为backend](#范例1使用service-nodeport作为backend)
+         * [范例2：使用Label选择Pod，并直接将Pod绑定至负载均衡](#范例2使用label选择pod并直接将pod绑定至负载均衡)
+         * [范例3：使用name选择Pod，并直接将Pod绑定至负载均衡](#范例3使用name选择pod并直接将pod绑定至负载均衡)
+         * [范例4：使用静态地址作为backend](#范例4使用静态地址作为backend)
+         * [范例5：同一个后端绑定至多个负载均衡](#范例5同一个后端绑定至多个负载均衡)
+         * [范例6：自定义解绑条件](#范例6自定义解绑条件)
+      * [BackendGroup.Status](#backendgroupstatus)
+   * [BackendRecord](#backendrecord)
+      * [BackendRecord.Status](#backendrecordstatus)
 
-- [LoadBalancerDriver](#loadbalancerdriver)
-    - [LoadBalancerDriver.Status](#loadbalancerdriverstatus)
-- [LoadBalancer](#loadbalancer)
-    - [范例](#范例)
-        - [范例1：使用已存在的负载均衡](#范例1使用已存在的负载均衡)
-        - [范例2：动态创建负载均衡](#范例2动态创建负载均衡)
-        - [范例3：由系统管理员限定每个namespace可用的负载均衡](#范例3由系统管理员限定每个namespace可用的负载均衡)
-    - [LoadBalancer.Status](#loadbalancerstatus)
-- [BackendGroup](#backendgroup)
-    - [范例](#范例-1)
-        - [范例1：使用Service NodePort作为backend](#范例1使用service-nodeport作为backend)
-        - [范例2：使用Label选择Pod，并直接将Pod绑定至负载均衡](#范例2使用label选择pod并直接将pod绑定至负载均衡)
-        - [范例3：使用name选择Pod，并直接将Pod绑定至负载均衡](#范例3使用name选择pod并直接将pod绑定至负载均衡)
-        - [范例4：使用静态地址作为backend](#范例4使用静态地址作为backend)
-        - [范例5：同一个后端绑定至多个负载均衡](#范例5同一个后端绑定至多个负载均衡)
-        - [范例6：自定义解绑条件](#范例6自定义解绑条件)
-    - [BackendGroup.Status](#backendgroupstatus)
-- [BackendRecord](#backendrecord)
-    - [BackendRecord.Status](#backendrecordstatus)
+<!-- Added by: ianlang, at: Sat Oct 10 14:50:33 CST 2020 -->
 
-<!-- /TOC -->
+<!--te-->
 
-LBCF设计了4种CRD及其各自的Status Subresource，所有CRD皆为namespaced类型。
+LBCF设计了5种CRD及其各自的Status Subresource，所有CRD皆为namespaced类型。
 
 # LoadBalancerDriver
 
@@ -92,6 +96,160 @@ status:
   - lastTransitionTime: 2019-05-30T02:42:48Z
     status: "True"
     type: Accepted
+```
+
+# Bind
+Bind是LBCF在1.4中新增的CRD，功能上基本等同于`LoadBalancer`和`BackendGroup`的融合。设计Bind的主要目的在于简化LBCF用户侧的使用逻辑，其Webhook
+的触发条件与内容与1.3.x版本一致，因此已有的driver不需要进行修改。
+
+ValidatingAdmissionWebhook的使用：  
+1. 触发条件：Create、Update  
+2. 校验基本格式
+3. 调用[validateLoadBalancer](lbcf-webhook-specification.md#validateloadbalancer)和[validateBackend](lbcf-webhook
+-specification.md#validatebackend)进行业务逻辑校验
+4. 创建后，禁止修改`loadbalancer`中的`spec`
+
+MutatingAdmissionWebhook的使用：
+
+1.	增加finalizer：
+
+* lbcf.tkestack.io/delete-load-loadbalancer，删除前调用[deleteLoadBalancer](lbcf-webhook-specification.md#deleteloadbalancer)
+
+**CRD结构体定义**
+
+| Field | Type | Required| Description|
+|:---:|:---:|:---:|:---|
+|loadbalancers|[]TargetLoadBalancer结构体|TRUE|描述负载均衡的数组|
+|pods|[]PodBackend结构体|TRUE|描述哪些Pod需要绑定到负载均衡,选中的每个Pod的每个端口都将注册到loadbalancers中的每个负载均衡上|
+|parameters|map<string, string>|FALSE|任意key:value，用来传递向负载均衡注册Pod时的自定义参数|
+|deregisterPolicy|string|FALSE|Pod解绑条件，可选的值为`IfNotReady`、`IfNotRunning`、`Webhook`。不填时默认为`IfNotReady`。详见文档[自定义解绑条件设计](/docs/design/proposal/deregister-policy.md)|
+|deregisterWebhook|DeregisterWebhookSpec|FALSE|通过Webhook判断Pod是否解绑，仅当`deregisterPolicy`为`Webhook`时有效。详见文档[自定义解绑条件设计](/docs/design/proposal/deregister-policy.md)|
+|ensurePolicy|EnsurePolicy|FALSE|周期性检查的策略，默认不开启周期性检查|
+
+**TargetLoadBalancer结构体**
+
+| Field | Type | Required| Description|
+|:---:|:---:|:---:|:---|
+|name|string|TRUE|任意字符串，需保证在当前Bind对象中唯一|
+|Driver|string|TRUE|使用的LoadBalancerDriver的name|
+|spec|map<string, string>|TRUE|负载均衡的唯一标识，用来在外部负载均衡系统中查找负载均衡实例。在临时创建负载均衡的场景中，spec中的某些参数可能无法预先确定（如实例ID、监听器ID等），此时负载均衡的标识以status中的lbInfo为准，lbInfo的值由[createLoadBalancer](lbcf-webhook-specification.md#createloadbalancer)返回。**lbSpec中的字段由Webhook Server的实现者定义**|
+|attributes|map<string, string>|FALSE|与唯一标识无关的负载均衡属性，例如超时时间、缴费类型等。**attributes中的字段由Webhook Server的实现者定义**|
+
+**PodBackend结构体**
+
+| Field | Type | Required| Description|
+|:---:|:---:|:---:|:---|
+|ports|[]PortSelector结构体|TRUE|用来选择被绑定的**容器内**端口|
+|byLabel|SelectPodByLabel结构体|FALSE|通过label选择Pod|
+|byName|[]string|FALSE|通过Pod.name选择Pod|
+
+**PortSelector结构体**
+
+| Field | Type | Required| Description|
+|:---:|:---:|:---:|:---|
+|port|int32|TRUE|端口号|
+|protocol|string|TRUE|支持`TCP`和`UDP`|
+
+**SelectPodByLabel结构体**
+
+| Field | Type | Required| Description|
+|:---:|:---:|:---:|:---|
+|selector|map<string, string>|TRUE|被选中的Pod label|
+|except|[]string|FALSE|Pod.name数组，数组中的Pod不会被选中，如果之前已被选中，则会触发该Pod的解绑流程|
+
+## 范例
+
+```yaml
+apiVersion: lbcf.tkestack.io/v1
+kind: Bind
+metadata:
+  name: test
+  namespace: kube-system
+spec:
+  loadBalancers:
+  - attributes:
+      payment: by-hour
+    driver: lbcf-example-driver
+    name: foo-lb
+    spec:
+      lbID: lb-foo
+      listenerID: lsn-foo
+  - attributes:
+      payment: month
+    driver: lbcf-example-driver
+    name: bar-lb
+    spec:
+      lbID: lb-bar
+      listenerID: lsn-bar
+  parameters:
+    weight: "100"
+  pods:
+    byLabel:
+      selector:
+        k8s-app: test
+    ports:
+    - port: 8000
+      protocol: tcp
+    - port: 8000
+      protocol: udp
+```
+
+## Bind.Status
+
+**CRD结构体定义**
+
+| Field | Type | Description|
+|:---:|:---:|:---|
+|loadBalancerStatuses|[]TargetLoadBalancerStatus结构体|负载均衡状态数组，每个负载均衡都会在此数组中有一个对应的元素|
+
+**TargetLoadBalancerStatus结构体**  
+
+| Field | Type | Description|  
+|:---:|:---:|:---|  
+|name|string|与`Bind.spec.loadbalancers`中各元素的name一一对应|  
+|driver|string|与`Bind.spec.loadbalancers`中各元素的driver一一对应|  
+|lbInfo|map<string, string>|负载均衡唯一标识，由[createLoadBalancer](lbcf-webhook-specification.md#createloadbalancer)返回，若webhook返回值为空格，则lbcf-controller会自动向其中填入对应`Bind.spec.loadbalancers`的`spec`中的内容|
+|lastSyncedAttributes|map<string, string>|最近一次成功同步的负载均衡属性，当与`Bind.spec.loadbalancers`中的`attributes`不同时，会触发负载均衡属性的更新|
+|deletionTimestamp|string|仅当对应负载均衡从`Bind.spec.loadbalancers`中被删除时才会为非空值|
+|retryAfter|string|下一次重试时间|
+|conditions|[]TargetLoadBalancerCondition结构体|webhook执行状态，有`Created`和`Ready`两种condition。`Created`表示负载均衡已创建完成，`Ready`表示负载均衡`attributes`已更新完毕|
+
+**样例**
+```yaml
+status:
+  loadBalancerStatuses:
+  - conditions:
+    - lastTransitionTime: "2020-10-10T04:28:58Z"
+      status: "True"
+      type: Created
+    - lastTransitionTime: "2020-10-10T04:28:58Z"
+      status: "True"
+      type: Ready
+    deletionTimestamp: null
+    driver: lbcf-example-driver
+    lastSyncedAttributes:
+      payment: month
+    lbInfo:
+      lbID: lb-bar
+      listenerID: lsn-bar
+    name: bar-lb
+    retryAfter: null
+  - conditions:
+    - lastTransitionTime: "2020-10-10T04:28:58Z"
+      status: "True"
+      type: Created
+    - lastTransitionTime: "2020-10-10T04:28:58Z"
+      status: "True"
+      type: Ready
+    deletionTimestamp: null
+    driver: lbcf-example-driver
+    lastSyncedAttributes:
+      payment: by-hour
+    lbInfo:
+      lbID: lb-foo
+      listenerID: lsn-foo
+    name: foo-lb
+    retryAfter: null
 ```
 
 # LoadBalancer
