@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/validation"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	lbcfapiv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
@@ -104,6 +106,14 @@ func ValidateBind(bind *lbcfapiv1.Bind) field.ErrorList {
 	// validate load balancers
 	lbNames := sets.NewString()
 	for i, lb := range bind.Spec.LoadBalancers {
+		errMessages := validation.NameIsDNSLabel(lb.Name, true)
+		if len(errMessages) > 0 {
+			allErrs = append(
+				allErrs,
+				field.Invalid(field.NewPath("spec").Child(fmt.Sprintf("loadbalancers[%d].name", i)), lb.Name,
+					strings.Join(errMessages, ".")))
+			continue
+		}
 		if lbNames.Has(lb.Name) {
 			allErrs = append(
 				allErrs,
