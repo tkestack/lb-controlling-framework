@@ -20,6 +20,7 @@ package lbcfcontroller
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,17 +110,27 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	var errList util.ErrorList
 	var availableLBs []*lbcfapi.LoadBalancer
 	for _, lbName := range group.Spec.GetLoadBalancers() {
-		lbNamespace := util.NamespaceOfSharedObj(lbName, namespace)
-		lb, err := c.lbLister.LoadBalancers(lbNamespace).Get(lbName)
+		// before LBCF 1.4, LoadBalancer with prefix lbcf- can be created outside kube-system.
+		// In order to be compatible, we first search the LoadBalancer in the namespace that BackendGroup resides,
+		// then search kube-system if not found
+		lb, err := c.lbLister.LoadBalancers(group.Namespace).Get(lbName)
 		lbNotFound := errors.IsNotFound(err)
+		if lbNotFound && strings.HasPrefix(lbName, lbcfapi.SystemDriverPrefix) {
+			sharedLB, lastErr := c.lbLister.LoadBalancers("kube-system").Get(lbName)
+			lbNotFound = errors.IsNotFound(lastErr)
+			if lastErr == nil {
+				lb = sharedLB
+			}
+			err = lastErr
+		}
 		lbDeleting := err == nil && lb.DeletionTimestamp != nil
 		if lbNotFound || lbDeleting {
 			errList = append(errList, c.deleteAllBackend(namespace, lbName, group.Name)...)
 			continue
 		} else if err != nil {
 			errList = append(errList,
-				fmt.Errorf("get LoadBalancer %s/%s for BackendGroup %s/%s failed: %v",
-					group.Namespace, lbName, group.Namespace, group.Name, err))
+				fmt.Errorf("get LoadBalancer %s for BackendGroup %s/%s failed: %v",
+					lbName, group.Namespace, group.Name, err))
 			event(c.eventRecorder, group, v1.EventTypeWarning, "GetLoadBalancerFailed", "%v", err)
 			continue
 		} else if !util.LBCreated(lb) || !util.IsLoadBalancerAllowedForBackendGroup(lb, group.Namespace) {
