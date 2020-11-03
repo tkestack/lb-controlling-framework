@@ -196,7 +196,7 @@ func (a *Admitter) ValidateLoadBalancerCreate(ar *admission.AdmissionReview) *ad
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancer failed: %v", err))
 	}
 
-	errList := ValidateLoadBalancer(lb)
+	errList := ValidateLoadBalancer(lb, true)
 	if len(errList) > 0 {
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}
@@ -251,7 +251,7 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 		return toAdmissionResponse(fmt.Errorf(msg))
 	}
 
-	errList := ValidateLoadBalancer(curObj)
+	errList := ValidateLoadBalancer(curObj, false)
 	if len(errList) > 0 {
 		return toAdmissionResponse(fmt.Errorf("%s", errList.ToAggregate().Error()))
 	}

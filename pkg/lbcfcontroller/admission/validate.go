@@ -52,12 +52,12 @@ func ValidateLoadBalancerDriver(raw *lbcfapi.LoadBalancerDriver) field.ErrorList
 }
 
 // ValidateLoadBalancer validates LoadBalancer
-func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer) field.ErrorList {
+func ValidateLoadBalancer(raw *lbcfapi.LoadBalancer, validateName bool) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if raw.Spec.LBDriver == "" {
 		allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("lbDriver"), "lbDriver must be specified"))
 	}
-	if strings.HasPrefix(raw.Name, "lbcf-") && raw.Namespace != "kube-system" {
+	if validateName && strings.HasPrefix(raw.Name, "lbcf-") && raw.Namespace != "kube-system" {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), raw.Name,
 			"LoadBalancer that has name begins with \"lbcf-\" must be create in namespace kube-system"))
 	}
