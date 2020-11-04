@@ -1013,7 +1013,7 @@ func TestLBCFControllerDeleteDriver(t *testing.T) {
 }
 
 func TestLBCFControllerAddBackendRecord(t *testing.T) {
-	record := newFakeBackendRecord("", "record")
+	notRegisteredRecord := newFakeBackendRecord("", "record")
 	backendCtrl := newBackendController(
 		fake.NewSimpleClientset(),
 		&fakeBackendLister{},
@@ -1026,7 +1026,8 @@ func TestLBCFControllerAddBackendRecord(t *testing.T) {
 		false)
 	c := newFakeLBCFController(nil, nil, backendCtrl, nil)
 
-	c.addBackendRecord(record)
+	// records that not yet registered should be enqueued
+	c.addBackendRecord(notRegisteredRecord)
 	if c.backendQueue.Len() != 1 {
 		t.Fatalf("queue length should be 1, get %d", c.backendQueue.Len())
 	}
@@ -1035,10 +1036,51 @@ func TestLBCFControllerAddBackendRecord(t *testing.T) {
 		t.Error("failed to enqueue BackendGroup")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(record); expectedKey != key {
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(notRegisteredRecord); expectedKey != key {
 		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
 	}
 	c.backendQueue.Done(key)
+
+	// records that were being deleted before restart should be enqueued
+	deletingRecord := notRegisteredRecord.DeepCopy()
+	deletingRecord.DeletionTimestamp = &metav1.Time{}
+	c.addBackendRecord(deletingRecord)
+	if c.backendQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendQueue.Len())
+	}
+	key, done = c.backendQueue.Get()
+	if key == nil || done {
+		t.Error("failed to enqueue BackendGroup")
+	} else if key, ok := key.(string); !ok {
+		t.Error("key is not a string")
+	} else if expectedKey, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(deletingRecord); expectedKey != key {
+		t.Errorf("expected Backendgroup key %s found %s", expectedKey, key)
+	}
+	c.backendQueue.Done(key)
+
+	// registered records with empty ensurePolicy should not be enqueued
+	registeredRecord := notRegisteredRecord.DeepCopy()
+	registeredRecord.Status.Conditions = []lbcfapi.BackendRecordCondition{
+		{
+			Type:   lbcfapi.BackendRegistered,
+			Status: lbcfapi.ConditionTrue,
+		},
+	}
+	c.addBackendRecord(registeredRecord)
+	if c.backendQueue.Len() != 0 {
+		t.Fatalf("queue length should be 0, get %d", c.backendQueue.Len())
+	}
+
+	// registered records with ensurePolicy set "Always" should be enqueued
+	alwaysEnsureRegisteredRecord := registeredRecord.DeepCopy()
+	alwaysEnsureRegisteredRecord.Spec.EnsurePolicy = &lbcfapi.EnsurePolicyConfig{
+		Policy: lbcfapi.PolicyAlways,
+	}
+	c.addBackendRecord(alwaysEnsureRegisteredRecord)
+	if c.backendQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendQueue.Len())
+	}
+
 }
 
 func TestLBCFControllerUpdateBackendRecord(t *testing.T) {

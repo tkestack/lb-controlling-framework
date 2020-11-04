@@ -462,7 +462,7 @@ func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {
 func (c *Controller) addBackendRecord(obj interface{}) {
 	backend := obj.(*v1beta1.BackendRecord)
 	alwaysEnsure := backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == v1beta1.PolicyAlways
-	if !util.BackendRegistered(backend) || alwaysEnsure {
+	if !util.BackendRegistered(backend) || alwaysEnsure || backend.DeletionTimestamp != nil {
 		c.enqueue(obj, c.backendQueue)
 	}
 }
