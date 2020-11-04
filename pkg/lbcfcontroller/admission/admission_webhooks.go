@@ -247,6 +247,9 @@ func (a *Admitter) ValidateLoadBalancerUpdate(ar *admission.AdmissionReview) *ad
 	if err := json.Unmarshal(ar.Request.OldObject.Raw, oldObj); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancer failed: %v", err))
 	}
+	if curObj.DeletionTimestamp != nil {
+		return toAdmissionResponse(nil)
+	}
 	if allowed, msg := LBUpdatedFieldsAllowed(curObj, oldObj); !allowed {
 		return toAdmissionResponse(fmt.Errorf(msg))
 	}
@@ -340,6 +343,9 @@ func (a *Admitter) ValidateDriverUpdate(ar *admission.AdmissionReview) *admissio
 	if err := json.Unmarshal(ar.Request.OldObject.Raw, oldObj); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
 	}
+	if curObj.DeletionTimestamp != nil {
+		return toAdmissionResponse(nil)
+	}
 
 	if allowed, msg := DriverUpdatedFieldsAllowed(curObj, oldObj); !allowed {
 		return toAdmissionResponse(fmt.Errorf(msg))
@@ -420,6 +426,9 @@ func (a *Admitter) ValidateBackendGroupUpdate(ar *admission.AdmissionReview) *ad
 	if err := json.Unmarshal(ar.Request.OldObject.Raw, oldObj); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode LoadBalancerDriver failed: %v", err))
 	}
+	if curObj.DeletionTimestamp != nil {
+		return toAdmissionResponse(nil)
+	}
 
 	if allowed, msg := BackendGroupUpdateFieldsAllowed(curObj, oldObj); !allowed {
 		return toAdmissionResponse(fmt.Errorf(msg))
@@ -489,6 +498,9 @@ func (a *Admitter) ValidateBindUpdate(ar *admission.AdmissionReview) *admission.
 	}
 	if err := json.Unmarshal(ar.Request.OldObject.Raw, oldObj); err != nil {
 		return toAdmissionResponse(fmt.Errorf("decode Bind failed: %v", err))
+	}
+	if curObj.DeletionTimestamp != nil {
+		return toAdmissionResponse(nil)
 	}
 	if reflect.DeepEqual(oldObj.Spec, curObj.Spec) {
 		return toAdmissionResponse(nil)
