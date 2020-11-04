@@ -22,6 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/bindcontroller"
+
+	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -30,6 +34,7 @@ import (
 
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/client-go/clientset/versioned/fake"
+	lbcflisterv1 "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1"
 	lbcflister "tkestack.io/lb-controlling-framework/pkg/client-go/listers/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/webhooks"
@@ -66,7 +71,6 @@ func TestLBCFControllerAddPod(t *testing.T) {
 		false,
 	)
 	c := newFakeLBCFController(nil, nil, nil, bgCtrl)
-
 	c.addPod(pod1)
 	if c.backendGroupQueue.Len() != 1 {
 		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
@@ -1615,12 +1619,14 @@ func newFakeNode(namespace, name string) *apiv1.Node {
 	}
 }
 
-func newFakeLBCFController(driverCtrl *driverController, lbCtrl *loadBalancerController, backendCtrl *backendController, bgCtrl *backendGroupController) *Controller {
+func newFakeLBCFController(driverCtrl *driverController, lbCtrl *loadBalancerController,
+	backendCtrl *backendController, bgCtrl *backendGroupController) *Controller {
 	return &Controller{
 		driverCtrl:       driverCtrl,
 		lbCtrl:           lbCtrl,
 		backendCtrl:      backendCtrl,
 		backendGroupCtrl: bgCtrl,
+		bindController:   bindcontroller.NewController(nil, nil, &fakeBindLister{}, nil, nil, nil, nil, false),
 
 		driverQueue:       util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second),
 		loadBalancerQueue: util.NewConditionalDelayingQueue("test", nil, time.Second, time.Second, 2*time.Second),
@@ -1741,6 +1747,31 @@ func (l *fakeBackendLister) List(selector labels.Selector) (ret []*lbcfapi.Backe
 }
 
 func (l *fakeBackendLister) BackendRecords(namespace string) lbcflister.BackendRecordNamespaceLister {
+	return l
+}
+
+type fakeBindLister struct {
+	data []*lbcfv1.Bind
+}
+
+func (l *fakeBindLister) Get(name string) (*lbcfv1.Bind, error) {
+	for _, bind := range l.data {
+		if bind.Name == name {
+			return bind, nil
+		}
+	}
+	return nil, errors.NewNotFound(schema.GroupResource{
+		Group:    "lbcf.tkestack.io/v1",
+		Resource: "Bind",
+	}, name)
+
+}
+
+func (l *fakeBindLister) List(selector labels.Selector) (ret []*lbcfv1.Bind, err error) {
+	return l.data, nil
+}
+
+func (l *fakeBindLister) Binds(namespace string) lbcflisterv1.BindNamespaceLister {
 	return l
 }
 

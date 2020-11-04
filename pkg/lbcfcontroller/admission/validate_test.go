@@ -500,7 +500,7 @@ func TestValidateLoadBalancer(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		err := ValidateLoadBalancer(c.lb)
+		err := ValidateLoadBalancer(c.lb, true)
 		if c.expectValid && len(err) > 0 {
 			t.Fatalf("case %s, expect valid, get error: %v", c.name, err.ToAggregate().Error())
 		} else if !c.expectValid && len(err) == 0 {
