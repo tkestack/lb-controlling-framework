@@ -248,6 +248,10 @@ func (c *Controller) handleLoadBalancer(bind *lbcfv1.Bind) (needResync bool) {
 	}
 	wg.Wait()
 
+	if c.dryRun {
+		return false
+	}
+
 	// parse results
 	var newStatuses, needDeleteStatuses []lbcfv1.TargetLoadBalancerStatus
 	result.Range(func(key, value interface{}) bool {
