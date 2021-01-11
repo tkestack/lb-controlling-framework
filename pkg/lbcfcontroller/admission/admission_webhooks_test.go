@@ -1912,8 +1912,8 @@ func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
 	}
 	a := fakeAdmitter(&notfoundLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
-	if resp.Allowed {
-		t.Fatalf("expect not allow")
+	if !resp.Allowed {
+		t.Fatalf("expect allow")
 	}
 }
 
