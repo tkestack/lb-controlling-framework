@@ -650,6 +650,10 @@ func (a *Admitter) validateBackendGroupCreate(bg *lbcfapi.BackendGroup, lbName s
 	if err != nil {
 		return err
 	}
+	if lb == nil {
+		klog.Infof("Loadbalancer %s required by BackendGroup %s not found, skip validation", lbName, bg.Name)
+		return nil
+	}
 	driverNamespace := util.NamespaceOfSharedObj(lb.Spec.LBDriver, bg.Namespace)
 	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
 	if err != nil {
@@ -688,6 +692,10 @@ func (a *Admitter) validateBackendGroupUpdate(oldObj, curObj *lbcfapi.BackendGro
 	if err != nil {
 		return err
 	}
+	if lb == nil {
+		klog.Infof("Loadbalancer %s required by BackendGroup %s not found, skip validation", lbName, curObj.Name)
+		return nil
+	}
 	driverNamespace := util.NamespaceOfSharedObj(lb.Spec.LBDriver, curObj.Namespace)
 	driver, err := a.driverLister.LoadBalancerDrivers(driverNamespace).Get(lb.Spec.LBDriver)
 	if err != nil {
@@ -722,7 +730,8 @@ func (a *Admitter) getLBForBackendGroup(lbName string, bg *lbcfapi.BackendGroup)
 	lbNamespace := util.NamespaceOfSharedObj(lbName, bg.Namespace)
 	lb, err := a.lbLister.LoadBalancers(lbNamespace).Get(lbName)
 	if err != nil {
-		return nil, fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup")
+		klog.V(3).Infof("LoadBalancer %s required by BackedGroup %s not found, skip validation", lbName, bg.Name)
+		return nil, nil
 	}
 	if lb.DeletionTimestamp != nil {
 		return nil, fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name)

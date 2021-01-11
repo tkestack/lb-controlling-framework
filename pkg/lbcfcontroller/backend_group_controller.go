@@ -125,6 +125,9 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 		}
 		lbDeleting := err == nil && lb.DeletionTimestamp != nil
 		if lbNotFound || lbDeleting {
+			if lbNotFound {
+				event(c.eventRecorder, group, v1.EventTypeNormal, "GetLoadBalancerFailed", "%s", err)
+			}
 			errList = append(errList, c.deleteAllBackend(namespace, lbName, group.Name)...)
 			continue
 		} else if err != nil {
@@ -153,6 +156,7 @@ func (c *backendGroupController) syncBackendGroup(key string) *util.SyncResult {
 	if len(errList) > 0 {
 		return util.ErrorResult(errList)
 	}
+	event(c.eventRecorder, group, v1.EventTypeNormal, "SuccSyncedBackendGroup", "Successfully synced BackendGroup")
 	return util.FinishedResult()
 }
 
