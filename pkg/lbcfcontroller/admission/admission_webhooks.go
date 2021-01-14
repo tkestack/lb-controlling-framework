@@ -650,8 +650,10 @@ func (a *Admitter) validateBackendGroupCreate(bg *lbcfapi.BackendGroup, lbName s
 	if err != nil {
 		return err
 	}
-	if lb == nil {
-		klog.Infof("Loadbalancer %s required by BackendGroup %s not found, skip validation", lbName, bg.Name)
+	validationPolicy := bg.Annotations[lbcfapi.AnnotationValidationPolicy]
+	if (lb == nil) && (validationPolicy == "optional") {
+		klog.Infof("Validation Policy [%s]: Loadbalancer %s required by BackendGroup %s not found, skipped",
+			validationPolicy, lbName, bg.Name)
 		return nil
 	}
 	driverNamespace := util.NamespaceOfSharedObj(lb.Spec.LBDriver, bg.Namespace)
@@ -692,8 +694,10 @@ func (a *Admitter) validateBackendGroupUpdate(oldObj, curObj *lbcfapi.BackendGro
 	if err != nil {
 		return err
 	}
-	if lb == nil {
-		klog.Infof("Loadbalancer %s required by BackendGroup %s not found, skip validation", lbName, curObj.Name)
+	validationPolicy := curObj.Annotations[lbcfapi.AnnotationValidationPolicy]
+	if (lb == nil) && (validationPolicy == "optional") {
+		klog.Infof("Validation Policy [%s]: Loadbalancer %s required by BackendGroup %s not found, skipped",
+			validationPolicy, lbName, curObj.Name)
 		return nil
 	}
 	driverNamespace := util.NamespaceOfSharedObj(lb.Spec.LBDriver, curObj.Namespace)
@@ -729,10 +733,17 @@ func (a *Admitter) validateBackendGroupUpdate(oldObj, curObj *lbcfapi.BackendGro
 func (a *Admitter) getLBForBackendGroup(lbName string, bg *lbcfapi.BackendGroup) (*lbcfapi.LoadBalancer, error) {
 	lbNamespace := util.NamespaceOfSharedObj(lbName, bg.Namespace)
 	lb, err := a.lbLister.LoadBalancers(lbNamespace).Get(lbName)
+
 	if err != nil {
-		klog.V(3).Infof("LoadBalancer %s required by BackedGroup %s not found, skip validation", lbName, bg.Name)
-		return nil, nil
+		validationPolicy := bg.Annotations[lbcfapi.AnnotationValidationPolicy]
+		if validationPolicy == "optional" {
+			klog.Infof("Validation Policy [%s]: Loadbalancer %s required by BackendGroup %s not found, skipped",
+				validationPolicy, lbName, bg.Name)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("loadbalancer not found, LoadBalancer must be created before BackendGroup")
 	}
+
 	if lb.DeletionTimestamp != nil {
 		return nil, fmt.Errorf("operation denied: loadbalancer %q is deleting", lb.Name)
 	}
