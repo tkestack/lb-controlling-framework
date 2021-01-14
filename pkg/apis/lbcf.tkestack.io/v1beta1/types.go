@@ -50,6 +50,9 @@ const (
 	FinalizerDeleteLB               = "lbcf.tkestack.io/delete-load-loadbalancer"
 	FinalizerDeregisterBackend      = "lbcf.tkestack.io/deregister-backend"
 	FinalizerDeregisterBackendGroup = "lbcf.tkestack.io/deregister-backend-group"
+
+	// Control admission webhook validation policy
+	AnnotationValidationPolicy = "lbcf.tkestack.io/validation-policy"
 )
 
 // +genclient

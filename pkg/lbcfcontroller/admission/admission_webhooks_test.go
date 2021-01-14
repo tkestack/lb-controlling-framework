@@ -1912,6 +1912,56 @@ func TestAdmitter_ValidateBackendGroupCreate_LBNotFound(t *testing.T) {
 	}
 	a := fakeAdmitter(&notfoundLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
 	resp := a.ValidateBackendGroupCreate(ar)
+	if resp.Allowed {
+		t.Fatalf("expect not allow")
+	}
+}
+func TestAdmitter_ValidateBackendGroupCreate_LBNotFoundValitaionOptional(t *testing.T) {
+	group := &lbcfapi.BackendGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				lbcfapi.AnnotationValidationPolicy: "optional",
+			},
+		},
+		Spec: lbcfapi.BackendGroupSpec{
+			LoadBalancers: []string{"test-lb"},
+			Pods: &lbcfapi.PodBackend{
+				Ports: []lbcfapi.PortSelector{
+					{
+						Port:     80,
+						Protocol: "TCP",
+					},
+				},
+				ByLabel: &lbcfapi.SelectPodByLabel{
+					Selector: map[string]string{
+						"k1": "v1",
+					},
+					Except: []string{
+						"pod-0",
+					},
+				},
+			},
+			Parameters: map[string]string{
+				"p1": "v1",
+			},
+			EnsurePolicy: &lbcfapi.EnsurePolicyConfig{
+				Policy: lbcfapi.PolicyAlways,
+				MinPeriod: &lbcfapi.Duration{
+					Duration: 30 * time.Second,
+				},
+			},
+		},
+	}
+	raw, _ := json.Marshal(group)
+	ar := &v1beta1.AdmissionReview{
+		Request: &v1beta1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: raw,
+			},
+		},
+	}
+	a := fakeAdmitter(&notfoundLBLister{}, &alwaysSuccDriverLister{}, nil, &alwaysSuccBackendLister{}, &fakeFailInvoker{})
+	resp := a.ValidateBackendGroupCreate(ar)
 	if !resp.Allowed {
 		t.Fatalf("expect allow")
 	}
