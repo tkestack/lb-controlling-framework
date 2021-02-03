@@ -389,9 +389,11 @@ func TestLBCFControllerUpdateBackendGroup(t *testing.T) {
 	curGroup := newFakeBackendGroupOfPods("", "bg", "", 80, "tcp", nil, nil, nil)
 
 	c.updateBackendGroup(oldGroup, curGroup)
-	if c.backendGroupQueue.Len() != 0 {
-		t.Fatalf("queue length should be 0, get %d", c.backendGroupQueue.Len())
+	if c.backendGroupQueue.Len() != 1 {
+		t.Fatalf("queue length should be 1, get %d", c.backendGroupQueue.Len())
 	}
+	c.backendGroupQueue.Get()
+	c.backendGroupQueue.Done(curGroup.Name)
 
 	curGroup.ResourceVersion = "2"
 	c.updateBackendGroup(oldGroup, curGroup)
