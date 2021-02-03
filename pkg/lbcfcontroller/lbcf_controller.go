@@ -519,7 +519,8 @@ func (c *Controller) deleteBind(obj interface{}) {
 
 func (c *Controller) updateQueuePendingMetric() {
 	metrics.PendingKeysSet(c.driverQueue.GetName(), float64(c.driverQueue.Len()))
-	metrics.PendingKeysSet(c.loadBalancerQueue.GetName(), float64(c.driverQueue.Len()))
-	metrics.PendingKeysSet(c.backendGroupQueue.GetName(), float64(c.driverQueue.Len()))
-	metrics.PendingKeysSet(c.backendQueue.GetName(), float64(c.driverQueue.Len()))
+	metrics.PendingKeysSet(c.loadBalancerQueue.GetName(), float64(c.loadBalancerQueue.Len()))
+	metrics.PendingKeysSet(c.backendGroupQueue.GetName(), float64(c.backendGroupQueue.Len()))
+	metrics.PendingKeysSet(c.backendQueue.GetName(), float64(c.backendQueue.Len()))
+	metrics.PendingKeysSet(c.bindQueue.GetName(), float64(c.bindQueue.Len()))
 }
