@@ -114,6 +114,7 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 	if backend.Spec.PodBackendInfo != nil {
 		rsp, err = c.generatePodAddr(backend, driver)
 		if err != nil {
+			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "%v", err)
 			return util.ErrorResult(err)
 		}
 	} else if backend.Spec.ServiceBackendInfo != nil {
@@ -359,6 +360,8 @@ func (c *backendController) generatePodAddr(backend *lbcfapi.BackendRecord, driv
 	pod, err := c.podLister.Pods(backend.Namespace).Get(backend.Spec.PodBackendInfo.Name)
 	if err != nil {
 		return nil, err
+	} else if !util.PodAvailable(pod) {
+		return nil, fmt.Errorf("pod %s is not ready, try later", pod.Name)
 	}
 	req := &webhooks.GenerateBackendAddrRequest{
 		RequestForRetryHooks: webhooks.RequestForRetryHooks{
