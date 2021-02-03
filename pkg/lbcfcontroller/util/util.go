@@ -24,9 +24,6 @@ import (
 	"strings"
 	"time"
 
-	bindutil "tkestack.io/lb-controlling-framework/pkg/api/bind"
-	lbcfapiv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
-
 	lbcfapi "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 
 	v1 "k8s.io/api/core/v1"
@@ -656,41 +653,6 @@ func NeedEnqueueBackend(old *lbcfapi.BackendRecord, cur *lbcfapi.BackendRecord) 
 	}
 	if old.Status.BackendAddr != cur.Status.BackendAddr {
 		return true
-	}
-	return false
-}
-
-// NeedEnqueueBind determines if the given Bind should be enqueue
-func NeedEnqueueBind(old, cur *lbcfapiv1.Bind) bool {
-	if old.ResourceVersion == cur.ResourceVersion {
-		return false
-	}
-	if old.DeletionTimestamp == nil && cur.DeletionTimestamp != nil {
-		return true
-	}
-	if !reflect.DeepEqual(old.Spec, cur.Spec) {
-		return true
-	}
-	oldLBStatus := old.Status.LoadBalancerStatuses
-	curLBStatus := cur.Status.LoadBalancerStatuses
-	if len(oldLBStatus) != len(curLBStatus) {
-		return true
-	}
-	oldStsMap := make(map[string]lbcfapiv1.TargetLoadBalancerStatus)
-	for _, sts := range oldLBStatus {
-		oldStsMap[sts.Name] = sts
-	}
-	for _, curSts := range curLBStatus {
-		oldSts, ok := oldStsMap[curSts.Name]
-		if !ok {
-			return true
-		}
-		if !reflect.DeepEqual(curSts.DeletionTimestamp, oldSts.DeletionTimestamp) {
-			return true
-		}
-		if bindutil.IsLoadBalancerCreated(curSts) != bindutil.IsLoadBalancerCreated(oldSts) {
-			return true
-		}
 	}
 	return false
 }

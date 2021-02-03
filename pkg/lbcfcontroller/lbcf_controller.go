@@ -21,8 +21,6 @@ import (
 	"reflect"
 	"time"
 
-	lbcfv1 "tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1"
-
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/bindcontroller"
 
 	v1 "k8s.io/api/core/v1"
@@ -361,11 +359,6 @@ func (c *Controller) addBackendGroup(obj interface{}) {
 }
 
 func (c *Controller) updateBackendGroup(old, cur interface{}) {
-	oldGroup := old.(*v1beta1.BackendGroup)
-	curGroup := cur.(*v1beta1.BackendGroup)
-	if oldGroup.ResourceVersion == curGroup.ResourceVersion {
-		return
-	}
 	c.enqueue(cur, c.backendGroupQueue)
 }
 
@@ -478,7 +471,12 @@ func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	}
 	if util.BackendRegistered(oldObj) != util.BackendRegistered(curObj) {
 		if controllerRef := metav1.GetControllerOf(curObj); controllerRef != nil {
-			c.enqueue(util.NamespacedNameKeyFunc(curObj.Namespace, controllerRef.Name), c.backendGroupQueue)
+			switch controllerRef.Kind {
+			case "Bind":
+				c.enqueue(util.NamespacedNameKeyFunc(curObj.Namespace, controllerRef.Name), c.bindQueue)
+			case "BackendGroup":
+				c.enqueue(util.NamespacedNameKeyFunc(curObj.Namespace, controllerRef.Name), c.backendGroupQueue)
+			}
 		}
 	}
 }
@@ -498,7 +496,12 @@ func (c *Controller) deleteBackendRecord(obj interface{}) {
 		}
 	}
 	if controllerRef := metav1.GetControllerOf(backend); controllerRef != nil {
-		c.enqueue(util.NamespacedNameKeyFunc(backend.Namespace, controllerRef.Name), c.backendGroupQueue)
+		switch controllerRef.Kind {
+		case "Bind":
+			c.enqueue(util.NamespacedNameKeyFunc(backend.Namespace, controllerRef.Name), c.bindQueue)
+		case "BackendGroup":
+			c.enqueue(util.NamespacedNameKeyFunc(backend.Namespace, controllerRef.Name), c.backendGroupQueue)
+		}
 	}
 }
 
@@ -507,12 +510,7 @@ func (c *Controller) addBind(obj interface{}) {
 }
 
 func (c *Controller) updateBind(old, cur interface{}) {
-	oldBind := old.(*lbcfv1.Bind)
-	curBind := cur.(*lbcfv1.Bind)
-	if util.NeedEnqueueBind(oldBind, curBind) {
-		c.enqueue(curBind, c.bindQueue)
-
-	}
+	c.enqueue(cur, c.bindQueue)
 }
 
 func (c *Controller) deleteBind(obj interface{}) {
