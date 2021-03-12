@@ -32,6 +32,8 @@ type Config struct {
 	ServerCrt            string
 	ServerKey            string
 	DryRun               bool
+	ClientQPS            float32
+	ClientBurst          int
 }
 
 func NewConfig() *Config {
@@ -47,4 +49,6 @@ func (o *Config) AddFlags(fs *flag.FlagSet) {
 	fs.StringVar(&o.ServerCrt, "server-crt", "/etc/lbcf/server.crt", "Path to crt file for admit webhook server")
 	fs.StringVar(&o.ServerKey, "server-key", "/etc/lbcf/server.key", "Path to key file for admit webhook server")
 	fs.BoolVar(&o.DryRun, "dry-run", false, "If true, only print the webhooks that would be invoked, without invoking them")
+	fs.Float32Var(&o.ClientQPS, "client-qps", 200, "qps of lbcf client")
+	fs.IntVar(&o.ClientBurst, "client-burst", 400, "burst of lbcf client")
 }

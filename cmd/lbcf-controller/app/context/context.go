@@ -44,7 +44,7 @@ func NewContext(cfg *config.Config) *Context {
 	c := &Context{
 		Cfg: cfg,
 	}
-	clientCfg := getClientConfigOrDie(cfg.KubeConfig)
+	clientCfg := getClientConfigOrDie(cfg.KubeConfig, cfg.ClientQPS, cfg.ClientBurst)
 
 	c.K8sClient = kubernetes.NewForConfigOrDie(clientCfg)
 	c.LbcfClient = lbcfclientset.NewForConfigOrDie(clientCfg)
@@ -112,17 +112,22 @@ func (c *Context) IsDryRun() bool {
 	return c.Cfg.DryRun
 }
 
-func getClientConfigOrDie(kubeConfig string) *rest.Config {
+func getClientConfigOrDie(kubeConfig string, qps float32, burst int) *rest.Config {
+	var cfg *rest.Config
 	if kubeConfig != "" {
 		clientCfg, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
 		if err != nil {
 			klog.Fatal(err)
 		}
-		return clientCfg
+		cfg = clientCfg
+	} else {
+		clientCfg, err := rest.InClusterConfig()
+		if err != nil {
+			klog.Fatal(err)
+		}
+		cfg = clientCfg
 	}
-	clientCfg, err := rest.InClusterConfig()
-	if err != nil {
-		klog.Fatal(err)
-	}
-	return clientCfg
+	cfg.QPS = qps
+	cfg.Burst = burst
+	return cfg
 }
