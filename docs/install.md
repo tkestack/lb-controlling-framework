@@ -23,7 +23,7 @@ make image
 
 ## 步骤2：修改YAML中的镜像名称
 
-[deployments目录](deployments)中包含了部署LBCF需要的所有YAML, 在其中找到[deployment.yaml](/deployments/deployment.yaml)并使用步骤1生成的镜像替换文件中的`${IMAGE_NAME}`
+[deployments目录](/deployments)中包含了部署LBCF需要的所有YAML, 在其中找到[deployment.yaml](/deployments/deployment.yaml)并使用步骤1生成的镜像替换文件中的`${IMAGE_NAME}`
 
 ## 步骤3：安装YAML
 
