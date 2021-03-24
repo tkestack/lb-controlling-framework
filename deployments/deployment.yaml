@@ -18,7 +18,7 @@ spec:
       containers:
         - name: controller
           image: ${IMAGE_NAME}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 443
               name: admit-server
