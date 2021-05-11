@@ -138,7 +138,7 @@ func (c *backendController) generateBackendAddr(backend *lbcfapi.BackendRecord) 
 		cpy.Status.BackendAddr = rsp.BackendAddr
 		start := time.Now()
 		_, err := c.client.LbcfV1beta1().BackendRecords(cpy.Namespace).UpdateStatus(cpy)
-		metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
+		metrics.K8SOpLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
 		if err != nil {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedGenerateAddr", "update status failed: %v", err)
 			return util.ErrorResult(err)
@@ -212,7 +212,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		})
 		start := time.Now()
 		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
-		metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
+		metrics.K8SOpLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
 		if err != nil {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
 			return util.ErrorResult(err)
@@ -233,7 +233,7 @@ func (c *backendController) ensureBackend(backend *lbcfapi.BackendRecord) *util.
 		})
 		start := time.Now()
 		_, err := c.client.LbcfV1beta1().BackendRecords(backend.Namespace).UpdateStatus(backend)
-		metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
+		metrics.K8SOpLatencyObserve("BackendRecord", metrics.OpUpdateStatus, time.Since(start))
 		if err != nil {
 			c.eventRecorder.Eventf(backend, apicore.EventTypeWarning, "FailedEnsureBackend", "update status failed: %v", err)
 			return util.ErrorResult(err)

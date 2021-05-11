@@ -386,7 +386,7 @@ func (c *backendGroupController) createBackendRecord(record *lbcfapi.BackendReco
 
 	start := time.Now()
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Create(record)
-	metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpCreate, time.Since(start))
+	metrics.K8SOpLatencyObserve("BackendRecord", metrics.OpCreate, time.Since(start))
 	if err != nil {
 		return fmt.Errorf("create BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
 	}
@@ -407,7 +407,7 @@ func (c *backendGroupController) updateBackendRecord(record *lbcfapi.BackendReco
 
 	start := time.Now()
 	_, err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Update(record)
-	metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpUpdate, time.Since(start))
+	metrics.K8SOpLatencyObserve("BackendRecord", metrics.OpUpdate, time.Since(start))
 	if err != nil {
 		return fmt.Errorf("update BackendRecord %s/%s failed: %v", record.Namespace, record.Name, err)
 	}
@@ -426,7 +426,7 @@ func (c *backendGroupController) deleteBackendRecord(record *lbcfapi.BackendReco
 
 	start := time.Now()
 	err := c.client.LbcfV1beta1().BackendRecords(record.Namespace).Delete(record.Name, nil)
-	metrics.K8sOPLatencyObserve("BackendRecord", metrics.OpDelete, time.Since(start))
+	metrics.K8SOpLatencyObserve("BackendRecord", metrics.OpDelete, time.Since(start))
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
