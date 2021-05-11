@@ -126,9 +126,10 @@ func WebhookLatencyObserve(driverName, webhookName string, elapsed time.Duration
 		labelWebhookName: webhookName,
 	}
 	webhookLatency.With(l).Observe(elapsed.Seconds())
+
 }
 
-func K8sOPLatencyObserve(obj, op string, elapsed time.Duration) {
+func K8SOpLatencyObserve(obj, op string, elapsed time.Duration) {
 	l := prometheus.Labels{
 		labelK8sOpObj:  obj,
 		labelK8sOpType: op,
