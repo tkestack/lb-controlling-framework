@@ -18,7 +18,9 @@
 package lbcfcontroller
 
 import (
+	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/bindcontroller"
@@ -29,6 +31,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 	"tkestack.io/lb-controlling-framework/cmd/lbcf-controller/app/context"
+	bindutil "tkestack.io/lb-controlling-framework/pkg/api/bind"
 	"tkestack.io/lb-controlling-framework/pkg/apis/lbcf.tkestack.io/v1beta1"
 	"tkestack.io/lb-controlling-framework/pkg/lbcfcontroller/util"
 	"tkestack.io/lb-controlling-framework/pkg/metrics"
@@ -255,6 +258,7 @@ func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface
 
 func (c *Controller) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
+	klog.V(4).Infof("receive pod %s/%s create event", pod.Namespace, pod.Name)
 	// maybe we can ignore Added Pod? For
 	// 1. Added Pods are never ready
 	// 2. every time we restart, all LBCF CRDs are synced
@@ -269,12 +273,23 @@ func (c *Controller) addPod(obj interface{}) {
 func (c *Controller) updatePod(old, cur interface{}) {
 	oldPod := old.(*v1.Pod)
 	curPod := cur.(*v1.Pod)
+	klog.V(4).Infof("receive pod %s/%s update event", curPod.Namespace, curPod.Name)
 	if oldPod.ResourceVersion == curPod.ResourceVersion {
 		return
 	}
 
 	labelChanged := !reflect.DeepEqual(oldPod.Labels, curPod.Labels)
 	statusChanged := util.PodAvailable(oldPod) != util.PodAvailable(curPod)
+
+	klog.Infof("old pod %s/%s new pod %s/%s statusChanged %t", oldPod.Namespace, oldPod.Name, curPod.Namespace, curPod.Name, statusChanged)
+
+	// TODO:DeregisterWebhook
+	if statusChanged && (!util.PodAvailable(curPod) || !util.PodAvailableByRunning(curPod)) {
+		err := c.handlePodStatusChanged(curPod)
+		if err != nil {
+			klog.Errorf("failed to handle pod %s/%s status change: %v", curPod.Namespace, curPod.Name, err)
+		}
+	}
 
 	if labelChanged || statusChanged {
 		oldGroups := c.backendGroupCtrl.listRelatedBackendGroupsForPod(oldPod)
@@ -294,20 +309,20 @@ func (c *Controller) updatePod(old, cur interface{}) {
 }
 
 func (c *Controller) deletePod(obj interface{}) {
-	if _, ok := obj.(*v1.Pod); ok {
-		c.addPod(obj)
-		return
-	}
-	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	pod, ok := obj.(*v1.Pod)
 	if !ok {
-		klog.Errorf("Couldn't get object from tombstone %#v", obj)
-		return
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Couldn't get object from tombstone %#v", obj)
+			return
+		}
+		pod, ok = tombstone.Obj.(*v1.Pod)
+		if !ok {
+			klog.Errorf("Tombstone contained object that is not a Pod: %#v", obj)
+			return
+		}
 	}
-	pod, ok := tombstone.Obj.(*v1.Pod)
-	if !ok {
-		klog.Errorf("Tombstone contained object that is not a Pod: %#v", obj)
-		return
-	}
+	klog.V(4).Infof("receive pod %s/%s delete event", pod.Namespace, pod.Name)
 	c.addPod(pod)
 }
 
@@ -454,6 +469,7 @@ func (c *Controller) deleteLoadBalancerDriver(obj interface{}) {
 
 func (c *Controller) addBackendRecord(obj interface{}) {
 	backend := obj.(*v1beta1.BackendRecord)
+	klog.V(4).Infof("receive backendrecord %s/%s create event", backend.Namespace, backend.Name)
 	alwaysEnsure := backend.Spec.EnsurePolicy != nil && backend.Spec.EnsurePolicy.Policy == v1beta1.PolicyAlways
 	if !util.BackendRegistered(backend) || alwaysEnsure || backend.DeletionTimestamp != nil {
 		c.enqueue(obj, c.backendQueue)
@@ -463,6 +479,7 @@ func (c *Controller) addBackendRecord(obj interface{}) {
 func (c *Controller) updateBackendRecord(old, cur interface{}) {
 	oldObj := old.(*v1beta1.BackendRecord)
 	curObj := cur.(*v1beta1.BackendRecord)
+	klog.V(4).Infof("receive backendrecord %s/%s update event", curObj.Namespace, curObj.Name)
 	if oldObj.ResourceVersion == curObj.ResourceVersion {
 		return
 	}
@@ -495,6 +512,7 @@ func (c *Controller) deleteBackendRecord(obj interface{}) {
 			return
 		}
 	}
+	klog.V(4).Infof("receive backendrecord %s/%s delete event", backend.Namespace, backend.Name)
 	if controllerRef := metav1.GetControllerOf(backend); controllerRef != nil {
 		switch controllerRef.Kind {
 		case "Bind":
@@ -523,4 +541,85 @@ func (c *Controller) updateQueuePendingMetric() {
 	metrics.PendingKeysSet(c.backendGroupQueue.GetName(), float64(c.backendGroupQueue.Len()))
 	metrics.PendingKeysSet(c.backendQueue.GetName(), float64(c.backendQueue.Len()))
 	metrics.PendingKeysSet(c.bindQueue.GetName(), float64(c.bindQueue.Len()))
+}
+
+// handlePodStatusChanged delete pod's BackendRecord directly when pod needs to be deregistered
+// please note that BackendRecord won't be removed instantly for all BackendRecords are created with finalizers
+func (c *Controller) handlePodStatusChanged(pod *v1.Pod) error {
+	lock := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	needDelete := make([]*v1beta1.BackendRecord, 0)
+	brs := c.backendCtrl.listRelatedBackendRecordsForPod(pod)
+	klog.V(3).Infof("related BackendRecords for status changed pod %s/%s: %v", pod.Namespace, pod.Name, brs)
+	for brKey := range brs {
+		key := brKey
+		wg.Add(1)
+		go func() {
+			namespace, name, err := cache.SplitMetaNamespaceKey(key)
+			if err != nil {
+				klog.Errorf("failed to handle pod status changed for BackendRecord %s: %v, skipping", key, err)
+				return
+			}
+			br, err := c.backendCtrl.brLister.BackendRecords(namespace).Get(name)
+			if err != nil {
+				klog.Errorf("failed to get BackendRecord %s/%s: %v, skipping", namespace, name, err)
+				return
+			}
+			controllerRef := metav1.GetControllerOf(br)
+			if controllerRef == nil {
+				klog.Warningf("BackendRecord %s/%s does not contain controllerRef, skipping", namespace, name)
+				return
+			}
+			switch controllerRef.Kind {
+			case "Bind":
+				bind, err := c.context.BindInformer.Lister().Binds(namespace).Get(controllerRef.Name)
+				if err != nil {
+					klog.Errorf("failed to get Bind %s/%s: %v, skipping", namespace, controllerRef.Name, err)
+					return
+				}
+				if bindutil.DeregIfNotRunning(bind) && util.PodAvailableByRunning(pod) {
+					return
+				}
+				if bindutil.DeregByWebhook(bind) {
+					// todo
+					return
+				}
+				if util.PodAvailable(pod) {
+					return
+				}
+			case "BackendGroup":
+				bg, err := c.backendGroupCtrl.bgLister.BackendGroups(namespace).Get(controllerRef.Name)
+				if err != nil {
+					klog.Errorf("failed to get BackendGroup %s/%s: %v, skipping", namespace, controllerRef.Name, err)
+					return
+				}
+				if util.DeregIfNotRunning(bg) && util.PodAvailableByRunning(pod) {
+					return
+				}
+				if util.DeregByWebhook(bg) {
+					// todo
+					return
+				}
+				if util.PodAvailable(pod) {
+					return
+				}
+			}
+			lock.Lock()
+			defer lock.Unlock()
+			needDelete = append(needDelete, br)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	if klog.V(3) {
+		needDeleteInfo := make([]string, 0)
+		for _, br := range needDelete {
+			needDeleteInfo = append(needDeleteInfo, fmt.Sprintf("%s/%s", br.Namespace, br.Name))
+		}
+		klog.V(3).Infof("handlePodStatusChanged %s/%s needDeleteInfo: %v", pod.Namespace, pod.Name, needDeleteInfo)
+	}
+	if err := util.IterateBackends(needDelete, c.backendGroupCtrl.deleteBackendRecord); err != nil {
+		return err
+	}
+	return nil
 }

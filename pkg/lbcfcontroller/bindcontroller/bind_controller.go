@@ -347,6 +347,27 @@ func (c *Controller) handleBackends(bind *lbcfv1.Bind) (needResync bool) {
 		return true
 	}
 	needCreate, needUpdate, needDelete := compareBackendRecords(expected, existBackendRecords, doNotDelete)
+	if klog.V(3) {
+		var needCreateInfo, needUpdateInfo, needDeleteInfo []string
+		for _, e := range needCreate {
+			needCreateInfo = append(needCreateInfo, fmt.Sprintf("\t[pod]%s/%s:%s/%d --> [lb]%s\n",
+				e.Namespace, e.Spec.PodBackendInfo.Name, e.Spec.PodBackendInfo.Port.Protocol, e.Spec.PodBackendInfo.Port.Port,
+				e.Labels[lbcfv1.LabelLBName]))
+		}
+		for _, e := range needUpdate {
+			needUpdateInfo = append(needUpdateInfo, fmt.Sprintf("\t[pod]%s/%s:%s/%d --> [lb]%s\n",
+				e.Namespace, e.Spec.PodBackendInfo.Name, e.Spec.PodBackendInfo.Port.Protocol, e.Spec.PodBackendInfo.Port.Port,
+				e.Labels[lbcfv1.LabelLBName]))
+		}
+		for _, e := range needDelete {
+			needDeleteInfo = append(needDeleteInfo, fmt.Sprintf("\t[pod]%s/%s:%s/%d --> [lb]%s\n",
+				e.Namespace, e.Spec.PodBackendInfo.Name, e.Spec.PodBackendInfo.Port.Protocol, e.Spec.PodBackendInfo.Port.Port,
+				e.Labels[lbcfv1.LabelLBName]))
+		}
+		klog.V(3).Infof("Bind %s/%s need create following BackendRecord:\n%s", bind.Namespace, bind.Name, strings.Join(needCreateInfo, ""))
+		klog.V(3).Infof("Bind %s/%s need update following BackendRecord:\n%s", bind.Namespace, bind.Name, strings.Join(needUpdateInfo, ""))
+		klog.V(3).Infof("Bind %s/%s need delete following BackendRecord:\n%s", bind.Namespace, bind.Name, strings.Join(needDeleteInfo, ""))
+	}
 	var errs util.ErrorList
 	if err := util.IterateBackends(needDelete, c.deleteBackendRecord); err != nil {
 		klog.Errorf("delete BackendRecords for Bind %s/%s failed: %v",
@@ -464,6 +485,7 @@ func (c *Controller) expectedPodBackends(bind *lbcfv1.Bind) (expected []*v1beta1
 				e.Labels[lbcfv1.LabelLBName]))
 		}
 		klog.Infof("Bind %s/%s expecting following BackendRecord:\n%s", bind.Namespace, bind.Name, strings.Join(info, ""))
+		klog.Infof("Bind %s/%s expecting following doNotDelete BackendRecord:\n%s", bind.Namespace, bind.Name, strings.Join(doNotDelete.List(), ""))
 	}
 	return expected, doNotDelete, nil
 

@@ -30,8 +30,11 @@ import (
 	"tkestack.io/lb-controlling-framework/pkg/metrics"
 
 	apicore "k8s.io/api/core/v1"
+	apicorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	corev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -425,4 +428,26 @@ func (c *backendController) generateStaticAddr(backend *lbcfapi.BackendRecord) (
 	rsp.Status = webhooks.StatusSucc
 	rsp.BackendAddr = *backend.Spec.StaticAddr
 	return rsp, nil
+}
+
+func (c *backendController) listRelatedBackendRecordsForPod(pod *apicorev1.Pod) sets.String {
+	brList, err := c.brLister.BackendRecords(pod.Namespace).List(labels.Everything())
+	if err != nil {
+		klog.Errorf("list related BackendRecord for pod %s/%s failed: %v", pod.Namespace, pod.Name, err)
+		return nil
+	}
+	ret := sets.NewString()
+	for _, br := range brList {
+		var key string
+		if len(br.Namespace) > 0 {
+			key = br.Namespace + "/" + br.Name
+		} else {
+			key = br.Name
+		}
+		if br.Spec.PodBackendInfo == nil || br.Spec.PodBackendInfo.Name != pod.Name {
+			continue
+		}
+		ret.Insert(key)
+	}
+	return ret
 }

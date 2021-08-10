@@ -71,10 +71,12 @@ func (w *WebhookInvokerImpl) CallValidateLoadBalancer(driver *lbcfapi.LoadBalanc
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer", elapsed)
 	if !rsp.Succ {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateLoadBalancer")
 	}
+	klog.V(3).Infof("call validateLoadBalancer on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -87,10 +89,12 @@ func (w *WebhookInvokerImpl) CallCreateLoadBalancer(driver *lbcfapi.LoadBalancer
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer", elapsed)
 	if rsp.Status == webhooks.StatusFail {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "createLoadBalancer")
 	}
+	klog.V(3).Infof("call createLoadBalancer on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -103,10 +107,12 @@ func (w *WebhookInvokerImpl) CallEnsureLoadBalancer(driver *lbcfapi.LoadBalancer
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer", elapsed)
 	if rsp.Status == webhooks.StatusFail {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureLoadBalancer")
 	}
+	klog.V(3).Infof("call ensureLoadBalancer on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -119,10 +125,12 @@ func (w *WebhookInvokerImpl) CallDeleteLoadBalancer(driver *lbcfapi.LoadBalancer
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer", elapsed)
 	if rsp.Status == webhooks.StatusFail {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deleteLoadBalancer")
 	}
+	klog.V(3).Infof("call deleteLoadBalancer on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -135,10 +143,12 @@ func (w *WebhookInvokerImpl) CallValidateBackend(driver *lbcfapi.LoadBalancerDri
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend", elapsed)
 	if !rsp.Succ {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "validateBackend")
 	}
+	klog.V(3).Infof("call validateBackend on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -158,10 +168,12 @@ func (w *WebhookInvokerImpl) CallGenerateBackendAddr(driver *lbcfapi.LoadBalance
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr", elapsed)
 	if rsp.Status == webhooks.StatusFail {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "generateBackendAddr")
 	}
+	klog.V(3).Infof("call generateBackendAddr on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -174,10 +186,12 @@ func (w *WebhookInvokerImpl) CallEnsureBackend(driver *lbcfapi.LoadBalancerDrive
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend", elapsed)
 	if rsp.Status == webhooks.StatusFail {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "ensureBackend")
 	}
+	klog.V(3).Infof("call ensureBackend on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -190,10 +204,12 @@ func (w *WebhookInvokerImpl) CallDeregisterBackend(driver *lbcfapi.LoadBalancerD
 		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend")
 		return nil, err
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend", elapsed)
 	if rsp.Status == webhooks.StatusFail {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "deregisterBackend")
 	}
+	klog.V(3).Infof("call deregisterBackend on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
@@ -208,7 +224,9 @@ func (w *WebhookInvokerImpl) CallJudgePodDeregister(driver *lbcfapi.LoadBalancer
 	if !rsp.Succ {
 		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister")
 	}
-	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister", time.Since(start))
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "judgePodDeregister", elapsed)
+	klog.V(3).Infof("call judgePodDeregister on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
 	return rsp, nil
 }
 
