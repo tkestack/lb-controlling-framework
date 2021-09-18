@@ -258,7 +258,7 @@ func (c *Controller) processNextItem(queue util.ConditionalRateLimitingInterface
 
 func (c *Controller) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
-	klog.V(4).Infof("receive pod %s/%s create event", pod.Namespace, pod.Name)
+	klog.V(3).Infof("receive pod %s/%s create event", pod.Namespace, pod.Name)
 	// maybe we can ignore Added Pod? For
 	// 1. Added Pods are never ready
 	// 2. every time we restart, all LBCF CRDs are synced
@@ -273,7 +273,7 @@ func (c *Controller) addPod(obj interface{}) {
 func (c *Controller) updatePod(old, cur interface{}) {
 	oldPod := old.(*v1.Pod)
 	curPod := cur.(*v1.Pod)
-	klog.V(4).Infof("receive pod %s/%s update event", curPod.Namespace, curPod.Name)
+	klog.V(3).Infof("receive pod %s/%s update event", curPod.Namespace, curPod.Name)
 	if oldPod.ResourceVersion == curPod.ResourceVersion {
 		return
 	}
@@ -322,7 +322,7 @@ func (c *Controller) deletePod(obj interface{}) {
 			return
 		}
 	}
-	klog.V(4).Infof("receive pod %s/%s delete event", pod.Namespace, pod.Name)
+	klog.V(3).Infof("receive pod %s/%s delete event", pod.Namespace, pod.Name)
 	c.addPod(pod)
 }
 
@@ -546,6 +546,12 @@ func (c *Controller) updateQueuePendingMetric() {
 // handlePodStatusChanged delete pod's BackendRecord directly when pod needs to be deregistered
 // please note that BackendRecord won't be removed instantly for all BackendRecords are created with finalizers
 func (c *Controller) handlePodStatusChanged(pod *v1.Pod) error {
+	startTime := time.Now()
+	klog.V(3).Infof("start handle pod %s/%s status changed", pod.Namespace, pod.Name)
+	defer func() {
+		klog.V(3).Infof("finished handle pod %s/%s status changed, took %s", pod.Namespace, pod.Name, time.Since(startTime).String())
+	}()
+
 	lock := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	needDelete := make([]*v1beta1.BackendRecord, 0)
@@ -555,6 +561,7 @@ func (c *Controller) handlePodStatusChanged(pod *v1.Pod) error {
 		key := brKey
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			namespace, name, err := cache.SplitMetaNamespaceKey(key)
 			if err != nil {
 				klog.Errorf("failed to handle pod status changed for BackendRecord %s: %v, skipping", key, err)
@@ -607,7 +614,6 @@ func (c *Controller) handlePodStatusChanged(pod *v1.Pod) error {
 			lock.Lock()
 			defer lock.Unlock()
 			needDelete = append(needDelete, br)
-			wg.Done()
 		}()
 	}
 	wg.Wait()
