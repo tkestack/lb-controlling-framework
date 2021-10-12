@@ -35,6 +35,8 @@ import (
 
 // WebhookInvoker is an abstract interface for testability
 type WebhookInvoker interface {
+	CallHealthz(driver *lbcfapi.LoadBalancerDriver, req *webhooks.HealthzRequest) (*webhooks.HealthzResponse, error)
+
 	CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error)
 
 	CallCreateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.CreateLoadBalancerRequest) (*webhooks.CreateLoadBalancerResponse, error)
@@ -61,6 +63,24 @@ func NewWebhookInvoker() WebhookInvoker {
 
 // WebhookInvokerImpl is an implementation of WebhookInvoker
 type WebhookInvokerImpl struct{}
+
+// CallHealthz calls webhook healthz on driver
+func (w *WebhookInvokerImpl) CallHealthz(driver *lbcfapi.LoadBalancerDriver, req *webhooks.HealthzRequest) (*webhooks.HealthzResponse, error) {
+	metrics.WebhookCallsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "healthz")
+	rsp := &webhooks.HealthzResponse{}
+	start := time.Now()
+	if err := callWebhook(driver, webhooks.Healthz, req, rsp); err != nil {
+		metrics.WebhookErrorsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "healthz")
+		return nil, err
+	}
+	elapsed := time.Since(start)
+	metrics.WebhookLatencyObserve(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "healthz", elapsed)
+	if !rsp.Healthy {
+		metrics.WebhookFailsInc(NamespacedNameKeyFunc(driver.Namespace, driver.Name), "healthz")
+	}
+	klog.V(3).Infof("call healthz on driver %s, req: %v, rsp: %v, took %s", driver.Name, req, rsp, elapsed.String())
+	return rsp, nil
+}
 
 // CallValidateLoadBalancer calls webhook validateLoadBalancer on driver
 func (w *WebhookInvokerImpl) CallValidateLoadBalancer(driver *lbcfapi.LoadBalancerDriver, req *webhooks.ValidateLoadBalancerRequest) (*webhooks.ValidateLoadBalancerResponse, error) {

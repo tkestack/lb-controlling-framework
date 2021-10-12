@@ -25,6 +25,9 @@ import (
 )
 
 const (
+	// Healthz is the name and URL path of webhook healthz
+	Healthz = "healthz"
+
 	// ValidateLoadBalancer is the name and URL path of webhook validateLoadBalancer
 	ValidateLoadBalancer = "validateLoadBalancer"
 
@@ -55,6 +58,7 @@ const (
 
 // KnownWebhooks is a set contains all supported webhooks
 var KnownWebhooks = sets.NewString(
+	Healthz,
 	ValidateLoadBalancer,
 	CreateLoadBalancer,
 	EnsureLoadBalancer,
@@ -64,6 +68,15 @@ var KnownWebhooks = sets.NewString(
 	EnsureBackend,
 	DeregBackend,
 )
+
+// HealthzRequest is the request for webhook healthz
+type HealthzRequest struct {
+}
+
+// HealthzResponse is the response for webhook healthz
+type HealthzResponse struct {
+	Healthy bool `json:"healthy"`
+}
 
 // RequestForRetryHooks is the common request for webhooks that can be retried, including:
 //
