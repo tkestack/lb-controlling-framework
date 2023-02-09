@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/elazarl/goproxy v0.0.0-20190421051319-9d40249d3c2f // indirect
 	github.com/elazarl/goproxy/ext v0.0.0-20190421051319-9d40249d3c2f // indirect
-	github.com/emicklei/go-restful v2.9.5+incompatible
+	github.com/emicklei/go-restful v2.16.0+incompatible
 	github.com/evanphx/json-patch v4.4.0+incompatible
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/moul/http2curl v1.0.0 // indirect
